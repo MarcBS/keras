@@ -1063,7 +1063,7 @@ class ConvAtt(Layer):
         #return (input_shape[0][0], self.num_words, self.nb_embedding, rows, cols)
 
         if self.return_states:
-            if self.nb_glimpses > 0:
+            if False:#self.nb_glimpses > 0:
                 if self.concat_timesteps:
                     if self.dim_ordering == 'th':
                         return (input_shape[0][0], self.nb_glimpses * self.num_words, rows, cols)
@@ -1087,7 +1087,7 @@ class ConvAtt(Layer):
                         return (input_shape[0][0], self.num_words, rows, cols, self.nb_embedding)
 
         else:
-            if self.nb_glimpses > 0:
+            if False:#self.nb_glimpses > 0:
                 if self.dim_ordering == 'th':
                     return (input_shape[0][0], self.nb_glimpses, rows, cols)
                 elif self.dim_ordering == 'tf':
@@ -1170,6 +1170,7 @@ class ConvAtt(Layer):
         else:
             e_t = activation_t
 
+
         # Apply softmax on att. weights
         e_t_reshaped = e_t.sum(axis=1)
         alphas_shape = e_t_reshaped.shape
@@ -1179,6 +1180,9 @@ class ConvAtt(Layer):
 
         # Weight input image vectors according to alphas
         attended_ctx = context * alphas[:, None, :, :]
+
+
+        ############################################################
 
         """
         alphas_shape = e_t.shape
@@ -1606,3 +1610,4 @@ class ConvCoAtt(Layer):
         self.b_learning_rate_multiplier = b_learning_rate_multiplier
         self.learning_rate_multipliers = [self.W_learning_rate_multiplier,
                                           self.b_learning_rate_multiplier]
+
