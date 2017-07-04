@@ -36,16 +36,19 @@ x = Dense(100, W_learning_rate_multiplier=10.0, b_learning_rate_multiplier=10.0)
 
 #### Recurrent layers
 LSTM layers:
-- [LSTMCond](https://github.com/MarcBS/keras/blob/ba642f5d345983c3ebeffede41c57e03a5c1f7ee/keras/layers/recurrent.py#L940): LSTM conditioned to the previously generated word (additional input with previous word).
-- [AttLSTM](https://github.com/MarcBS/keras/blob/ba642f5d345983c3ebeffede41c57e03a5c1f7ee/keras/layers/recurrent.py#L1261): LSTM with Attention mechanism.
-- [AttLSTMCond](https://github.com/MarcBS/keras/blob/4e6a8ec8a55bd0d5d091a44b058a797d3d934ce0/keras/layers/recurrent.py#L1642): LSTM with Attention mechanism and conditioned to previously generated word.
-- [AttLSTMCond2Inputs](https://github.com/MarcBS/keras/blob/340f5d4230eafee07fac770c2a265a7fe2a65f37/keras/layers/recurrent.py#L4400): LSTM with double Attention mechanism (one for each input) and conditioned to previously generated word.
+- [LSTMCond](https://github.com/MarcBS/keras/blob/75ab7cc25db43b1f6c44496a77414a4c9030c58a/keras/layers/recurrent.py#L2421): LSTM conditioned to the previously generated word (additional input with previous word).
+- [AttLSTM](https://github.com/MarcBS/keras/blob/75ab7cc25db43b1f6c44496a77414a4c9030c58a/keras/layers/recurrent.py#L3367): LSTM with Attention mechanism.
+- [AttLSTMCond](https://github.com/MarcBS/keras/blob/75ab7cc25db43b1f6c44496a77414a4c9030c58a/keras/layers/recurrent.py#L3783): LSTM with Attention mechanism and conditioned to previously generated word.
+- [AttConditionalLSTMCond](https://github.com/MarcBS/keras/blob/75ab7cc25db43b1f6c44496a77414a4c9030c58a/keras/layers/recurrent.py#L4370): ConditionalLSTM [similar to Nematus](https://arxiv.org/abs/1703.04357) with Attention mechanism and conditioned to previously generated word.
+- [AttLSTMCond2Inputs](https://github.com/MarcBS/keras/blob/75ab7cc25db43b1f6c44496a77414a4c9030c58a/keras/layers/recurrent.py#L5540): LSTM with double Attention mechanism (one for each input) and conditioned to previously generated word.
+- [AttLSTMCond3Inputs](https://github.com/MarcBS/keras/blob/75ab7cc25db43b1f6c44496a77414a4c9030c58a/keras/layers/recurrent.py#L6192): LSTM with triple Attention mechanism (one for each input) and conditioned to previously generated word.
 - others
 
 And their corresponding GRU version:
 
-- [GRUCond](https://github.com/MarcBS/keras/blob/d8450ef65e2b143aefb1fe1e919fbd9c34dac927/keras/layers/recurrent.py#L605): GRU conditioned to the previously generated word (additional input with previous word).
-- [AttGRUCond](https://github.com/MarcBS/keras/blob/d8450ef65e2b143aefb1fe1e919fbd9c34dac927/keras/layers/recurrent.py#L972): GRU with Attention mechanism and conditioned to previously generated word.
+- [GRUCond](https://github.com/MarcBS/keras/blob/75ab7cc25db43b1f6c44496a77414a4c9030c58a/keras/layers/recurrent.py#L628): GRU conditioned to the previously generated word (additional input with previous word).
+- [AttGRUCond](https://github.com/MarcBS/keras/blob/75ab7cc25db43b1f6c44496a77414a4c9030c58a/keras/layers/recurrent.py#L1027): GRU with Attention mechanism and conditioned to previously generated word.
+- [AttConditionalGRUCond](https://github.com/MarcBS/keras/blob/75ab7cc25db43b1f6c44496a77414a4c9030c58a/keras/layers/recurrent.py#L1564): ConditionalGRU [as in Nematus](https://arxiv.org/abs/1703.04357) with Attention 
 
 #### Convolutional layers
 - [ClassActivationMapping](https://github.com/MarcBS/keras/blob/4e6a8ec8a55bd0d5d091a44b058a797d3d934ce0/keras/layers/convolutional.py#L23): Class Activation Mapping computation used in [GAP networks](http://arxiv.org/pdf/1512.04150.pdf).
