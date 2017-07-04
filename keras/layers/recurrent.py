@@ -1525,7 +1525,7 @@ class AttGRUCond(Recurrent):
 
         initial_states = [initial_state]
 
-        initial_state = K.zeros_like(self.context)  # (samples, intput_timesteps, ctx_dim)
+        initial_state = K.zeros_like(self.context)  # (samples, input_timesteps, ctx_dim)
         initial_state_alphas = K.sum(initial_state, axis=2)  # (samples, input_timesteps)
         initial_state = K.sum(initial_state, axis=1)  # (samples, ctx_dim)
         extra_states = [initial_state, initial_state_alphas]  # (samples, ctx_dim)
@@ -2117,7 +2117,7 @@ class AttConditionalGRUCond(Recurrent):
 
         initial_states = [initial_state]
 
-        initial_state = K.zeros_like(self.context)  # (samples, intput_timesteps, ctx_dim)
+        initial_state = K.zeros_like(self.context)  # (samples, input_timesteps, ctx_dim)
         initial_state_alphas = K.sum(initial_state, axis=2)  # (samples, input_timesteps)
         initial_state = K.sum(initial_state, axis=1)  # (samples, ctx_dim)
         extra_states = [initial_state, initial_state_alphas]  # (samples, ctx_dim)
@@ -4330,7 +4330,7 @@ class AttLSTMCond(Recurrent):
             else:
                 initial_states = [initial_state for _ in range(2)]
 
-        initial_state = K.zeros_like(self.context)  # (samples, intput_timesteps, ctx_dim)
+        initial_state = K.zeros_like(self.context)  # (samples, input_timesteps, ctx_dim)
         initial_state_alphas = K.sum(initial_state, axis=2)  # (samples, input_timesteps)
         initial_state = K.sum(initial_state, axis=1)  # (samples, ctx_dim)
         extra_states = [initial_state, initial_state_alphas]  # (samples, ctx_dim)
@@ -4852,7 +4852,7 @@ class AttConditionalLSTMCond(Recurrent):
             else:
                 initial_states = [initial_state for _ in range(2)]
 
-        initial_state = K.zeros_like(self.context)  # (samples, intput_timesteps, ctx_dim)
+        initial_state = K.zeros_like(self.context)  # (samples, input_timesteps, ctx_dim)
         initial_state_alphas = K.sum(initial_state, axis=2)  # (samples, input_timesteps)
         initial_state = K.sum(initial_state, axis=1)  # (samples, ctx_dim)
         extra_states = [initial_state, initial_state_alphas]  # (samples, ctx_dim)
@@ -5498,7 +5498,7 @@ class AttCondLSTMCond(Recurrent):
             else:
                 initial_states = [initial_state for _ in range(2)]
 
-        initial_state = K.zeros_like(self.context)  # (samples, intput_timesteps, ctx_dim)
+        initial_state = K.zeros_like(self.context)  # (samples, input_timesteps, ctx_dim)
         initial_state_alphas = K.sum(initial_state, axis=2)  # (samples, input_timesteps)
         initial_state = K.sum(initial_state, axis=1)  # (samples, ctx_dim)
         extra_states = [initial_state, initial_state_alphas]  # (samples, ctx_dim)
