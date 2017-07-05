@@ -141,7 +141,7 @@ def variable(value, dtype=_FLOATX, name=None):
             C.variables.Parameter):
         value = value.value
 
-    # we don't support init parameter with symbolic op, so eval it first as
+    # we don't support kernel_initializer parameter with symbolic op, so eval it first as
     # workaround
     if isinstance(value, C.cntk_py.Function):
         value = eval(value)
@@ -149,7 +149,7 @@ def variable(value, dtype=_FLOATX, name=None):
     shape = value.shape if hasattr(value, 'shape') else ()
     if hasattr(value, 'dtype') and value.dtype != dtype and len(shape) > 0:
         value = value.astype(dtype)
-    # cntk will init type based on the value type
+    # cntk will kernel_initializer type based on the value type
     v = C.parameter(shape=shape,
                     init=value,
                     name=_prepare_name(name, 'variable'))

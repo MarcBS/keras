@@ -4,9 +4,7 @@ import numpy as np
 _FLOATX = 'float32'
 _EPSILON = 10e-8
 _IMAGE_DATA_FORMAT = 'channels_last'
-_UID_PREFIXES = defaultdict(int)
-_IMAGE_DIM_ORDERING = 'th'
-_LEGACY_WEIGHT_ORDERING = False
+
 
 def epsilon():
     """Returns the value of the fuzz

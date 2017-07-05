@@ -471,7 +471,7 @@ def merge(inputs, mode='sum', concat_axis=-1,
 class MaxoutDense(Layer):
     """A dense maxout layer.
     A `MaxoutDense` layer takes the element-wise maximum of
-    `nb_feature` `Dense(input_dim, output_dim)` linear layers.
+    `nb_feature` `Dense(input_dim, units)` linear layers.
     This allows the layer to learn a convex,
     piecewise linear activation function over the inputs.
     Note that this is a *linear* layer;
@@ -479,16 +479,16 @@ class MaxoutDense(Layer):
     (you shouldn't need to --they are universal function approximators),
     an `Activation` layer must be added after.
     # Arguments
-        output_dim: int > 0.
+        units: int > 0.
         nb_feature: number of Dense layers to use internally.
-        init: name of initialization function for the weights of the layer
+        kernel_initializer: name of initialization function for the weights of the layer
             (see [initializations](../initializations.md)),
             or alternatively, Theano function to use for weights
             initialization. This parameter is only relevant
             if you don't pass a `weights` argument.
         weights: list of Numpy arrays to set as initial weights.
-            The list should have 2 elements, of shape `(input_dim, output_dim)`
-            and (output_dim,) for weights and biases respectively.
+            The list should have 2 elements, of shape `(input_dim, units)`
+            and (units,) for weights and biases respectively.
         W_regularizer: instance of [WeightRegularizer](../regularizers.md)
             (eg. L1 or L2 regularization), applied to the main weights matrix.
         b_regularizer: instance of [WeightRegularizer](../regularizers.md),
@@ -507,7 +507,7 @@ class MaxoutDense(Layer):
     # Input shape
         2D tensor with shape: `(nb_samples, input_dim)`.
     # Output shape
-        2D tensor with shape: `(nb_samples, output_dim)`.
+        2D tensor with shape: `(nb_samples, units)`.
     # References
         - [Maxout Networks](http://arxiv.org/abs/1302.4389)
     """
@@ -583,8 +583,8 @@ class MaxoutDense(Layer):
         return output
 
     def get_config(self):
-        config = {'output_dim': self.output_dim,
-                  'init': initializers.serialize(self.init),
+        config = {'units': self.output_dim,
+                  'kernel_initializer': initializers.serialize(self.init),
                   'nb_feature': self.nb_feature,
                   'W_regularizer': regularizers.serialize(self.W_regularizer),
                   'b_regularizer': regularizers.serialize(self.b_regularizer),
@@ -601,7 +601,7 @@ class Highway(Layer):
     """Densely connected highway network.
     Highway layers are a natural extension of LSTMs to feedforward networks.
     # Arguments
-        init: name of initialization function for the weights of the layer
+        kernel_initializer: name of initialization function for the weights of the layer
             (see [initializations](../initializations.md)),
             or alternatively, Theano function to use for weights
             initialization. This parameter is only relevant
@@ -612,8 +612,8 @@ class Highway(Layer):
             If you don't specify anything, no activation is applied
             (ie. "linear" activation: a(x) = x).
         weights: list of Numpy arrays to set as initial weights.
-            The list should have 2 elements, of shape `(input_dim, output_dim)`
-            and (output_dim,) for weights and biases respectively.
+            The list should have 2 elements, of shape `(input_dim, units)`
+            and (units,) for weights and biases respectively.
         W_regularizer: instance of [WeightRegularizer](../regularizers.md)
             (eg. L1 or L2 regularization), applied to the main weights matrix.
         b_regularizer: instance of [WeightRegularizer](../regularizers.md),
@@ -718,7 +718,7 @@ class Highway(Layer):
         return output
 
     def get_config(self):
-        config = {'init': initializers.serialize(self.init),
+        config = {'kernel_initializer': initializers.serialize(self.init),
                   'activation': activations.serialize(self.activation),
                   'W_regularizer': regularizers.serialize(self.W_regularizer),
                   'b_regularizer': regularizers.serialize(self.b_regularizer),

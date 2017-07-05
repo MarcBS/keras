@@ -153,7 +153,7 @@ class ChannelWisePReLU(Layer):
         Same shape as the input.
 
     # Arguments
-        init: initialization function for the weights.
+        kernel_initializer: initialization function for the weights.
         weights: initial weights, as a list of a single Numpy array.
         channels_shared: True if we use the same parameter for all channeles or False if not.
         axis: Channels axis.
@@ -184,7 +184,7 @@ class ChannelWisePReLU(Layer):
         return pos + neg
 
     def get_config(self):
-        config = {'init': self.init.__name__, 'channels_shared': self.channels_shared, 'axis': self.axis}
+        config = {'kernel_initializer': self.init.__name__, 'channels_shared': self.channels_shared, 'axis': self.axis}
         base_config = super(ChannelWisePReLU, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 

@@ -622,9 +622,9 @@ class Adamax(Optimizer):
         lr_t = lr / (1. - K.pow(self.beta_1, t))
 
         shapes = [K.get_variable_shape(p) for p in params]
-        # zero init of 1st moment
+        # zero kernel_initializer of 1st moment
         ms = [K.zeros(shape) for shape in shapes]
-        # zero init of exponentially weighted infinity norm
+        # zero kernel_initializer of exponentially weighted infinity norm
         us = [K.zeros(shape) for shape in shapes]
         self.weights = [self.iterations] + ms + us
 

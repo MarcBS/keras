@@ -100,7 +100,7 @@ def wider2net_conv2d(teacher_w1, teacher_b1, teacher_w2, new_width, init):
         teacher_w2: `weight` of next connected conv2d layer,
           of shape (filters2, num_channel2, kh2, kw2)
         new_width: new `filters` for the wider conv2d layer
-        init: initialization algorithm for new weights,
+        kernel_initializer: initialization algorithm for new weights,
           either 'random-pad' or 'net2wider'
     '''
     assert teacher_w1.shape[0] == teacher_w2.shape[1], (
@@ -151,7 +151,7 @@ def wider2net_fc(teacher_w1, teacher_b1, teacher_w2, new_width, init):
         teacher_w2: `weight` of next connected fc layer,
           of shape (nin2, nout2)
         new_width: new `nout` for the wider fc layer
-        init: initialization algorithm for new weights,
+        kernel_initializer: initialization algorithm for new weights,
           either 'random-pad' or 'net2wider'
     '''
     assert teacher_w1.shape[1] == teacher_w2.shape[0], (
@@ -290,7 +290,7 @@ def make_wider_student_model(teacher_model, train_data,
 def make_deeper_student_model(teacher_model, train_data,
                               validation_data, init, epochs=3):
     '''Train a deeper student model based on teacher_model,
-       with either 'random-init' (baseline) or 'net2deeper'
+       with either 'random-kernel_initializer' (baseline) or 'net2deeper'
     '''
     model = Sequential()
     model.add(Conv2D(64, 3, input_shape=input_shape,
@@ -303,7 +303,7 @@ def make_deeper_student_model(teacher_model, train_data,
         new_weights = deeper2net_conv2d(prev_w)
         model.add(Conv2D(64, 3, padding='same',
                          name='conv2-deeper', weights=new_weights))
-    elif init == 'random-init':
+    elif init == 'random-kernel_initializer':
         model.add(Conv2D(64, 3, padding='same', name='conv2-deeper'))
     else:
         raise ValueError('Unsupported weight initializer: %s' % init)
@@ -315,7 +315,7 @@ def make_deeper_student_model(teacher_model, train_data,
         # net2deeper for fc layer with relu, is just an identity initializer
         model.add(Dense(64, init='identity',
                         activation='relu', name='fc1-deeper'))
-    elif init == 'random-init':
+    elif init == 'random-kernel_initializer':
         model.add(Dense(64, activation='relu', name='fc1-deeper'))
     else:
         raise ValueError('Unsupported weight initializer: %s' % init)
@@ -375,9 +375,9 @@ def net2deeper_experiment():
                                           validation_data,
                                           epochs=3)
 
-    print('\nbuilding deeper student model by random init ...')
+    print('\nbuilding deeper student model by random kernel_initializer ...')
     make_deeper_student_model(teacher_model, train_data,
-                              validation_data, 'random-init',
+                              validation_data, 'random-kernel_initializer',
                               epochs=3)
     print('\nbuilding deeper student model by net2deeper ...')
     make_deeper_student_model(teacher_model, train_data,

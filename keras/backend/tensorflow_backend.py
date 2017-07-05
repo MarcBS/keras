@@ -2332,14 +2332,14 @@ def rnn(step_function, inputs, initial_states,
                     time step.
                 states: list of tensors.
             Returns:
-                outputs: tensor with shape `(samples, output_dim)`
+                outputs: tensor with shape `(samples, units)`
                     (no time dimension).
                 new_states: list of tensors, same length and shapes
                     as 'states'. The first state in the list must be the
                     output tensor at the previous timestep.
         inputs: tensor of temporal data of shape `(samples, time, ...)`
             (at least 3D).
-        initial_states: tensor with shape (samples, output_dim)
+        initial_states: tensor with shape (samples, units)
             (no time dimension),
             containing the initial values for the states used in
             the step function.

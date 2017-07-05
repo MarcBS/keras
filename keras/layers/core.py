@@ -518,11 +518,11 @@ class PermuteGeneral(Layer):
         to the specified pattern.
     '''
     def __init__(self, dims, **kwargs):
+        super(PermuteGeneral, self).__init__(**kwargs)
         self.dims = tuple(dims)
         self.supports_masking = True
-        super(PermuteGeneral, self).__init__(**kwargs)
 
-    def get_output_shape_for(self, input_shape):
+    def compute_output_shape(self, input_shape):
         input_shape = list(input_shape)
         output_shape = copy.copy(input_shape)
         for i, dim in enumerate(self.dims):
@@ -1069,3 +1069,596 @@ class ActivityRegularization(Layer):
                   'l2': self.l2}
         base_config = super(ActivityRegularization, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
+
+class MaskedMean(Layer):
+    """
+    This layer is called after an Embedding layer.
+    It averages all of the masked-out embeddings.
+    The mask is discarded
+    """
+    def __init__(self, **kwargs):
+        self.support_mask = True
+        super(MaskedMean, self).__init__(**kwargs)
+
+    def call(self, x, mask=None):
+        return K.mean(mask[:, :, None] * x, axis=1)
+
+    def compute_mask(self, input_shape, input_mask=None):
+        return None
+
+    def get_output_shape_for(self, input_shape):
+        return (input_shape[0], input_shape[2])
+
+    def get_config(self):
+        base_config = super(MaskedMean, self).get_config()
+        return dict(list(base_config.items()))
+
+
+class MaskLayer(Layer):
+    """
+    Applies to the input layer its mask
+    """
+    def __init__(self, **kwargs):
+        self.support_mask = True
+        super(MaskLayer, self).__init__(**kwargs)
+
+    def call(self, x, mask=None):
+        return mask[:, :, None] * x
+
+    def compute_mask(self, input_shape, input_mask=None):
+        return input_mask
+
+    def get_output_shape_for(self, input_shape):
+        return input_shape
+
+    def get_config(self):
+        base_config = super(MaskLayer, self).get_config()
+        return dict(list(base_config.items()))
+
+class WeightedSum(Layer):
+    ''' Applies a weighted sum over a set of vectors input[0] and their respective weights input[1].
+        First, the weights are tiled for matching the length of the input vectors on dim=1.
+        Second, an element-wise multiplication is applied over the inputs.
+        Third, the output tensor is summed over the defined set of dimensions if
+        the input parameter sum_dims is provided.
+
+    # Arguments
+        sum_dims: dimensions on which the final summation will be applied after the respective multiplication
+
+    # Input shape
+        List with two tensors:
+            input[0]: vectors
+            input[1]: weights
+        Both tensors must have a matching number of dimensions and lengths, except
+        dim=1, which must be 1 for the set of weights.
+
+    # Output shape
+        Vector with the same number of dimensions and length as input[0] but having removed the dimensions
+        specified in sum_dims (if any).
+    '''
+    def __init__(self, sum_dims=[], **kwargs):
+        assert isinstance(sum_dims, list)
+        self.sum_dims = sorted(sum_dims)[::-1]
+        self.supports_masking = True
+        super(WeightedSum, self).__init__(**kwargs)
+
+    def build(self, input_shape):
+        assert isinstance(input_shape, list)
+        assert len(input_shape) == 2
+
+    def call(self, x, mask=None):
+        # get input values and weights
+        values = x[0]
+        weights = x[1]
+
+        # tile weights before summing
+        K.repeatRdim(weights, K.shape(values)[1], axis=1)
+
+        #x = K.dot(values, weights)
+        x = values*weights
+
+        for d in self.sum_dims:
+            x = K.sum(x, axis=d)
+        return x
+
+    def get_output_shape_for(self, input_shape):
+        out_dim = []
+        num_dim = len(input_shape[0])
+        for d in range(num_dim):
+            if d not in self.sum_dims:
+                out_dim.append(max(input_shape[0][d], input_shape[1][d]))
+        return tuple(out_dim)
+
+    def compute_mask(self, input, input_mask=None):
+        if not any(input_mask):
+            return None
+        else:
+            not_None_masks = [m for m in input_mask if m is not None]
+            if len(not_None_masks) == 1:
+                out_mask = input_mask[not_None_masks[0]]
+            else:
+                out_mask = input_mask[not_None_masks[0]] * input_mask[not_None_masks[1]]
+
+            return out_mask
+
+
+    def get_config(self):
+        config = {'sum_dims': self.sum_dims}
+        base_config = super(WeightedSum, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+
+class WeightedMerge(Layer):
+    ''' Applies a weighted merge over a set of tensors.
+        This layer learns a set of lambda weights for applying a weighted sum
+        for merging the input tensors.
+
+    # Parameters
+        :param mode: merge mode used. Possible values are 'sum' (default) or 'mul'.
+
+    # Input shape
+        List of tensors of any dimensions but with the same shape.
+
+    # Output shape
+        Tensor with the same number of dimensions as the input tensors.
+    '''
+    def __init__(self, mode='sum', init='glorot_uniform', lambdas_regularizer=None, weights=None, **kwargs):
+        #self.out_shape = out_shape
+        self._valid_modes = ['sum', 'mul']
+
+        if mode not in self._valid_modes:
+            raise NotImplementedError("Merge mode of type '"+ mode +"' is not valid. Valid modes are: "+str(self._valid_modes))
+        self.mode = mode
+
+        self.init = initializations.get(init)
+        self.lambdas_regularizer = regularizers.get(lambdas_regularizer)
+        self.initial_weights = weights
+
+        self.supports_masking = True
+        super(WeightedMerge, self).__init__(**kwargs)
+
+    def build(self, input_shape):
+
+        if not isinstance(input_shape, list):
+            input_shape = [input_shape]
+        s = input_shape[0]
+        for i in range(1,len(input_shape)):
+            for s1,s2 in zip(input_shape[i], s):
+                assert s1 == s2 or s1 is None or s2 is None, 'The shapes of some input tensors do not match ' \
+                                                             '(' + str(input_shape[i]) + ' vs ' + str(s) + ').'
+            #assert input_shape[i] == s, 'The shapes of some input tensors do not match ' \
+            #                        '('+str(input_shape[i])+' vs '+str(s)+').'
+
+        self.lambdas = self.init((len(input_shape),), name='{}_lambdas'.format(self.name))
+        self.trainable_weights = [self.lambdas]
+        self.regularizers = []
+
+        if self.lambdas_regularizer:
+            self.lambdas_regularizer.set_param(self.lambdas)
+            self.regularizers.append(self.lambdas_regularizer)
+
+        if self.initial_weights is not None:
+            self.set_weights(self.initial_weights)
+            del self.initial_weights
+
+    def call(self, x, mask=None):
+        if not isinstance(x, list):
+            x = [x]
+
+        # merge inputs after weighting by the learned lambda weights
+        s = x[0] * self.lambdas[0]
+        for i in range(1, len(x)):
+            if self.mode == 'sum':
+                s += x[i] * self.lambdas[i]
+            elif self.mode == 'mul':
+                s *= x[i] * self.lambdas[i]
+
+        return s
+
+
+    def get_output_shape_for(self, input_shape):
+        #return tuple(list(input_shape[0][:2]) + self.out_shape)
+
+        if not isinstance(input_shape, list):
+            input_shape = [input_shape]
+        return tuple(input_shape[0])
+
+    def compute_mask(self, input, input_mask=None):
+        if not isinstance(input_mask, list):
+            input_mask = [input_mask]
+        if not any(input_mask):
+            return None
+        else:
+            return input_mask[0]
+
+    def get_config(self):
+        config = {'mode': self.mode,
+                  'kernel_initializer': self.init.__name__,
+                  'lambdas_regularizer': self.lambdas_regularizer.get_config() if self.lambdas_regularizer else None}
+        base_config = super(WeightedMerge, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+
+class SetSubtensor(Layer):
+    """
+    This layer performs a set_subtensor operation over two layers
+    # Arguments
+        indices: list of strings specifying the indexation over the two input layers
+
+    # Input shape
+        List with two tensors:
+            input[0]: Tensor to overwrite
+            input[1]: Tensor that overwrites
+    # Output shape
+        K.set_subtensor(input[0][indices[0], input[1][indices[1]])
+    # Supports masking: The mask of the first input layer
+    """
+    def __init__(self, indices, **kwargs):
+        self.supports_masking = True
+        self.indices = indices
+        super(SetSubtensor, self).__init__(**kwargs)
+
+    def build(self, input_shape):
+        assert isinstance(input_shape, list)
+        assert len(input_shape) == 2
+
+    def call(self, x, mask=None):
+        return K.set_subtensor(eval('x[0]' + self.indices[0]), eval('x[1]' + self.indices[1]))
+
+    def compute_mask(self, input_shape, input_mask=None):
+        return input_mask[0]
+
+    def get_output_shape_for(self, input_shape):
+        return input_shape[0]
+
+    def get_config(self):
+        config = {'indices': self.indices}
+        base_config = super(SetSubtensor, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+
+class RemoveMask(Layer):
+    def __init__(self, **kwargs):
+        super(RemoveMask, self).__init__(**kwargs)
+
+    def compute_mask(self, input, input_mask=None):
+        return None
+
+
+    def get_config(self):
+        base_config = super(RemoveMask, self).get_config()
+        return dict(list(base_config.items()))
+
+
+class ZeroesLayer(Layer):
+    '''Given any input, produces an output input_dim zeroes
+
+    # Example
+
+    ```python
+        # as first
+
+    # Arguments
+        units: int > 0.
+        input_dim: dimensionality of the input (integer). This argument
+            (or alternatively, the keyword argument `input_shape`)
+            is required when using this layer as the first layer in a model.
+
+    # Input shape
+        nD tensor with shape: `(nb_samples, ..., input_dim)`.
+        The most common situation would be
+        a 2D input with shape `(nb_samples, input_dim)`.
+
+    # Output shape
+        nD tensor with shape: `(nb_samples, ..., units)`.
+        For instance, for a 2D input with shape `(nb_samples, input_dim)`,
+        the output would have shape `(nb_samples, units)`.
+    '''
+    def __init__(self, output_dim,  input_dim=None, **kwargs):
+        self.output_dim = output_dim
+        self.input_dim = input_dim
+        super(ZeroesLayer, self).__init__(**kwargs)
+
+    def build(self, input_shape):
+        assert len(input_shape) >= 2
+        self.built = True
+
+    def call(self, x, mask=None):
+        initial_state = K.zeros_like(x)  # (samples, input_dim)
+        initial_state = K.sum(initial_state, axis=1)  # (samples, )
+        initial_state = K.expand_dims(initial_state)  # (samples, 1)
+        initial_state = K.tile(initial_state, self.output_dim)  # (samples, units)
+        return initial_state
+
+    def get_output_shape_for(self, input_shape):
+        output_shape = list(input_shape)
+        output_shape[-1] = self.output_dim
+        return tuple(output_shape)
+
+    def get_config(self):
+        config = {'units': self.output_dim,
+                  'input_dim': self.input_dim}
+        base_config = super(ZeroesLayer, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+    def set_lr_multipliers(self, W_learning_rate_multiplier, b_learning_rate_multiplier):
+        self.W_learning_rate_multiplier = W_learning_rate_multiplier
+        self.b_learning_rate_multiplier = b_learning_rate_multiplier
+        self.learning_rate_multipliers = [self.W_learning_rate_multiplier,
+                                          self.b_learning_rate_multiplier]
+
+
+class EqualDimensions(Layer):
+    '''Zero-padding layer for 2D input (e.g. picture).
+
+    # Arguments
+        dim_ordering: 'th' or 'tf'.
+            In 'th' mode, the channels dimension (the depth)
+            is at index 1, in 'tf' mode is it at index 3.
+            It defaults to the `image_dim_ordering` value found in your
+            Keras config file at `~/.keras/keras.json`.
+            If you never set it, then it will be "tf".
+
+    # Input shape
+        4D tensor with shape:
+        `(samples, channels, rows, cols)` if dim_ordering='th'
+        or 4D tensor with shape:
+        `(samples, rows, cols, channels)` if dim_ordering='tf'.
+
+    # Output shape
+        4D tensor with shape:
+        `(samples, channels, rows+1, cols+1)` if dim_ordering='th'
+        or 4D tensor with shape:
+        `(samples, rows+1, cols+1, channels)` if dim_ordering='tf'.
+    '''
+
+    def __init__(self,
+                 dim_ordering='default',
+                 **kwargs):
+        super(EqualDimensions, self).__init__(**kwargs)
+        if dim_ordering == 'default':
+            dim_ordering = K.image_dim_ordering()
+        if dim_ordering not in {'tf', 'th'}:
+            raise ValueError('dim_ordering must be in {tf, th}.')
+        self.dim_ordering = dim_ordering
+
+    def get_output_shape_for(self, input_shape):
+        assert len(input_shape[0]) == len(input_shape[1])
+
+        out_dims = [input_shape[1][0], input_shape[1][1], input_shape[0][2], input_shape[0][3]]
+        return tuple(out_dims)
+
+    def call(self, x, mask=None):
+        return K.equal_dimensions(x[0],x[1])
+
+    def get_config(self):
+        config = {}
+        base_config = super(EqualDimensions, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+class Concat(Layer):
+    '''Concatenates multiple inputs along the specified axis. Inputs should have the same
+    shape except for the dimension specified in axis, which can have different sizes.
+
+    # Arguments
+
+        axis: int
+            Axis which inputs are joined over
+
+        cropping: None or [crop]
+            Cropping for each input axis. Cropping is always disable for axis.
+
+        dim_ordering: 'th' or 'tf'.
+            In 'th' mode, the channels dimension (the depth)
+            is at index 1, in 'tf' mode is it at index 3.
+            It defaults to the `image_dim_ordering` value found in your
+            Keras config file at `~/.keras/keras.json`.
+            If you never set it, then it will be "tf".
+    '''
+
+    def __init__(self, axis=1,
+                cropping=None, dim_ordering='default',
+                 **kwargs):
+        super(Concat, self).__init__(**kwargs)
+        if dim_ordering == 'default':
+            dim_ordering = K.image_dim_ordering()
+        if dim_ordering not in {'tf', 'th'}:
+            raise ValueError('dim_ordering must be in {tf, th}.')
+
+        self.dim_ordering = dim_ordering
+        self.axis = axis
+
+        if cropping is not None:
+            # If cropping is enabled, don't crop on the selected axis
+            cropping = list(cropping)
+            cropping[axis] = None
+        self.cropping = cropping
+
+    def get_output_shape_for(self, input_shape):
+        input_shapes = autocrop_array_shapes(input_shape, self.cropping)
+        # Infer the output shape by grabbing, for each axis, the first
+        # input size that is not `None` (if there is any)
+        output_shape = [next((s for s in sizes if s is not None), None)
+                        for sizes in zip(*input_shapes)]
+
+        def match(shape1, shape2):
+            axis = self.axis if self.axis >= 0 else len(shape1) + self.axis
+            return (len(shape1) == len(shape2) and
+                    all(i == axis or s1 is None or s2 is None or s1 == s2
+                        for i, (s1, s2) in enumerate(zip(shape1, shape2))))
+
+        # Check for compatibility with inferred output shape
+        if not all(match(shape, output_shape) for shape in input_shapes):
+            raise ValueError("Mismatch: input shapes must be the same except "
+                             "in the concatenation axis")
+
+        # Infer output shape on concatenation axis and return
+        sizes = [input_shape[self.axis] for input_shape in input_shapes]
+        concat_size = None if any(s is None for s in sizes) else sum(sizes)
+        output_shape[self.axis] = concat_size
+        return tuple(output_shape)
+
+    def call(self, x, mask=None):
+        x = autocrop(x, self.cropping)
+        return K.concatenate(x, axis=self.axis)
+
+    def get_config(self):
+        config = {'axis': self.axis, 'cropping': self.cropping}
+        base_config = super(Concat, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+
+def autocrop(inputs, cropping):
+    """
+    Crops the given input arrays.
+
+    Cropping takes a sequence of inputs and crops them per-axis in order to
+    ensure that their sizes are consistent so that they can be combined
+    in an element-wise fashion. If cropping is enabled for a specific axis,
+    the minimum size in that axis of all inputs is computed, and all
+    inputs are cropped to that size.
+
+    The per-axis cropping modes are:
+
+    `None`: this axis is not cropped, inputs are unchanged in this axis
+
+    `'lower'`: inputs are cropped choosing the lower portion in this axis
+    (`a[:crop_size, ...]`)
+
+    `'upper'`: inputs are cropped choosing the upper portion in this axis
+    (`a[-crop_size:, ...]`)
+
+    `'center'`: inputs are cropped choosing the central portion in this axis
+    (``a[offset:offset+crop_size, ...]`` where
+    ``offset = (a.shape[0]-crop_size)//2)``
+
+    Parameters
+    ----------
+    inputs : list of Theano expressions
+        The input arrays in the form of a list of Theano expressions
+
+    cropping : list of cropping modes
+        Cropping modes, one for each axis. If length of `cropping` is less
+        than the number of axes in the inputs, it is padded with `None`.
+        If `cropping` is None, `input` is returned as is.
+
+    Returns
+    -------
+    list of Theano expressions
+
+        each expression is the cropped version of the corresponding input
+    """
+    if cropping is None:
+        # No cropping in any dimension
+        return inputs
+    else:
+        # Get the number of dimensions
+        ndim = K.ndim(inputs[0])
+
+        # Check for consistent number of dimensions
+        if not all(K.ndim(input) == ndim for input in inputs):
+            raise ValueError("Not all inputs are of the same ",
+                             "dimensionality. Got {0} inputs of "
+                             "dimensionalities {1}.".format(
+                             len(inputs), [K.ndim(input) for input in inputs]))
+
+        # Get the shape of each input
+        shapes = [K.shape(input) for input in inputs]
+        # Convert the shapes to a matrix expression
+        shapes_tensor = K.as_tensor_variable(shapes)
+        # Min along axis 0 to get the minimum size in each dimension
+        min_shape = K.min(shapes_tensor, axis=0)
+
+        # Nested list of slices; each list in `slices` corresponds to
+        # an input and contains a slice for each dimension
+        slices_by_input = [[] for i in range(len(inputs))]
+
+        # If there are more dimensions than cropping entries, pad
+        # the cropping
+        cropping = list(cropping)
+        if ndim > len(cropping):
+            cropping = list(cropping) + \
+                         [None] * (ndim - len(cropping))
+
+        # For each dimension
+        for dim, cr in enumerate(cropping):
+            if cr is None:
+                # Don't crop this dimension
+                slice_all = slice(None)
+                for slices in slices_by_input:
+                    slices.append(slice_all)
+            else:
+                # We crop all inputs in the dimension `dim` so that they
+                # are the minimum found in this dimension from all inputs
+                sz = min_shape[dim]
+                if cr == 'lower':
+                    # Choose the first `sz` elements
+                    slc_lower = slice(None, sz)
+                    for slices in slices_by_input:
+                        slices.append(slc_lower)
+                elif cr == 'upper':
+                    # Choose the last `sz` elements
+                    slc_upper = slice(-sz, None)
+                    for slices in slices_by_input:
+                        slices.append(slc_upper)
+                elif cr == 'center':
+                    # Choose `sz` elements from the center
+                    for sh, slices in zip(shapes, slices_by_input):
+                        offset = (sh[dim] - sz) // 2
+                        slices.append(slice(offset, offset+sz))
+                else:
+                    raise ValueError(
+                        'Unknown crop mode \'{0}\''.format(cr))
+
+        return [input[slices] for input, slices in
+                zip(inputs, slices_by_input)]
+
+
+def autocrop_array_shapes(input_shapes, cropping):
+    """
+    Computes the shapes of the given arrays after auto-cropping is applied.
+
+    For more information on cropping, see the :func:`autocrop` function
+    documentation.
+
+    Parameters
+    ----------
+    input_shapes : the shapes of input arrays prior to cropping in
+        the form of a list of tuples
+
+    cropping : a list of cropping modes, one for each axis. If length of
+        `cropping` is less than the number of axes in the inputs, it is
+        padded with `None`. If `cropping` is None, `input_shapes` is returned
+        as is. For more information on their values and operation, see the
+        :func:`autocrop` documentation.
+    """
+    if cropping is None:
+        return input_shapes
+    else:
+        # Check for consistent number of dimensions
+        ndim = len(input_shapes[0])
+        if not all(len(sh) == ndim for sh in input_shapes):
+            raise ValueError("Not all inputs are of the same "
+                             "dimensionality. Got {0} inputs of "
+                             "dimensionalities {1}.".format(
+                                len(input_shapes),
+                                [len(sh) for sh in input_shapes]))
+
+        result = []
+
+        # If there are more dimensions than cropping entries, pad
+        # the cropping
+        cropping = list(cropping)
+        if ndim > len(cropping):
+            cropping = list(cropping) + \
+                         [None] * (ndim - len(cropping))
+
+        for sh, cr in zip(zip(*input_shapes), cropping):
+            if cr is None:
+                result.append(sh)
+            elif cr in {'lower', 'center', 'upper'}:
+                min_sh = None if any(x is None for x in sh) else min(sh)
+                result.append([min_sh] * len(sh))
+            else:
+                raise ValueError('Unknown crop mode \'{0}\''.format(cr))
+        return [tuple(sh) for sh in zip(*result)]

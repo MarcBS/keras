@@ -1391,7 +1391,7 @@ def rnn(step_function, inputs, initial_states,
             for i in range(len(successive_states[-1])):
                 states.append(T.stack(*[states_at_step[i] for states_at_step in successive_states]))
         else:
-            # build an all-zero tensor of shape (samples, output_dim)
+            # build an all-zero tensor of shape (samples, units)
             initial_output = step_function(inputs[0], initial_states + constants)[0] * 0
             # Theano gets confused by broadcasting patterns in the scan op
             initial_output = T.unbroadcast(initial_output, 0, 1)
@@ -1561,7 +1561,7 @@ def _rnn(step_function, inputs, initial_states,
             for i in range(len(successive_states[-1])):
                 states.append(T.stack(*[states_at_step[i] for states_at_step in successive_states]))
         else:
-            # build an all-zero tensor of shape (samples, output_dim)
+            # build an all-zero tensor of shape (samples, units)
             initial_output = step_function(inputs[0], initial_states + constants)[0] * 0
             # Theano gets confused by broadcasting patterns in the scan op
             initial_output = T.unbroadcast(initial_output, 0, 1)

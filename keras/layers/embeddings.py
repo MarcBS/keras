@@ -33,7 +33,7 @@ class Embedding(Layer):
     # Arguments
       input_dim: int > 0. Size of the vocabulary,
           i.e. maximum integer index + 1.
-      output_dim: int >= 0. Dimension of the dense embedding.
+      units: int >= 0. Dimension of the dense embedding.
       embeddings_initializer: Initializer for the `embeddings` matrix
           (see [initializers](../initializers.md)).
       embeddings_regularizer: Regularizer function applied to
@@ -60,7 +60,7 @@ class Embedding(Layer):
         2D tensor with shape: `(batch_size, sequence_length)`.
 
     # Output shape
-        3D tensor with shape: `(batch_size, sequence_length, output_dim)`.
+        3D tensor with shape: `(batch_size, sequence_length, units)`.
 
     # References
         - [A Theoretically Grounded Application of Dropout in Recurrent Neural Networks](http://arxiv.org/abs/1512.05287)
@@ -136,7 +136,7 @@ class Embedding(Layer):
 
     def get_config(self):
         config = {'input_dim': self.input_dim,
-                  'output_dim': self.output_dim,
+                  'units': self.output_dim,
                   'embeddings_initializer': initializers.serialize(self.embeddings_initializer),
                   'embeddings_regularizer': regularizers.serialize(self.embeddings_regularizer),
                   'activity_regularizer': regularizers.serialize(self.activity_regularizer),

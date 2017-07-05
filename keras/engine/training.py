@@ -23,6 +23,7 @@ from .. import losses
 from .. import metrics as metrics_module
 from ..utils.generic_utils import Progbar
 from .. import callbacks as cbks
+from ..legacy import interfaces
 
 
 def _standardize_input_data(data, names, shapes=None,
@@ -929,7 +930,7 @@ class Model(Container):
 
             training_updates = self.optimizer.get_updates(self._collected_trainable_weights,
                                                           self.constraints,
-                                                          lr_multipliers
+                                                          lr_multipliers,
                                                           self.total_loss)
             updates = self.updates + training_updates
             # Gets loss and metrics. Updates weights at each call.

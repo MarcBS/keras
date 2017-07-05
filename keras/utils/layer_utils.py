@@ -1,11 +1,11 @@
 from __future__ import print_function
-import inspect
+#import inspect
 
 from .conv_utils import convert_kernel
 from .. import backend as K
 import numpy as np
 
-from ..caffe.extra_layers import *
+#from ..caffe.extra_layers import *
 
 def layer_from_config(config, custom_objects=None):
     '''
