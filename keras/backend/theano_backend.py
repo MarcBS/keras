@@ -1,4 +1,7 @@
+from collections import defaultdict
+from contextlib import contextmanager
 import theano
+from theano import ifelse
 from theano import tensor as T
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 from theano.tensor.signal import pool
@@ -15,14 +18,20 @@ try:
 except ImportError:
     from theano.sandbox.softsign import softsign as T_softsign
 
-import inspect
 import numpy as np
-from .common import _FLOATX, floatx, _EPSILON, image_dim_ordering
+from .common import _FLOATX, floatx, _EPSILON, image_data_format
+from ..utils.generic_utils import has_arg
+# Legacy functions
+from .common import set_image_dim_ordering, image_dim_ordering
+
 py_all = all
+py_sum = sum
+
 
 # INTERNAL UTILS
 theano.config.floatX = _FLOATX
 _LEARNING_PHASE = T.scalar(dtype='uint8', name='keras_learning_phase')  # 0 = test, 1 = train
+_UID_PREFIXES = defaultdict(int)
 
 def printing(x, string=''):
     '''
@@ -47,6 +56,33 @@ def set_learning_phase(value):
     _LEARNING_PHASE = value
 
 
+def get_uid(prefix=''):
+    """Provides a unique UID given a string prefix.
+
+    # Arguments
+        prefix: string.
+
+    # Returns
+        An integer.
+
+    # Example
+    ```
+        >>> keras.backend.get_uid('dense')
+        >>> 1
+        >>> keras.backend.get_uid('dense')
+        >>> 2
+    ```
+
+    """
+    _UID_PREFIXES[prefix] += 1
+    return _UID_PREFIXES[prefix]
+
+
+def reset_uids():
+    global _UID_PREFIXES
+    _UID_PREFIXES = defaultdict(int)
+
+
 # VARIABLE MANIPULATION
 
 
@@ -67,8 +103,36 @@ def to_dense(tensor):
         return tensor
 
 
+def _is_explicit_shape(shape):
+    if hasattr(shape, '__iter__'):
+        for x in shape:
+            if x is not None:
+                if not isinstance(x, int):
+                    return False
+        return True
+    return False
+
+
+NAME_SCOPE_STACK = []
+
+
+@contextmanager
+def name_scope(name):
+    global NAME_SCOPE_STACK
+    NAME_SCOPE_STACK.append(name)
+    yield
+    NAME_SCOPE_STACK.pop()
+
+
+def _prepare_name(name, default):
+    prefix = '/'.join(NAME_SCOPE_STACK)
+    if name is None:
+        return prefix + '/' + default
+    return prefix + '/' + name
+
+
 def variable(value, dtype=None, name=None):
-    '''Instantiates a variable and returns it.
+    """Instantiates a variable and returns it.
 
     # Arguments
         value: Numpy array, initial value of the tensor.
@@ -77,23 +141,81 @@ def variable(value, dtype=None, name=None):
 
     # Returns
         A variable instance (with Keras metadata included).
-    '''
+    """
     if dtype is None:
         dtype = floatx()
     if hasattr(value, 'tocoo'):
         _assert_sparse_module()
-        variable = th_sparse_module.as_sparse_variable(value)
+        variable = th_sparse_module.as_sparse_variable(
+            value, name=_prepare_name(name, 'variable'))
     else:
+        if isinstance(value, (theano.tensor.TensorVariable,
+                              theano.tensor.sharedvar.TensorSharedVariable,
+                              theano.tensor.TensorConstant)):
+            # Support for RandomStreams().normal(), .uniform().
+            value = value.eval()
         value = np.asarray(value, dtype=dtype)
-        variable = theano.shared(value=value, name=name, strict=False)
+        variable = theano.shared(value=value,
+                                 name=_prepare_name(name, 'variable'),
+                                 strict=False)
     variable._keras_shape = value.shape
     variable._uses_learning_phase = False
     return variable
 
 
+def constant(value, dtype=None, shape=None, name=None):
+    if dtype is None:
+        dtype = floatx()
+    if shape is None:
+        shape = ()
+    np_value = value * np.ones(shape)
+    const = T.constant(np_value,
+                       dtype=dtype,
+                       name=_prepare_name(name, 'constant'))
+    const._keras_shape = shape
+    const._uses_learning_phase = False
+    return const
+
+
+def is_keras_tensor(x):
+    """Returns whether `x` is a Keras tensor.
+
+    # Arguments
+        x: a potential tensor.
+
+    # Returns
+        A boolean: whether the argument is a Keras tensor.
+
+    # Raises
+        ValueError: in case `x` is not a symbolic tensor.
+
+    # Examples
+    ```python
+        >>> from keras import backend as K
+        >>> np_var = numpy.array([1, 2])
+        >>> K.is_keras_tensor(np_var) # A numpy array is not a symbolic tensor.
+        ValueError
+        >>> k_var = theano.shared(value=np.array([1,2,3]))
+        >>> K.is_keras_tensor(k_var) # A variable created directly from tensorflow/theano is not a Keras tensor.
+        False
+        >>> keras_var = K.variable(np_var)
+        >>> K.is_keras_tensor(keras_var) # A variable created with the keras backend is a Keras tensor.
+        True
+        >>> keras_placeholder = K.placeholder(shape=(2, 4, 5))
+        >>> K.is_keras_tensor(keras_placeholder)  # A placeholder is a Keras tensor.
+        True
+    ```
+    """
+    if not isinstance(x, (T.TensorVariable,
+                          T.sharedvar.TensorSharedVariable)):
+        raise ValueError('Unexpectedly found an instance of type `' + str(type(x)) + '`. '
+                         'Expected a symbolic tensor instance.')
+    return hasattr(x, '_keras_history')
+
+
 def placeholder(shape=None, ndim=None, dtype=None, sparse=False, name=None):
-    '''Instantiate an input data placeholder variable.
-    '''
+    """Instantiate an input data placeholder variable.
+    """
     if dtype is None:
         dtype = floatx()
     if shape is None and ndim is None:
@@ -103,6 +225,7 @@ def placeholder(shape=None, ndim=None, dtype=None, sparse=False, name=None):
     else:
         shape = tuple([None for _ in range(ndim)])
 
+    name = _prepare_name(name, 'placeholder')
     broadcast = (False,) * ndim
     if sparse:
         _assert_sparse_module()
@@ -115,16 +238,16 @@ def placeholder(shape=None, ndim=None, dtype=None, sparse=False, name=None):
 
 
 def shape(x):
-    '''Returns the shape of a tensor.
+    """Returns the shape of a tensor.
 
     Warning: type returned will be different for
     Theano backend (Theano tensor type) and TF backend (TF TensorShape).
-    '''
+    """
     return x.shape
 
 
 def int_shape(x):
-    '''Returns the shape of a Keras tensor or a Keras variable as a tuple of
+    """Returns the shape of a Keras tensor or a Keras variable as a tuple of
     integers or None entries.
 
     # Arguments
@@ -132,16 +255,15 @@ def int_shape(x):
 
     # Returns
         A tuple of integers (or None entries).
-    '''
+    """
     if hasattr(x, '_keras_shape'):
         return x._keras_shape
     else:
-        raise Exception('Not a Keras tensor:', x)
+        raise TypeError('Not a Keras tensor:', x)
 
 
 def ndim(x):
     return x.ndim
-
 
 
 def dtype(x):
@@ -149,14 +271,14 @@ def dtype(x):
 
 
 def eval(x):
-    '''Returns the value of a tensor.
-    '''
+    """Returns the value of a tensor.
+    """
     return to_dense(x).eval()
 
 
 def zeros(shape, dtype=None, name=None):
-    '''Instantiates an all-zeros variable.
-    '''
+    """Instantiates an all-zeros variable.
+    """
     if dtype is None:
         dtype = floatx()
     return variable(np.zeros(shape), dtype, name)
@@ -169,27 +291,39 @@ def zeros_symbolic(shape, dtype=_FLOATX):
 
 
 def ones(shape, dtype=None, name=None):
-    '''Instantiates an all-ones variable.
-    '''
+    """Instantiates an all-ones variable.
+    """
     if dtype is None:
         dtype = floatx()
     return variable(np.ones(shape), dtype, name)
 
 
 def eye(size, dtype=None, name=None):
-    '''Instantiates an identity matrix.
-    '''
+    """Instantiates an identity matrix.
+    """
     if dtype is None:
         dtype = floatx()
     return variable(np.eye(size), dtype, name)
 
 
-def ones_like(x, name=None):
-    return T.ones_like(x)
+def ones_like(x, dtype=None, name=None):
+    return T.ones_like(x, dtype=dtype)
 
 
-def zeros_like(x, name=None):
-    return T.zeros_like(x)
+def zeros_like(x, dtype=None, name=None):
+    return T.zeros_like(x, dtype=dtype)
+
+
+def identity(x):
+    """Returns a tensor with the same content as the input tensor.
+
+    # Arguments
+        x: The input tensor.
+
+    # Returns
+        A tensor of the same shape, type and content.
+    """
+    return x.copy()
 
 
 def random_uniform_variable(shape, low, high, dtype=None, name=None):
@@ -203,11 +337,13 @@ def random_normal_variable(shape, mean, scale, dtype=None, name=None):
 
 
 def count_params(x):
-    '''Returns the number of scalars in a tensor.
+    """Returns the number of scalars in a tensor.
 
     Return: numpy integer.
-    '''
-    return np.prod(x.shape.eval())
+    """
+    # We don't want those compilation to show up in Theano profiler.
+    f = theano.function([], x.shape, profile=False)
+    return np.prod(f())
 
 
 def cast(x, dtype):
@@ -240,21 +376,32 @@ def moving_average_update(variable, value, momentum):
 
 # LINEAR ALGEBRA
 
-'''
+"""
 Assumed overridden:
 +, -, /, *, +=, -=, *=, /=
-'''
+"""
 
 
 def dot(x, y):
     if is_sparse(x):
-        return th_sparse_module.basic.structured_dot(x, y)
+        out = th_sparse_module.basic.structured_dot(x, y)
     else:
-        return T.dot(x, y)
+        out = T.dot(x, y)
+    if hasattr(x, '_keras_shape') and hasattr(y, '_keras_shape'):
+        x_shape = list(x._keras_shape)
+        y_shape = list(y._keras_shape)
+        if len(x_shape) > 0:
+            x_shape.pop()
+        if len(y_shape) == 1:
+            y_shape.pop()
+        elif len(y_shape) > 1:
+            y_shape.pop(-2)
+        out._keras_shape = tuple(x_shape + y_shape)
+    return out
 
 
 def batch_dot(x, y, axes=None):
-    '''Batchwise dot product.
+    """Batchwise dot product.
 
     batch_dot results in a tensor with less dimensions than the input.
     If the number of dimensions is reduced to 1, we use `expand_dims` to
@@ -290,7 +437,7 @@ def batch_dot(x, y, axes=None):
             dimension 2 of y has been summed over. (dot_axes[1] = 2)
 
         output_shape = (100, 30)
-    '''
+    """
     if isinstance(axes, int):
         axes = (axes, axes)
     if axes is None:
@@ -299,20 +446,42 @@ def batch_dot(x, y, axes=None):
     out = T.batched_tensordot(x, y, axes=axes)
     if ndim(out) == 1:
         out = expand_dims(out, 1)
+
+    if hasattr(x, '_keras_shape') and hasattr(y, '_keras_shape'):
+        shape = []
+        for axis in range(len(x._keras_shape)):
+            if axis != axes[0]:
+                shape.append(x._keras_shape[axis])
+        for axis in range(1, len(y._keras_shape)):
+            if axis != axes[1]:
+                shape.append(y._keras_shape[axis])
+        if len(shape) == 1:
+            shape.append(1)     # Expand dims if ndim == 1
+        out._keras_shape = tuple(shape)
     return out
 
 
 def transpose(x):
-    return T.transpose(x)
+    y = T.transpose(x)
+    if hasattr(x, '_keras_shape'):
+        y._keras_shape = tuple(reversed(x._keras_shape))
+    return y
 
 
 def gather(reference, indices):
-    '''reference: a tensor.
-    indices: an int tensor of indices.
+    """Retrieves the elements of indices `indices` in the tensor `reference`.
 
-    Return: a tensor of same type as reference.
-    '''
-    return reference[indices]
+    # Arguments
+        reference: A tensor.
+        indices: An integer tensor of indices.
+
+    # Returns
+        A tensor of same type as `reference`.
+    """
+    y = reference[indices]
+    if hasattr(reference, '_keras_shape') and hasattr(indices, '_keras_shape'):
+        y._keras_shape = indices._keras_shape + reference._keras_shape[1:]
+    return y
 
 
 def fft(x, norm=None):
@@ -344,20 +513,46 @@ def min(x, axis=None, keepdims=False):
 
 
 def sum(x, axis=None, keepdims=False):
-    '''Sum of the values in a tensor, alongside the specified axis.
-    '''
+    """Sum of the values in a tensor, alongside the specified axis.
+    """
     return T.sum(x, axis=axis, keepdims=keepdims)
 
 
 def prod(x, axis=None, keepdims=False):
-    '''Multiply the values in a tensor, alongside the specified axis.
-    '''
+    """Multiply the values in a tensor, alongside the specified axis.
+    """
     return T.prod(x, axis=axis, keepdims=keepdims)
 
 
+def cumsum(x, axis=0):
+    """Cumulative sum of the values in a tensor, alongside the specified axis.
+
+    # Arguments
+        x: A tensor or variable.
+        axis: An integer, the axis to compute the sum.
+
+    # Returns
+        A tensor of the cumulative sum of values of `x` along `axis`.
+    """
+    return T.extra_ops.cumsum(x, axis=axis)
+
+
+def cumprod(x, axis=0):
+    """Cumulative product of the values in a tensor, alongside the specified axis.
+
+    # Arguments
+        x: A tensor or variable.
+        axis: An integer, the axis to compute the product.
+
+    # Returns
+        A tensor of the cumulative product of values of `x` along `axis`.
+    """
+    return T.extra_ops.cumprod(x, axis=axis)
+
+
 def mean(x, axis=None, keepdims=False):
-    '''Mean of a tensor, alongside the specified axis.
-    '''
+    """Mean of a tensor, alongside the specified axis.
+    """
     dtype = None
     # bool is available since theano v0.9dev
     if 'int' in x.dtype or x.dtype == 'bool':
@@ -368,18 +563,20 @@ def mean(x, axis=None, keepdims=False):
 def std(x, axis=None, keepdims=False):
     return T.std(x, axis=axis, keepdims=keepdims)
 
+
 def var(x, axis=None, keepdims=False):
     return T.var(x, axis=axis, keepdims=keepdims)
 
+
 def any(x, axis=None, keepdims=False):
-    '''Bitwise reduction (logical OR).
-    '''
+    """Bitwise reduction (logical OR).
+    """
     return T.any(x, axis=axis, keepdims=keepdims)
 
 
 def all(x, axis=None, keepdims=False):
-    '''Bitwise reduction (logical AND).
-    '''
+    """Bitwise reduction (logical AND).
+    """
     return T.all(x, axis=axis, keepdims=keepdims)
 
 
@@ -414,8 +611,31 @@ def log(x):
 def log2(x):
     return T.log2(x)
 
+def logsumexp(x, axis=None, keepdims=False):
+    """Computes log(sum(exp(elements across dimensions of a tensor))).
+
+    This function is more numerically stable than log(sum(exp(x))).
+    It avoids overflows caused by taking the exp of large inputs and
+    underflows caused by taking the log of small inputs.
+
+    # Arguments
+        x: A tensor or variable.
+        axis: An integer, the axis to reduce over.
+        keepdims: A boolean, whether to keep the dimensions or not.
+            If `keepdims` is `False`, the rank of the tensor is reduced
+            by 1. If `keepdims` is `True`, the reduced dimension is
+            retained with length 1.
+
+    # Returns
+        The reduced tensor.
+    """
+    # Theano has a built-in optimization for logsumexp (see https://github.com/Theano/Theano/pull/4736)
+    # so we can just write the expression directly:
+    return T.log(T.sum(T.exp(x), axis=axis, keepdims=keepdims))
+
+
 def round(x):
-    return T.round(x)
+    return T.round(x, mode='half_to_even')
 
 
 def sign(x):
@@ -427,8 +647,10 @@ def pow(x, a):
 
 
 def clip(x, min_value, max_value):
-    if max_value < min_value:
+    if max_value is not None and max_value < min_value:
         max_value = min_value
+    if max_value is None:
+        max_value = np.inf
     return T.clip(x, min_value, max_value)
 
 
@@ -448,11 +670,11 @@ def greater_equal(x, y):
     return T.ge(x, y)
 
 
-def lesser(x, y):
+def less(x, y):
     return T.lt(x, y)
 
 
-def lesser_equal(x, y):
+def less_equal(x, y):
     return T.le(x, y)
 
 
@@ -474,12 +696,22 @@ def cos(x):
 
 def normalize_batch_in_training(x, gamma, beta,
                                 reduction_axes, epsilon=1e-3):
-    '''Computes mean and std for batch then apply batch_normalization on batch.
-    '''
+    """Computes mean and std for batch then apply batch_normalization on batch.
+    """
     # TODO remove this if statement when Theano without
     # T.nnet.bn.batch_normalization_train is deprecated
     if not hasattr(T.nnet.bn, 'batch_normalization_train'):
         return _old_normalize_batch_in_training(x, gamma, beta, reduction_axes, epsilon)
+
+    if gamma is None:
+        if beta is None:
+            gamma = ones_like(x)
+        else:
+            gamma = ones_like(beta)
+    if beta is None:
+        if gamma is None:
+            beta = zeros_like(x)
+        beta = zeros_like(gamma)
 
     normed, mean, stdinv = T.nnet.bn.batch_normalization_train(
         x, gamma, beta, reduction_axes, epsilon)
@@ -488,16 +720,21 @@ def normalize_batch_in_training(x, gamma, beta,
 
 
 def batch_normalization(x, mean, var, beta, gamma, epsilon=1e-3):
-    '''Apply batch normalization on x given mean, var, beta and gamma.
-    '''
+    """Apply batch normalization on x given mean, var, beta and gamma.
+    """
     # TODO remove this if statement when Theano without
     # T.nnet.bn.batch_normalization_test is deprecated
     if not hasattr(T.nnet.bn, 'batch_normalization_test'):
         return _old_batch_normalization(x, mean, var, beta, gamma, epsilon)
 
+    if gamma is None:
+        gamma = ones_like(var)
+    if beta is None:
+        beta = zeros_like(mean)
+
     if mean.ndim == 1:
         # based on TensorFlow's default: normalize along rightmost dimension
-        reduction_axes = range(x.ndim - 1)
+        reduction_axes = list(range(x.ndim - 1))
     else:
         reduction_axes = [i for i in range(x.ndim) if mean.broadcastable[i]]
 
@@ -509,8 +746,13 @@ def batch_normalization(x, mean, var, beta, gamma, epsilon=1e-3):
 # T.nnet.bn.batch_normalization_train is deprecated
 def _old_normalize_batch_in_training(x, gamma, beta,
                                      reduction_axes, epsilon=1e-3):
-    '''Computes mean and std for batch then apply batch_normalization on batch.
-    '''
+    """Computes mean and std for batch then apply batch_normalization on batch.
+    """
+    if gamma is None:
+        gamma = ones_like(x)
+    if beta is None:
+        beta = zeros_like(x)
+
     dev = theano.config.device
     use_cudnn = ndim(x) < 5 and reduction_axes == [0, 2, 3] and (dev.startswith('cuda') or dev.startswith('gpu'))
     if use_cudnn:
@@ -551,8 +793,13 @@ def _old_normalize_batch_in_training(x, gamma, beta,
 # TODO remove this if statement when Theano without
 # T.nnet.bn.batch_normalization_test is deprecated
 def _old_batch_normalization(x, mean, var, beta, gamma, epsilon=1e-3):
-    '''Apply batch normalization on x given mean, var, beta and gamma.
-    '''
+    """Apply batch normalization on x given mean, var, beta and gamma.
+    """
+    if gamma is None:
+        gamma = ones_like(var)
+    if beta is None:
+        beta = zeros_like(mean)
+
     if mean.ndim == 1 and x.ndim > 1:
         # in TensorFlow's batch_normalization, if the parameters are vectors
         # the batch normalization should be applied along the rightmost axis.
@@ -565,7 +812,7 @@ def _old_batch_normalization(x, mean, var, beta, gamma, epsilon=1e-3):
 
     ndim = x.ndim
     dev = theano.config.device
-    use_cudnn = ndim < 5 and (dev.startswith('cuda') or dev.startswith('gpu')) and mean.broadcastable.index(False) == 1
+    use_cudnn = ndim < 5 and (dev.startswith('cuda') or dev.startswith('gpu'))
     if use_cudnn:
         try:
             axis = mean.broadcastable.index(False)
@@ -573,8 +820,7 @@ def _old_batch_normalization(x, mean, var, beta, gamma, epsilon=1e-3):
                 shuffle_pattern = list(range(ndim))
                 shuffle_pattern[1] = shuffle_pattern[axis]
                 shuffle_pattern[axis] = 1
-                #return theano.sandbox.cuda.dnn.dnn_batch_normalization_test(
-                result=theano.sandbox.cuda.dnn.dnn_batch_normalization_test(
+                result = theano.sandbox.cuda.dnn.dnn_batch_normalization_test(
                     x.dimshuffle(shuffle_pattern),
                     gamma.dimshuffle(shuffle_pattern),
                     beta.dimshuffle(shuffle_pattern),
@@ -582,8 +828,7 @@ def _old_batch_normalization(x, mean, var, beta, gamma, epsilon=1e-3):
                     var.dimshuffle(shuffle_pattern),
                     'spatial', epsilon).dimshuffle(shuffle_pattern)
             else:
-                #return theano.sandbox.cuda.dnn.dnn_batch_normalization_test(
-                result=theano.sandbox.cuda.dnn.dnn_batch_normalization_test(
+                result = theano.sandbox.cuda.dnn.dnn_batch_normalization_test(
                     x, gamma, beta, mean, var, 'spatial', epsilon)
             return theano.tensor.as_tensor_variable(result)
         except AttributeError:
@@ -610,77 +855,102 @@ def concatenate(tensors, axis=-1):
 
 
 def reshape(x, shape):
-    return T.reshape(x, shape)
+    y = T.reshape(x, shape)
+    if _is_explicit_shape(shape):
+        if -1 in shape:
+            shape = tuple(x if x != -1 else None for x in shape)
+        y._keras_shape = shape
+        if hasattr(x, '_uses_learning_phase'):
+            y._uses_learning_phase = x._uses_learning_phase
+        else:
+            y._uses_learning_phase = False
+    return y
 
 
 def permute_dimensions(x, pattern):
-    '''Transpose dimensions.
+    """Transpose dimensions.
 
     pattern should be a tuple or list of
     dimension indices, e.g. [0, 2, 1].
-    '''
+    """
     pattern = tuple(pattern)
-    return x.dimshuffle(pattern)
+    y = x.dimshuffle(pattern)
+    if hasattr(x, '_keras_shape'):
+        y._keras_shape = tuple(np.asarray(x._keras_shape)[list(pattern)])
+    return y
 
 
 def repeat_elements(x, rep, axis):
-    '''Repeat the elements of a tensor along an axis, like np.repeat.
+    """Repeat the elements of a tensor along an axis, like np.repeat.
 
     If x has shape (s1, s2, s3) and axis=1, the output
     will have shape (s1, s2 * rep, s3).
-    '''
-    return T.repeat(x, rep, axis=axis)
+    """
+    y = T.repeat(x, rep, axis=axis)
+    if hasattr(x, '_keras_shape'):
+        y._keras_shape = list(x._keras_shape)
+        repeat_dim = x._keras_shape[axis]
+        if repeat_dim is not None:
+                y._keras_shape[axis] = repeat_dim * rep
+        y._keras_shape = tuple(y._keras_shape)
+    return y
 
 
-def resize_images(X, height_factor, width_factor, dim_ordering):
-    '''Resize the images contained in a 4D tensor of shape
-    - [batch, channels, height, width] (for 'th' dim_ordering)
-    - [batch, height, width, channels] (for 'tf' dim_ordering)
+def resize_images(X, height_factor, width_factor, data_format):
+    """Resize the images contained in a 4D tensor of shape
+    - [batch, channels, height, width] (for 'channels_first' data_format)
+    - [batch, height, width, channels] (for 'channels_last' data_format)
     by a factor of (height_factor, width_factor). Both factors should be
     positive integers.
-    '''
-    if dim_ordering == 'th':
+    """
+    if data_format == 'channels_first':
         output = repeat_elements(X, height_factor, axis=2)
         output = repeat_elements(output, width_factor, axis=3)
         return output
-    elif dim_ordering == 'tf':
+    elif data_format == 'channels_last':
         output = repeat_elements(X, height_factor, axis=1)
         output = repeat_elements(output, width_factor, axis=2)
         return output
     else:
-        raise ValueError('Invalid dim_ordering:', dim_ordering)
+        raise ValueError('Invalid data_format:', data_format)
 
 
-def resize_volumes(X, depth_factor, height_factor, width_factor, dim_ordering):
-    '''Resize the volume contained in a 5D tensor of shape
-    - [batch, channels, depth, height, width] (for 'th' dim_ordering)
-    - [batch, depth, height, width, channels] (for 'tf' dim_ordering)
+def resize_volumes(X, depth_factor, height_factor, width_factor, data_format):
+    """Resize the volume contained in a 5D tensor of shape
+    - [batch, channels, depth, height, width] (for 'channels_first' data_format)
+    - [batch, depth, height, width, channels] (for 'channels_last' data_format)
     by a factor of (depth_factor, height_factor, width_factor).
     Both factors should be positive integers.
-    '''
-    if dim_ordering == 'th':
+    """
+    if data_format == 'channels_first':
         output = repeat_elements(X, depth_factor, axis=2)
         output = repeat_elements(output, height_factor, axis=3)
         output = repeat_elements(output, width_factor, axis=4)
         return output
-    elif dim_ordering == 'tf':
+    elif data_format == 'channels_last':
         output = repeat_elements(X, depth_factor, axis=1)
         output = repeat_elements(output, height_factor, axis=2)
         output = repeat_elements(output, width_factor, axis=3)
         return output
     else:
-        raise ValueError('Invalid dim_ordering:', dim_ordering)
+        raise ValueError('Invalid data_format:', data_format)
 
 
 def repeat(x, n):
-    '''Repeat a 2D tensor.
+    """Repeat a 2D tensor.
 
     If x has shape (samples, dim) and n=2,
     the output will have shape (samples, 2, dim).
-    '''
+    """
     assert x.ndim == 2
-    x = x.dimshuffle((0, 'x', 1))
-    return T.extra_ops.repeat(x, n, axis=1)
+    y = x.dimshuffle((0, 'x', 1))
+    y = T.extra_ops.repeat(y, n, axis=1)
+    if hasattr(x, '_keras_shape'):
+        shape = list(x._keras_shape)
+        shape.insert(1, n)
+        y._keras_shape = tuple(shape)
+
+    return y
 
 
 def repeatRdim(x, n, axis=1):
@@ -719,7 +989,7 @@ def funequal(x,y):
 
 
 def arange(start, stop=None, step=1, dtype='int32'):
-    '''Creates a 1-D tensor containing a sequence of integers.
+    """Creates a 1-D tensor containing a sequence of integers.
 
     The function arguments use the same convention as
     Theano's arange: if only one argument is provided,
@@ -727,127 +997,132 @@ def arange(start, stop=None, step=1, dtype='int32'):
 
     The default type of the returned tensor is 'int32' to
     match TensorFlow's default.
-    '''
+    """
     return T.arange(start, stop=stop, step=step, dtype=dtype)
 
 
 def tile(x, n):
-    return T.tile(x, n)
+    y = T.tile(x, n)
+    if hasattr(x, '_keras_shape'):
+        if _is_explicit_shape(n):
+            output_shape = x._keras_shape[:-len(n)]
+            for i, j in zip(x._keras_shape, n):
+                if i is None:
+                    output_shape += (None,)
+                else:
+                    output_shape += (i * j,)
+        elif isinstance(n, int):
+            output_shape = x._keras_shape[:-1]
+            if x._keras_shape[-1] is None:
+                output_shape += (None,)
+            else:
+                output_shape += (x._keras_shape[-1] * n,)
+        else:
+            # symbolic n
+            if n.ndim == 0:
+                # n is a scalar
+                output_shape = x._keras_shape[:-1] + (None,)
+            elif hasattr(n, '_keras_shape'):
+                # n is a vector
+                n_size = n._keras_shape[0]
+                output_shape = x._keras_shape[:-n_size] + (None,) * n_size
+            else:
+                output_shape = (None,) * x.ndim
+        y._keras_shape = output_shape
+    return y
 
 
 def flatten(x):
-    return T.flatten(x)
+    y = T.flatten(x)
+    if hasattr(x, '_keras_shape'):
+        if None in x._keras_shape:
+            y._keras_shape = (None,)
+        else:
+            y._keras_shape = (np.prod(x._keras_shape), )
+    return y
 
 
 def batch_flatten(x):
-    '''Turn a n-D tensor into a 2D tensor where
+    """Turn a n-D tensor into a 2D tensor where
     the first dimension is conserved.
-    '''
-    x = T.reshape(x, (x.shape[0], T.prod(x.shape) // x.shape[0]))
-    return x
-
-
-def expand_dims(x, dim=-1):
-    '''Add a 1-sized dimension at index "dim".
-    '''
-    pattern = [i for i in range(x.type.ndim)]
-    if dim < 0:
-        if x.type.ndim == 0:
-            dim = 0
+    """
+    y = T.reshape(x, (x.shape[0], T.prod(x.shape[1:])))
+    if hasattr(x, '_keras_shape'):
+        if None in x._keras_shape[1:]:
+            y._keras_shape = (x._keras_shape[0], None)
         else:
-            dim = dim % x.type.ndim + 1
-    pattern.insert(dim, 'x')
-    return x.dimshuffle(pattern)
+            y._keras_shape = (x._keras_shape[0], np.prod(x._keras_shape[1:]))
+    return y
+
+
+def expand_dims(x, axis=-1):
+    """Add a 1-sized dimension at index "dim".
+    """
+    pattern = [i for i in range(x.type.ndim)]
+    if axis < 0:
+        if x.type.ndim == 0:
+            axis = 0
+        else:
+            axis = axis % x.type.ndim + 1
+    pattern.insert(axis, 'x')
+    y = x.dimshuffle(pattern)
+    if hasattr(x, '_keras_shape'):
+        shape = list(x._keras_shape)
+        shape.insert(axis, 1)
+        y._keras_shape = tuple(shape)
+    return y
 
 
 def squeeze(x, axis):
-    '''Remove a 1-dimension from the tensor at index "axis".
-    '''
+    """Remove a 1-dimension from the tensor at index "axis".
+    """
     shape = list(x.shape)
     shape.pop(axis)
-    return T.reshape(x, tuple(shape))
+    y = T.reshape(x, tuple(shape))
+    if hasattr(x, '_keras_shape'):
+        kshape = list(x._keras_shape)
+        kshape.pop(axis)
+        y._keras_shape = tuple(kshape)
+    return y
 
 
-def temporal_padding(x, padding=1):
-    '''Pad the middle dimension of a 3D tensor
+def temporal_padding(x, padding=(1, 1)):
+    """Pad the middle dimension of a 3D tensor
     with "padding" zeros left and right.
-
-    Appologies for the inane API, but Theano makes this
-    really hard.
-    '''
-    input_shape = x.shape
-    output_shape = (input_shape[0],
-                    input_shape[1] + 2 * padding,
-                    input_shape[2])
-    output = T.zeros(output_shape)
-    return T.set_subtensor(output[:, padding:x.shape[1] + padding, :], x)
-
-
-def asymmetric_temporal_padding(x, left_pad=1, right_pad=1):
-    '''Pad the middle dimension of a 3D tensor
-    with "left_pad" zeros left and "right_pad" right.
 
     Apologies for the inane API, but Theano makes this
     really hard.
-    '''
+    """
+    assert len(padding) == 2
     input_shape = x.shape
     output_shape = (input_shape[0],
-                    input_shape[1] + left_pad + right_pad,
+                    input_shape[1] + padding[0] + padding[1],
                     input_shape[2])
     output = T.zeros(output_shape)
-    return T.set_subtensor(output[:, left_pad:x.shape[1] + left_pad, :], x)
+    result = T.set_subtensor(output[:, padding[0]:x.shape[1] + padding[0], :], x)
+    if hasattr(x, '_keras_shape'):
+        result._keras_shape = (x._keras_shape[0],
+                               x._keras_shape[1] + py_sum(padding),
+                               x._keras_shape[2])
+    return result
 
 
-def spatial_2d_padding(x, padding=(1, 1), dim_ordering='default'):
-    '''Pad the 2nd and 3rd dimensions of a 4D tensor
+def spatial_2d_padding(x, padding=((1, 1), (1, 1)), data_format=None):
+    """Pad the 2nd and 3rd dimensions of a 4D tensor
     with "padding[0]" and "padding[1]" (resp.) zeros left and right.
-    '''
-    if dim_ordering == 'default':
-        dim_ordering = image_dim_ordering()
-    if dim_ordering not in {'th', 'tf'}:
-        raise ValueError('Unknown dim_ordering ' + str(dim_ordering))
+    """
+    assert len(padding) == 2
+    assert len(padding[0]) == 2
+    assert len(padding[1]) == 2
+    top_pad, bottom_pad = padding[0]
+    left_pad, right_pad = padding[1]
+    if data_format is None:
+        data_format = image_data_format()
+    if data_format not in {'channels_first', 'channels_last'}:
+        raise ValueError('Unknown data_format ' + str(data_format))
 
     input_shape = x.shape
-    if dim_ordering == 'th':
-        output_shape = (input_shape[0],
-                        input_shape[1],
-                        input_shape[2] + 2 * padding[0],
-                        input_shape[3] + 2 * padding[1])
-        output = T.zeros(output_shape)
-        indices = (slice(None),
-                   slice(None),
-                   slice(padding[0], input_shape[2] + padding[0]),
-                   slice(padding[1], input_shape[3] + padding[1]))
-
-    elif dim_ordering == 'tf':
-        output_shape = (input_shape[0],
-                        input_shape[1] + 2 * padding[0],
-                        input_shape[2] + 2 * padding[1],
-                        input_shape[3])
-        output = T.zeros(output_shape)
-        indices = (slice(None),
-                   slice(padding[0], input_shape[1] + padding[0]),
-                   slice(padding[1], input_shape[2] + padding[1]),
-                   slice(None))
-    else:
-        raise ValueError('Invalid dim_ordering:', dim_ordering)
-    return T.set_subtensor(output[indices], x)
-
-
-def asymmetric_spatial_2d_padding(x, top_pad=1, bottom_pad=1,
-                                  left_pad=1, right_pad=1,
-                                  dim_ordering='default'):
-    '''Pad the rows and columns of a 4D tensor
-    with "top_pad", "bottom_pad", "left_pad", "right_pad" (resp.) zeros
-    rows on top, bottom; cols on left, right.
-    '''
-    if dim_ordering == 'default':
-        dim_ordering = image_dim_ordering()
-    if dim_ordering not in {'th', 'tf'}:
-        raise ValueError('Unknown dim_ordering ' + str(dim_ordering))
-
-    input_shape = x.shape
-    if dim_ordering == 'th':
+    if data_format == 'channels_first':
         output_shape = (input_shape[0],
                         input_shape[1],
                         input_shape[2] + top_pad + bottom_pad,
@@ -858,81 +1133,78 @@ def asymmetric_spatial_2d_padding(x, top_pad=1, bottom_pad=1,
                    slice(top_pad, input_shape[2] + top_pad),
                    slice(left_pad, input_shape[3] + left_pad))
 
-    elif dim_ordering == 'tf':
+    else:
         output_shape = (input_shape[0],
                         input_shape[1] + top_pad + bottom_pad,
                         input_shape[2] + left_pad + right_pad,
                         input_shape[3])
-        print(output_shape)
         output = T.zeros(output_shape)
         indices = (slice(None),
                    slice(top_pad, input_shape[1] + top_pad),
                    slice(left_pad, input_shape[2] + left_pad),
                    slice(None))
-    else:
-        raise ValueError('Invalid dim_ordering:', dim_ordering)
-    return T.set_subtensor(output[indices], x)
+    y = T.set_subtensor(output[indices], x)
+    y._keras_shape = output_shape
+    return y
 
 
-def spatial_3d_padding(x, padding=(1, 1, 1), dim_ordering='default'):
-    '''Pad the 2nd, 3rd and 4th dimensions of a 5D tensor
+def spatial_3d_padding(x, padding=((1, 1), (1, 1), (1, 1)), data_format=None):
+    """Pad the 2nd, 3rd and 4th dimensions of a 5D tensor
     with "padding[0]", "padding[1]" and "padding[2]" (resp.) zeros left and right.
-    '''
-    if dim_ordering == 'default':
-        dim_ordering = image_dim_ordering()
-    if dim_ordering not in {'th', 'tf'}:
-        raise ValueError('Unknown dim_ordering ' + str(dim_ordering))
+    """
+    if data_format is None:
+        data_format = image_data_format()
+    if data_format not in {'channels_first', 'channels_last'}:
+        raise ValueError('Unknown data_format ' + str(data_format))
 
     input_shape = x.shape
-    if dim_ordering == 'th':
+    if data_format == 'channels_first':
         output_shape = (input_shape[0],
                         input_shape[1],
-                        input_shape[2] + 2 * padding[0],
-                        input_shape[3] + 2 * padding[1],
-                        input_shape[4] + 2 * padding[2])
+                        input_shape[2] + padding[0][0] + padding[0][1],
+                        input_shape[3] + padding[1][0] + padding[1][1],
+                        input_shape[4] + padding[2][0] + padding[2][1])
         output = T.zeros(output_shape)
         indices = (slice(None),
                    slice(None),
-                   slice(padding[0], input_shape[2] + padding[0]),
-                   slice(padding[1], input_shape[3] + padding[1]),
-                   slice(padding[2], input_shape[4] + padding[2]))
+                   slice(padding[0][0], input_shape[2] + padding[0][0]),
+                   slice(padding[1][0], input_shape[3] + padding[1][0]),
+                   slice(padding[2][0], input_shape[4] + padding[2][0]))
 
-    elif dim_ordering == 'tf':
+    else:
         output_shape = (input_shape[0],
-                        input_shape[1] + 2 * padding[0],
-                        input_shape[2] + 2 * padding[1],
-                        input_shape[3] + 2 * padding[2],
+                        input_shape[1] + padding[0][0] + padding[0][1],
+                        input_shape[2] + padding[1][0] + padding[1][1],
+                        input_shape[3] + padding[2][0] + padding[2][1],
                         input_shape[4])
         output = T.zeros(output_shape)
         indices = (slice(None),
-                   slice(padding[0], input_shape[1] + padding[0]),
-                   slice(padding[1], input_shape[2] + padding[1]),
-                   slice(padding[2], input_shape[3] + padding[2]),
+                   slice(padding[0][0], input_shape[1] + padding[0][0]),
+                   slice(padding[1][0], input_shape[2] + padding[1][0]),
+                   slice(padding[2][0], input_shape[3] + padding[2][0]),
                    slice(None))
-    else:
-        raise ValueError('Invalid dim_ordering:', dim_ordering)
     return T.set_subtensor(output[indices], x)
 
 
-def stack(x):
-    return T.stack(*x)
+def stack(x, axis=0):
+    return T.stack(x, axis=axis)
 
 
-def one_hot(indices, nb_classes):
-    '''Input: nD integer tensor of shape (batch_size, dim1, dim2, ... dim(n-1))
+def one_hot(indices, num_classes):
+    """Input: nD integer tensor of shape (batch_size, dim1, dim2, ... dim(n-1))
     Output: (n + 1)D one hot representation of the input
-    with shape (batch_size, dim1, dim2, ... dim(n-1), nb_classes)
-    '''
+    with shape (batch_size, dim1, dim2, ... dim(n-1), num_classes)
+    """
     input_shape = tuple((indices.shape[i] for i in range(indices.ndim)))
     indices = T.flatten(indices)
-    oh = T.extra_ops.to_one_hot(indices, nb_classes)
-    oh = T.reshape(oh, input_shape + (nb_classes,))
+    oh = T.extra_ops.to_one_hot(indices, num_classes)
+    oh = T.reshape(oh, input_shape + (num_classes,))
     return oh
 
 
 def reverse(x, axes):
-    '''Reverse a tensor along the the specified axes
-    '''
+    """Reverse a tensor along the specified axes
+    """
     if isinstance(axes, int):
         axes = [axes]
     slices = [slice(None, None, -1) if i in axes else slice(None, None, None) for i in range(x.ndim)]
@@ -949,15 +1221,15 @@ def get_value(x):
     if isinstance(x, np.ndarray):
         return x
     if not hasattr(x, 'get_value'):
-        raise TypeError('get_value() can only be called on a variable. '
-                        'If you have an expression instead, use eval().')
+        raise TypeError('`get_value` can only be called on a variable. '
+                        'If you have an expression instead, use `eval()`.')
     return x.get_value()
 
 
 def batch_get_value(xs):
-    '''Returns the value of more than one tensor variable,
+    """Returns the value of more than one tensor variable,
     as a list of Numpy arrays.
-    '''
+    """
     return [get_value(x) for x in xs]
 
 
@@ -975,9 +1247,9 @@ def get_variable_shape(x):
 
 
 def print_tensor(x, message=''):
-    '''Print the message and the tensor when evaluated and return the same
+    """Print the message and the tensor when evaluated and return the same
     tensor.
-    '''
+    """
     p_op = Print(message)
     return p_op(x)
 
@@ -986,7 +1258,7 @@ def print_tensor(x, message=''):
 
 class Function(object):
 
-    def __init__(self, inputs, outputs, updates=[], **kwargs):
+    def __init__(self, inputs, outputs, updates=[], name=None, **kwargs):
         unique_variables_to_update = {}
         for v, nv in updates:
             if v not in unique_variables_to_update:
@@ -995,7 +1267,9 @@ class Function(object):
         self.function = theano.function(inputs, outputs, updates=updates,
                                         allow_input_downcast=True,
                                         on_unused_input='ignore',
+                                        name=name,
                                         **kwargs)
+        self.name = name
 
     def __call__(self, inputs):
         assert isinstance(inputs, (list, tuple))
@@ -1004,10 +1278,9 @@ class Function(object):
 
 def function(inputs, outputs, updates=[], **kwargs):
     if len(kwargs) > 0:
-        function_args = inspect.getargspec(theano.function)[0]
         for key in kwargs.keys():
-            if key not in function_args:
-                msg = 'Invalid argument "%s" passed to K.function' % key
+            if not has_arg(theano.function, key, True):
+                msg = 'Invalid argument "%s" passed to K.function with Theano backend' % key
                 raise ValueError(msg)
     return Function(inputs, outputs, updates=updates, **kwargs)
 
@@ -1017,9 +1290,9 @@ def gradients(loss, variables):
 
 
 def stop_gradient(variables):
-    '''Returns `variables` but with zero gradient with respect to every other
+    """Returns `variables` but with zero gradient with respect to every other
     variables.
-    '''
+    """
     return theano.gradient.disconnected_grad(variables)
 
 
@@ -1362,30 +1635,75 @@ def _rnn(step_function, inputs, initial_states,
     states = [T.squeeze(state[-1]) for state in states]
     return last_output, outputs, states
 
+
 def switch(condition, then_expression, else_expression):
-    '''condition: scalar tensor.
-    '''
+    """Switches between two operations depending on a scalar value.
+
+    Note that both `then_expression` and `else_expression`
+    should be symbolic tensors of the *same shape*.
+
+    # Arguments
+        condition: scalar tensor (`int` or `bool`).
+        then_expression: either a tensor, or a callable that returns a tensor.
+        else_expression: either a tensor, or a callable that returns a tensor.
+
+    # Returns
+        The selected tensor.
+    """
+    if callable(then_expression):
+        then_expression = then_expression()
+    if callable(else_expression):
+        else_expression = else_expression()
     return T.switch(condition, then_expression, else_expression)
 
 
-def in_train_phase(x, alt):
-    if _LEARNING_PHASE is 1:
-        return x
-    elif _LEARNING_PHASE is 0:
-        return alt
-    x = theano.ifelse.ifelse(_LEARNING_PHASE, x, alt)
-    x._uses_learning_phase = True
+def in_train_phase(x, alt, training=None):
+    """Selects `x` in train phase, and `alt` otherwise.
+
+    Note that `alt` should have the *same shape* as `x`.
+
+    # Returns
+        Either `x` or `alt` based on the `training` flag.
+        the `training` flag defaults to `K.learning_phase()`.
+    """
+    if training is None:
+        training = learning_phase()
+        uses_learning_phase = True
+    else:
+        uses_learning_phase = False
+
+    if training is 1 or training is True:
+        if callable(x):
+            return x()
+        else:
+            return x
+
+    elif training is 0 or training is False:
+        if callable(alt):
+            return alt()
+        else:
+            return alt
+
+    if callable(x):
+        x = x()
+    if callable(alt):
+        alt = alt()
+
+    # else: assume learning phase is a placeholder tensor.
+    x = theano.ifelse.ifelse(training, x, alt)
+    if uses_learning_phase:
+        x._uses_learning_phase = True
     return x
 
 
-def in_test_phase(x, alt):
-    if _LEARNING_PHASE is 1:
-        return alt
-    elif _LEARNING_PHASE is 0:
-        return x
-    x = theano.ifelse.ifelse(_LEARNING_PHASE, alt, x)
-    x._uses_learning_phase = True
-    return x
+def in_test_phase(x, alt, training=None):
+    """Selects `x` in test phase, and `alt` otherwise.
+    Note that `alt` should have the *same shape* as `x`.
+
+    # Returns
+        Either `x` or `alt` based on `K.learning_phase`.
+    """
+    return in_train_phase(alt, x, training=training)
 
 
 # NN OPERATIONS
@@ -1490,7 +1808,7 @@ def tanh(x):
 
 
 def dropout(x, level, noise_shape=None, seed=None):
-    '''Sets entries in `x` to zero at random,
+    """Sets entries in `x` to zero at random,
     while scaling the entire tensor.
 
     # Arguments
@@ -1500,11 +1818,14 @@ def dropout(x, level, noise_shape=None, seed=None):
         noise_shape: shape for randomly generated keep/drop flags,
             must be broadcastable to the shape of `x`
         seed: random seed to ensure determinism.
-    '''
+    """
     if level < 0. or level >= 1:
         raise ValueError('Dropout level must be in interval [0, 1[.')
     if seed is None:
         seed = np.random.randint(1, 10e6)
+    if isinstance(noise_shape, list):
+        noise_shape = tuple(noise_shape)
+
     rng = RandomStreams(seed=seed)
     retain_prob = 1. - level
 
@@ -1512,15 +1833,16 @@ def dropout(x, level, noise_shape=None, seed=None):
         random_tensor = rng.binomial(x.shape, p=retain_prob, dtype=x.dtype)
     else:
         random_tensor = rng.binomial(noise_shape, p=retain_prob, dtype=x.dtype)
-        random_tensor = T.patternbroadcast(random_tensor, [dim == 1 for dim in noise_shape])
-
+        random_tensor = T.patternbroadcast(random_tensor,
+                                           [dim == 1 for dim in noise_shape])
     x *= random_tensor
     x /= retain_prob
     return x
 
 
-def l2_normalize(x, axis):
-    norm = T.sqrt(T.sum(T.square(x), axis=axis, keepdims=True)) + _EPSILON # avoid division by values close to 0
+def l2_normalize(x, axis, epsilon=1e-12):
+    square_sum = T.sum(T.square(x), axis=axis, keepdims=True)
+    norm = T.sqrt(T.maximum(square_sum, epsilon))
     return x / norm
 
 
@@ -1530,26 +1852,41 @@ def l1_normalize(x, axis):
     return x / norm
 
 def in_top_k(predictions, targets, k):
-    '''Returns whether the `targets` are in the top `k` `predictions`
+    """Returns whether the `targets` are in the top `k` `predictions`.
 
     # Arguments
-        predictions: A tensor of shape batch_size x classess and type float32.
-        targets: A tensor of shape batch_size and type int32 or int64.
-        k: An int, number of top elements to consider.
+        predictions: A tensor of shape `(batch_size, classes)` and type `float32`.
+        targets: A 1D tensor of length `batch_size` and type `int32` or `int64`.
+        k: An `int`, number of top elements to consider.
 
     # Returns
-        A tensor of shape batch_size and type int. output_i is 1 if
-        targets_i is within top-k values of predictions_i
-    '''
-    predictions_top_k = T.argsort(predictions)[:, -k:]
-    result, _ = theano.map(lambda prediction, target: any(equal(prediction, target)), sequences=[predictions_top_k, targets])
-    return result
+        A 1D tensor of length `batch_size` and type `bool`.
+        `output[i]` is `True` if `predictions[i, targets[i]]` is within top-`k`
+        values of `predictions[i]`.
+    """
+    # handle k < 1 and k >= predictions.shape[1] cases to match TF behavior
+    if k < 1:
+        # dtype='bool' is only available since Theano 0.9.0
+        try:
+            return T.zeros_like(targets, dtype='bool')
+        except TypeError:
+            return T.zeros_like(targets, dtype='int8')
+
+    if k >= int_shape(predictions)[1]:
+        try:
+            return T.ones_like(targets, dtype='bool')
+        except TypeError:
+            return T.ones_like(targets, dtype='int8')
+
+    predictions_k = T.sort(predictions)[:, -k]
+    targets_values = predictions[T.arange(targets.shape[0]), targets]
+    return T.ge(targets_values, predictions_k)
 
 
 # CONVOLUTIONS
 
-def _preprocess_conv2d_input(x, dim_ordering):
-    if dim_ordering == 'tf':
+def _preprocess_conv2d_input(x, data_format):
+    if data_format == 'channels_last':
         # TF uses the last dimension as channel dimension,
         # instead of the 2nd one.
         # TH input shape: (samples, input_depth, rows, cols)
@@ -1558,8 +1895,8 @@ def _preprocess_conv2d_input(x, dim_ordering):
     return x
 
 
-def _preprocess_conv3d_input(x, dim_ordering):
-    if dim_ordering == 'tf':
+def _preprocess_conv3d_input(x, data_format):
+    if data_format == 'channels_last':
         # TF uses the last dimension as channel dimension,
         # instead of the 2nd one.
         # TH input shape: (samples, input_depth, rows, cols, slices)
@@ -1568,46 +1905,44 @@ def _preprocess_conv3d_input(x, dim_ordering):
     return x
 
 
-def _preprocess_conv2d_kernel(kernel, dim_ordering):
-    if dim_ordering == 'tf':
-        # TF uses the last dimension as channel dimension,
-        # instead of the 2nd one.
-        # TH kernel shape: (depth, input_depth, rows, cols)
-        # TF kernel shape: (rows, cols, input_depth, depth)
-        kernel = kernel.dimshuffle((3, 2, 0, 1))
+def _preprocess_conv2d_kernel(kernel, data_format):
+    # As of Keras 2.0.0, all kernels are normalized
+    # on the format `(rows, cols, input_depth, depth)`,
+    # independently of `data_format`.
+    # Theano expects `(depth, input_depth, rows, cols)`.
+    kernel = kernel.dimshuffle((3, 2, 0, 1))
     return kernel
 
 
-def _preprocess_conv3d_kernel(kernel, dim_ordering):
-    if dim_ordering == 'tf':
-        # TF uses the last dimension as channel dimension,
-        # instead of the 2nd one.
-        # TH kernel shape: (depth, input_depth, rows, cols, slices)
-        # TF kernel shape: (rows, cols, slices, input_depth, depth)
-        kernel = kernel.dimshuffle((4, 3, 0, 1, 2))
+def _preprocess_conv3d_kernel(kernel, data_format):
+    # As of Keras 2.0.0, all kernels are normalized
+    # on the format `(space, input_depth, depth)`,
+    # independently of `data_format`.
+    # Theano expects `(depth, input_depth, space)`.
+    kernel = kernel.dimshuffle((4, 3, 0, 1, 2))
     return kernel
 
 
-def _preprocess_border_mode(border_mode):
-    if border_mode == 'same':
-        th_border_mode = 'half'
-    elif border_mode == 'valid':
-        th_border_mode = 'valid'
-    elif border_mode == 'full':
-        th_border_mode = 'full'
+def _preprocess_padding(padding):
+    if padding == 'same':
+        th_padding = 'half'
+    elif padding == 'valid':
+        th_padding = 'valid'
+    elif padding == 'full':
+        th_padding = 'full'
     else:
-        raise ValueError('Border mode not supported:', str(border_mode))
-    return th_border_mode
+        raise ValueError('Border mode not supported:', str(padding))
+    return th_padding
 
 
-def _preprocess_conv2d_image_shape(dim_ordering, image_shape):
+def _preprocess_conv2d_image_shape(image_shape, data_format):
     # Theano might not accept long type
     def int_or_none(value):
         try:
             return int(value)
         except TypeError:
             return None
-    if dim_ordering == 'tf':
+    if data_format == 'channels_last':
         if image_shape:
             image_shape = (image_shape[0], image_shape[3],
                            image_shape[1], image_shape[2])
@@ -1616,14 +1951,14 @@ def _preprocess_conv2d_image_shape(dim_ordering, image_shape):
     return image_shape
 
 
-def _preprocess_conv3d_volume_shape(dim_ordering, volume_shape):
+def _preprocess_conv3d_volume_shape(volume_shape, data_format):
     # Theano might not accept long type
     def int_or_none(value):
         try:
             return int(value)
         except TypeError:
             return None
-    if dim_ordering == 'tf':
+    if data_format == 'channels_last':
         if volume_shape:
             volume_shape = (volume_shape[0], volume_shape[4],
                             volume_shape[1], volume_shape[2], volume_shape[3])
@@ -1632,154 +1967,225 @@ def _preprocess_conv3d_volume_shape(dim_ordering, volume_shape):
     return volume_shape
 
 
-def _preprocess_conv2d_filter_shape(dim_ordering, filter_shape):
+def _preprocess_conv2d_filter_shape(filter_shape, data_format):
     # Theano might not accept long type
     def int_or_none(value):
         try:
             return int(value)
         except TypeError:
             return None
-    if dim_ordering == 'tf':
-        if filter_shape:
-            filter_shape = (filter_shape[3], filter_shape[2],
-                            filter_shape[0], filter_shape[1])
+    if filter_shape:
+        filter_shape = (filter_shape[3], filter_shape[2],
+                        filter_shape[0], filter_shape[1])
     if filter_shape is not None:
         filter_shape = tuple(int_or_none(v) for v in filter_shape)
     return filter_shape
 
 
-def _preprocess_conv3d_filter_shape(dim_ordering, filter_shape):
+def _preprocess_conv3d_filter_shape(filter_shape, data_format):
     # Theano might not accept long type
     def int_or_none(value):
         try:
             return int(value)
         except TypeError:
             return None
-    if dim_ordering == 'tf':
-        if filter_shape:
-            filter_shape = (filter_shape[4], filter_shape[3],
-                            filter_shape[0], filter_shape[1], filter_shape[2])
+    if filter_shape:
+        filter_shape = (filter_shape[4], filter_shape[3],
+                        filter_shape[0], filter_shape[1], filter_shape[2])
     if filter_shape is not None:
         filter_shape = tuple(int_or_none(v) for v in filter_shape)
     return filter_shape
 
 
-def _postprocess_conv2d_output(conv_out, x, border_mode, np_kernel, strides, dim_ordering):
-    if border_mode == 'same':
-        if np_kernel.shape[2] % 2 == 0:
+def _postprocess_conv2d_output(conv_out, x,
+                               padding, kernel_shape,
+                               strides, data_format):
+    if padding == 'same':
+        if kernel_shape[2] % 2 == 0:
             conv_out = conv_out[:, :, :(x.shape[2] + strides[0] - 1) // strides[0], :]
-        if np_kernel.shape[3] % 2 == 0:
+        if kernel_shape[3] % 2 == 0:
             conv_out = conv_out[:, :, :, :(x.shape[3] + strides[1] - 1) // strides[1]]
-    if dim_ordering == 'tf':
+    if data_format == 'channels_last':
         conv_out = conv_out.dimshuffle((0, 2, 3, 1))
     return conv_out
 
 
-def _postprocess_conv3d_output(conv_out, x, border_mode, np_kernel, strides, dim_ordering):
-    if border_mode == 'same':
-        if np_kernel.shape[2] % 2 == 0:
+def _postprocess_conv3d_output(conv_out, x,
+                               padding, kernel_shape,
+                               strides, data_format):
+    if padding == 'same':
+        if kernel_shape[2] % 2 == 0:
             conv_out = conv_out[:, :, :(x.shape[2] + strides[0] - 1) // strides[0], :, :]
-        if np_kernel.shape[3] % 2 == 0:
+        if kernel_shape[3] % 2 == 0:
             conv_out = conv_out[:, :, :, :(x.shape[3] + strides[1] - 1) // strides[1], :]
-        if np_kernel.shape[4] % 2 == 0:
+        if kernel_shape[4] % 2 == 0:
             conv_out = conv_out[:, :, :, :, :(x.shape[4] + strides[2] - 1) // strides[2]]
-    if dim_ordering == 'tf':
+    if data_format == 'channels_last':
         conv_out = conv_out.dimshuffle((0, 2, 3, 4, 1))
     return conv_out
 
 
-def conv1d(x, kernel, stride=1, border_mode='valid',
-           image_shape=None, filter_shape=None):
-    '''1D convolution.
+def conv1d(x, kernel, strides=1, padding='valid',
+           data_format=None, dilation_rate=1):
+    """1D convolution.
 
     # Arguments
         kernel: kernel tensor.
         strides: stride integer.
-        border_mode: string, "same" or "valid".
-    '''
-    raise NotImplementedError
+        padding: string, `"same"`, `"causal"` or `"valid"`.
+        data_format: string, one of "channels_last", "channels_first"
+        dilation_rate: integer.
+    """
+    if data_format is None:
+        data_format = image_data_format()
+    if data_format not in {'channels_first', 'channels_last'}:
+        raise ValueError('Unknown data_format ', data_format)
+
+    if hasattr(kernel, '_keras_shape'):
+        kernel_shape = kernel._keras_shape
+    else:
+        kernel_shape = None
+    if padding == 'causal':
+        # causal (dilated) convolution:
+        if not kernel_shape:
+            raise AttributeError('Causal padding requires kernel._keras_shape set.')
+        left_pad = dilation_rate * (kernel_shape[0] - 1)
+        x = temporal_padding(x, (left_pad, 0))
+        padding = 'valid'
+    if hasattr(x, '_keras_shape'):
+        shape = x._keras_shape
+    else:
+        shape = None
+    if data_format == 'channels_last':
+        # original shape: (batch, length, input_dim)
+        # add dim to x to have (batch, length, 1, input_dim)
+        x = expand_dims(x, 2)
+        # update x._keras_shape
+        if shape is not None:
+            x._keras_shape = (shape[0], shape[1], 1, shape[2])
+    else:
+        # original shape: (batch, input_dim, length)
+        # add dim to x to have (batch, input_dim, length, 1)
+        x = expand_dims(x, 3)
+        # update x._keras_shape
+        if shape is not None:
+            x._keras_shape = (shape[0], shape[1], shape[2], 1)
+    # update dilation rate, strides
+    dilation_rate = (dilation_rate, 1)
+    strides = (strides, 1)
+    # add dim to kernel (always same format independently of data_format)
+    # i.e. (rows, 1, input_depth, depth)
+    kernel = expand_dims(kernel, 1)
+    output = conv2d(x, kernel,
+                    strides=strides, padding=padding,
+                    data_format=data_format, dilation_rate=dilation_rate)
+    # remove added dim
+    if data_format == 'channels_last':
+        output = squeeze(output, 2)
+    else:
+        output = squeeze(output, 3)
+    return output
 
 
-def conv2d(x, kernel, strides=(1, 1), border_mode='valid',
-           dim_ordering='default', image_shape=None,
-           filter_shape=None, filter_dilation=(1, 1)):
-    '''2D convolution.
+def conv2d(x, kernel, strides=(1, 1), padding='valid',
+           data_format=None, dilation_rate=(1, 1)):
+    """2D convolution.
 
     # Arguments
         kernel: kernel tensor.
         strides: strides tuple.
-        border_mode: string, "same" or "valid".
-        dim_ordering: "tf" or "th".
-            Whether to use Theano or TensorFlow dimension ordering
-        in inputs/kernels/ouputs.
-    '''
-    if dim_ordering == 'default':
-        dim_ordering = image_dim_ordering()
-    if dim_ordering not in {'th', 'tf'}:
-        raise ValueError('Unknown dim_ordering ', dim_ordering)
+        padding: string, "same" or "valid".
+        data_format: "channels_last" or "channels_first".
+            Whether to use Theano or TensorFlow data format
+        in inputs/kernels/outputs.
+    """
+    if data_format is None:
+        data_format = image_data_format()
+    if data_format not in {'channels_first', 'channels_last'}:
+        raise ValueError('Unknown data_format ', data_format)
 
-    x = _preprocess_conv2d_input(x, dim_ordering)
-    kernel = _preprocess_conv2d_kernel(kernel, dim_ordering)
-    th_border_mode = _preprocess_border_mode(border_mode)
-    np_kernel = kernel.eval()
-    image_shape = _preprocess_conv2d_image_shape(dim_ordering, image_shape)
-    filter_shape = _preprocess_conv2d_filter_shape(dim_ordering, filter_shape)
-
-    # TODO: remove the if statement when theano with no filter dilation is deprecated.
-    if filter_dilation == (1, 1):
-        conv_out = T.nnet.conv2d(x, kernel,
-                                 border_mode=th_border_mode,
-                                 subsample=strides,
-                                 input_shape=image_shape,
-                                 filter_shape=filter_shape)
+    if hasattr(x, '_keras_shape'):
+        image_shape = _preprocess_conv2d_image_shape(int_shape(x), data_format)
     else:
-        conv_out = T.nnet.conv2d(x, kernel,
-                                 border_mode=th_border_mode,
-                                 subsample=strides,
-                                 input_shape=image_shape,
-                                 filter_shape=filter_shape,
-                                 filter_dilation=filter_dilation)
+        image_shape = None
+    if hasattr(kernel, '_keras_shape'):
+        kernel_shape = kernel._keras_shape
+    else:
+        # Will only work if `kernel` is a shared variable.
+        kernel_shape = kernel.eval().shape
+    kernel_shape = _preprocess_conv2d_filter_shape(kernel_shape, data_format)
 
-    conv_out = _postprocess_conv2d_output(conv_out, x, border_mode, np_kernel,
-                                          strides, dim_ordering)
+    x = _preprocess_conv2d_input(x, data_format)
+    kernel = _preprocess_conv2d_kernel(kernel, data_format)
+    th_padding = _preprocess_padding(padding)
+
+    conv_out = T.nnet.conv2d(x, kernel,
+                             border_mode=th_padding,
+                             subsample=strides,
+                             input_shape=image_shape,
+                             filter_shape=kernel_shape,
+                             filter_dilation=dilation_rate)
+    conv_out = _postprocess_conv2d_output(conv_out, x, padding,
+                                          kernel_shape, strides, data_format)
     return conv_out
 
 
-def deconv2d(x, kernel, output_shape, strides=(1, 1),
-             border_mode='valid',
-             dim_ordering='default',
-             image_shape=None, filter_shape=None):
-    '''2D deconvolution (transposed convolution).
+def conv2d_transpose(x, kernel, output_shape, strides=(1, 1),
+                     padding='valid', data_format=None):
+    """2D deconvolution (transposed convolution).
 
     # Arguments
         kernel: kernel tensor.
         output_shape: desired dimensions of output.
         strides: strides tuple.
-        border_mode: string, "same" or "valid".
-        dim_ordering: "tf" or "th".
-            Whether to use Theano or TensorFlow dimension ordering
-        in inputs/kernels/ouputs.
-    '''
+        padding: string, "same" or "valid".
+        data_format: "channels_last" or "channels_first".
+            Whether to use Theano or TensorFlow data format
+        in inputs/kernels/outputs.
+
+    # Raises
+        ValueError: if using an even kernel size with padding 'same'.
+    """
     flip_filters = False
-    if dim_ordering == 'default':
-        dim_ordering = image_dim_ordering()
-    if dim_ordering not in {'th', 'tf'}:
-        raise ValueError('Unknown dim_ordering ' + dim_ordering)
+    if data_format is None:
+        data_format = image_data_format()
+    if data_format not in {'channels_first', 'channels_last'}:
+        raise ValueError('Unknown data_format ' + data_format)
 
-    x = _preprocess_conv2d_input(x, dim_ordering)
-    kernel = _preprocess_conv2d_kernel(kernel, dim_ordering)
-    kernel = kernel.dimshuffle((1, 0, 2, 3))
-    th_border_mode = _preprocess_border_mode(border_mode)
-    np_kernel = kernel.eval()
-    filter_shape = _preprocess_conv2d_filter_shape(dim_ordering, filter_shape)
-    filter_shape = tuple(filter_shape[i] for i in (1, 0, 2, 3))
+    if data_format == 'channels_last':
+        output_shape = (output_shape[0],
+                        output_shape[3],
+                        output_shape[1],
+                        output_shape[2])
 
-    op = T.nnet.abstract_conv.AbstractConv2d_gradInputs(imshp=output_shape,
-                                                        kshp=filter_shape,
+    if hasattr(kernel, '_keras_shape'):
+        kernel_shape = kernel._keras_shape
+    else:
+        # Will only work if `kernel` is a shared variable.
+        kernel_shape = kernel.eval().shape
+
+    if padding == 'same' and kernel_shape[0] % 2 == 0:
+        raise ValueError('In `Conv2DTranspose`, with padding mode `same`, '
+                         'even kernel sizes are only supported with Tensorflow. '
+                         'With Theano, set `kernel_size` to an odd number.')
+
+    kernel_shape = _preprocess_conv2d_filter_shape(kernel_shape, data_format)
+
+    x = _preprocess_conv2d_input(x, data_format)
+    kernel = _preprocess_conv2d_kernel(kernel, data_format)
+
+    th_padding = _preprocess_padding(padding)
+    op = T.nnet.abstract_conv.AbstractConv2d_gradInputs(imshp=None,
+                                                        kshp=kernel_shape,
                                                         subsample=strides,
-                                                        border_mode=th_border_mode,
+                                                        border_mode=th_padding,
                                                         filter_flip=not flip_filters)
+    conv_out = op(kernel, x, output_shape[2:])
+    conv_out = _postprocess_conv2d_output(conv_out, x, padding,
+                                          kernel_shape, strides, data_format)
 
+    #TODO: Check this (from v1.2)
+    """
     # Compute output width/height if None
     output_size = [None] * 2
     for i in [-2, -1]:
@@ -1792,260 +2198,204 @@ def deconv2d(x, kernel, output_shape, strides=(1, 1),
     conv_out = op(kernel, x, output_size)
     conv_out = _postprocess_conv2d_output(conv_out, x, border_mode, np_kernel,
                                           strides, dim_ordering)
+    """
     return conv_out
 
 
-def atrous_conv2d(x, kernel, rate=1,
-                  border_mode='valid',
-                  dim_ordering='default',
-                  image_shape=None, filter_shape=None):
+def separable_conv2d(x, depthwise_kernel, pointwise_kernel, strides=(1, 1),
+                     padding='valid', data_format=None, dilation_rate=(1, 1)):
     raise NotImplementedError
 
 
-def separable_conv2d(x, depthwise_kernel, pointwise_kernel, strides=(1, 1),
-                     border_mode='valid', dim_ordering='default'):
+def depthwise_conv2d(x, depthwise_kernel, strides=(1, 1), padding='valid',
+                     data_format=None, dilation_rate=(1, 1)):
     raise NotImplementedError
 
 
 def conv3d(x, kernel, strides=(1, 1, 1),
-           border_mode='valid', dim_ordering='default',
-           volume_shape=None, filter_shape=None,
-           filter_dilation=(1, 1, 1)):
-    '''3D convolution.
+           padding='valid', data_format=None,
+           dilation_rate=(1, 1, 1)):
+    """3D convolution.
 
     # Arguments
         kernel: kernel tensor.
         strides: strides tuple.
-        border_mode: string, "same" or "valid".
-        dim_ordering: "tf" or "th".
-            Whether to use Theano or TensorFlow dimension ordering
-        in inputs/kernels/ouputs.
-    '''
-    if dim_ordering == 'default':
-        dim_ordering = image_dim_ordering()
-    if dim_ordering not in {'th', 'tf'}:
-        raise ValueError('Unknown dim_ordering:', dim_ordering)
+        padding: string, "same" or "valid".
+        data_format: "channels_last" or "channels_first".
+            Whether to use Theano or TensorFlow data format
+        in inputs/kernels/outputs.
+    """
+    if data_format is None:
+        data_format = image_data_format()
+    if data_format not in {'channels_first', 'channels_last'}:
+        raise ValueError('Unknown data_format:', data_format)
 
-    # TODO: remove this if statement when Theano without AbstractConv3d is deprecated
-    if not hasattr(T.nnet, 'conv3d'):
-        if filter_dilation != (1, 1, 1):
-            raise ValueError('conv3d with filter dilation requires Theano '
-                             '0.9.0dev3 or newer.')
+    if hasattr(x, '_keras_shape'):
+        volume_shape = _preprocess_conv3d_volume_shape(int_shape(x), data_format)
+    else:
+        volume_shape = None
+    if hasattr(kernel, '_keras_shape'):
+        kernel_shape = kernel._keras_shape
+    else:
+        # Will only work if `kernel` is a shared variable.
+        kernel_shape = kernel.eval().shape
+    kernel_shape = _preprocess_conv3d_filter_shape(kernel_shape, data_format)
 
-        return _old_theano_conv3d(x, kernel, strides, border_mode,
-                                  dim_ordering, volume_shape, filter_shape)
-
-    x = _preprocess_conv3d_input(x, dim_ordering)
-    kernel = _preprocess_conv3d_kernel(kernel, dim_ordering)
-    th_border_mode = _preprocess_border_mode(border_mode)
-    np_kernel = kernel.eval()
-    volume_shape = _preprocess_conv3d_volume_shape(dim_ordering, volume_shape)
-    filter_shape = _preprocess_conv3d_filter_shape(dim_ordering, filter_shape)
+    x = _preprocess_conv3d_input(x, data_format)
+    kernel = _preprocess_conv3d_kernel(kernel, data_format)
+    th_padding = _preprocess_padding(padding)
 
     conv_out = T.nnet.conv3d(x, kernel,
-                             border_mode=th_border_mode,
+                             border_mode=th_padding,
                              subsample=strides,
                              input_shape=volume_shape,
-                             filter_shape=filter_shape,
-                             filter_dilation=filter_dilation)
-
-    conv_out = _postprocess_conv3d_output(conv_out, x, border_mode, np_kernel,
-                                          strides, dim_ordering)
+                             filter_shape=kernel_shape,
+                             filter_dilation=dilation_rate)
+    conv_out = _postprocess_conv3d_output(conv_out, x, padding,
+                                          kernel_shape, strides, data_format)
     return conv_out
 
 
-# TODO: remove this function when theano without AbstractConv3d is deprecated
-def _old_theano_conv3d(x, kernel, strides=(1, 1, 1),
-                       border_mode='valid', dim_ordering='default',
-                       volume_shape=None, filter_shape=None):
-    '''
-    Run on cuDNN if available.
-    border_mode: string, "same" or "valid".
-    '''
-    if dim_ordering == 'default':
-        dim_ordering = image_dim_ordering()
-    if dim_ordering not in {'th', 'tf'}:
-        raise ValueError('Unknown dim_ordering:', dim_ordering)
-    if border_mode not in {'same', 'valid'}:
-        raise ValueError('Invalid border mode:', border_mode)
+def conv3d_transpose(x, kernel, output_shape, strides=(1, 1, 1),
+                     padding='valid', data_format=None):
+    """3D deconvolution (transposed convolution).
 
-    if dim_ordering == 'tf':
-        # TF uses the last dimension as channel dimension,
-        # instead of the 2nd one.
-        # TH input shape: (samples, input_depth, conv_dim1, conv_dim2, conv_dim3)
-        # TF input shape: (samples, conv_dim1, conv_dim2, conv_dim3, input_depth)
-        # TH kernel shape: (out_depth, input_depth, kernel_dim1, kernel_dim2, kernel_dim3)
-        # TF kernel shape: (kernel_dim1, kernel_dim2, kernel_dim3, input_depth, out_depth)
-        x = x.dimshuffle((0, 4, 1, 2, 3))
-        kernel = kernel.dimshuffle((4, 3, 0, 1, 2))
-        if volume_shape:
-            volume_shape = (volume_shape[0], volume_shape[4],
-                            volume_shape[1], volume_shape[2], volume_shape[3])
-        if filter_shape:
-            filter_shape = (filter_shape[4], filter_shape[3],
-                            filter_shape[0], filter_shape[1], filter_shape[2])
+    # Arguments
+        kernel: kernel tensor.
+        output_shape: desired dimensions of output.
+        strides: strides tuple.
+        padding: string, "same" or "valid".
+        data_format: "channels_last" or "channels_first".
+            Whether to use Theano or TensorFlow data format
+        in inputs/kernels/outputs.
 
-    if border_mode == 'same':
-        assert(strides == (1, 1, 1))
-        pad_dim1 = (kernel.shape[2] - 1)
-        pad_dim2 = (kernel.shape[3] - 1)
-        pad_dim3 = (kernel.shape[4] - 1)
-        output_shape = (x.shape[0], x.shape[1],
-                        x.shape[2] + pad_dim1,
-                        x.shape[3] + pad_dim2,
-                        x.shape[4] + pad_dim3)
-        output = T.zeros(output_shape)
-        indices = (slice(None), slice(None),
-                   slice(pad_dim1 // 2, x.shape[2] + pad_dim1 // 2),
-                   slice(pad_dim2 // 2, x.shape[3] + pad_dim2 // 2),
-                   slice(pad_dim3 // 2, x.shape[4] + pad_dim3 // 2))
-        x = T.set_subtensor(output[indices], x)
-        border_mode = 'valid'
+    # Raises
+        ValueError: if using an even kernel size with padding 'same'.
+    """
+    flip_filters = False
+    if data_format is None:
+        data_format = image_data_format()
+    if data_format not in {'channels_first', 'channels_last'}:
+        raise ValueError('Unknown data_format ' + data_format)
 
-    border_mode_3d = (border_mode, border_mode, border_mode)
-    conv_out = conv3d2d.conv3d(signals=x.dimshuffle(0, 2, 1, 3, 4),
-                               filters=kernel.dimshuffle(0, 2, 1, 3, 4),
-                               border_mode=border_mode_3d)
-    conv_out = conv_out.dimshuffle(0, 2, 1, 3, 4)
+    if data_format == 'channels_last':
+        output_shape = (output_shape[0],
+                        output_shape[4],
+                        output_shape[1],
+                        output_shape[2],
+                        output_shape[3])
 
-    # support strides by manually slicing the output
-    if strides != (1, 1, 1):
-        conv_out = conv_out[:, :, ::strides[0], ::strides[1], ::strides[2]]
+    if hasattr(kernel, '_keras_shape'):
+        kernel_shape = kernel._keras_shape
+    else:
+        # Will only work if `kernel` is a shared variable.
+        kernel_shape = kernel.eval().shape
 
-    if dim_ordering == 'tf':
-        conv_out = conv_out.dimshuffle((0, 2, 3, 4, 1))
+    if padding == 'same' and kernel_shape[0] % 2 == 0:
+        raise ValueError('In `Conv3DTranspose`, with padding mode `same`, '
+                         'even kernel sizes are only supported with Tensorflow. '
+                         'With Theano, set `kernel_size` to an odd number.')
 
+    kernel_shape = _preprocess_conv3d_filter_shape(kernel_shape, data_format)
+
+    x = _preprocess_conv3d_input(x, data_format)
+    kernel = _preprocess_conv3d_kernel(kernel, data_format)
+
+    th_padding = _preprocess_padding(padding)
+    op = T.nnet.abstract_conv.AbstractConv3d_gradInputs(imshp=None,
+                                                        kshp=kernel_shape,
+                                                        subsample=strides,
+                                                        border_mode=th_padding,
+                                                        filter_flip=not flip_filters)
+    conv_out = op(kernel, x, output_shape[2:])
+    conv_out = _postprocess_conv3d_output(conv_out, x, padding,
+                                          kernel_shape, strides, data_format)
     return conv_out
 
 
-def pool2d(x, pool_size, strides=(1, 1), border_mode='valid',
-           dim_ordering='default', pool_mode='max'):
-    if dim_ordering == 'default':
-        dim_ordering = image_dim_ordering()
-    if dim_ordering not in {'th', 'tf'}:
-        raise ValueError('Unknown dim_ordering:', dim_ordering)
+def pool2d(x, pool_size, strides=(1, 1), padding='valid',
+           data_format=None, pool_mode='max'):
+    if data_format is None:
+        data_format = image_data_format()
+    if data_format not in {'channels_first', 'channels_last'}:
+        raise ValueError('Unknown data_format:', data_format)
 
     assert pool_size[0] >= 1 and pool_size[1] >= 1
 
-    if border_mode == 'same':
+    if padding == 'same':
         w_pad = pool_size[0] - 2 if pool_size[0] > 2 and pool_size[0] % 2 == 1 else pool_size[0] - 1
         h_pad = pool_size[1] - 2 if pool_size[1] > 2 and pool_size[1] % 2 == 1 else pool_size[1] - 1
-        padding = (w_pad, h_pad)
-    elif border_mode == 'valid':
-        padding = (0, 0)
+        pad = (w_pad, h_pad)
+    elif padding == 'valid':
+        pad = (0, 0)
     else:
-        raise ValueError('Invalid border mode:', border_mode)
+        raise ValueError('Invalid border mode:', padding)
 
-    if dim_ordering not in {'th', 'tf'}:
-        raise ValueError('Unknown dim_ordering:', dim_ordering)
-
-    if dim_ordering == 'tf':
+    if data_format == 'channels_last':
         x = x.dimshuffle((0, 3, 1, 2))
 
     if pool_mode == 'max':
-        # TODO remove the old call once Theano older than 0.9.0dev4 is deprecated
-        try:
-            # new interface (introduced in 0.9.0dev4)
-            pool_out = pool.pool_2d(x, ws=pool_size, stride=strides,
-                                    ignore_border=True,
-                                    pad=padding,
-                                    mode='max')
-        except TypeError:
-            # old interface
-            pool_out = pool.pool_2d(x, ds=pool_size, st=strides,
-                                    ignore_border=True,
-                                    padding=padding,
-                                    mode='max')
+        pool_out = pool.pool_2d(x, ws=pool_size, stride=strides,
+                                ignore_border=True,
+                                pad=pad,
+                                mode='max')
     elif pool_mode == 'avg':
-        # TODO remove the old call once Theano older than 0.9.0dev4 is deprecated
-        try:
-            # new interface (introduced in 0.9.0dev4)
-            pool_out = pool.pool_2d(x, ws=pool_size, stride=strides,
-                                    ignore_border=True,
-                                    pad=padding,
-                                    mode='average_exc_pad')
-        except TypeError:
-            # old interface
-            pool_out = pool.pool_2d(x, ds=pool_size, st=strides,
-                                    ignore_border=True,
-                                    padding=padding,
-                                    mode='average_exc_pad')
+        if padding == 'same':
+            th_avg_pool_mode = 'average_inc_pad'
+        elif padding == 'valid':
+            th_avg_pool_mode = 'average_exc_pad'
+        pool_out = pool.pool_2d(x, ws=pool_size, stride=strides,
+                                ignore_border=True,
+                                pad=pad,
+                                mode=th_avg_pool_mode)
     else:
         raise ValueError('Invalid pooling mode:', pool_mode)
-
-    if border_mode == 'same':
+    if padding == 'same':
         expected_width = (x.shape[2] + strides[0] - 1) // strides[0]
         expected_height = (x.shape[3] + strides[1] - 1) // strides[1]
-
         pool_out = pool_out[:, :,
                             : expected_width,
                             : expected_height]
 
-    if dim_ordering == 'tf':
+    if data_format == 'channels_last':
         pool_out = pool_out.dimshuffle((0, 2, 3, 1))
     return pool_out
 
 
-def pool3d(x, pool_size, strides=(1, 1, 1), border_mode='valid',
-           dim_ordering='default', pool_mode='max'):
-    if dim_ordering == 'default':
-        dim_ordering = image_dim_ordering()
-    if dim_ordering not in {'th', 'tf'}:
-        raise ValueError('Unknown dim_ordering:', dim_ordering)
+def pool3d(x, pool_size, strides=(1, 1, 1), padding='valid',
+           data_format=None, pool_mode='max'):
+    if data_format is None:
+        data_format = image_data_format()
+    if data_format not in {'channels_first', 'channels_last'}:
+        raise ValueError('Unknown data_format:', data_format)
 
-    # TODO: remove this if statement when Theano without pool_3d is deprecated
-    #       (pool_3d was introduced after 0.9.0dev3)
-    if not hasattr(T.signal.pool, 'pool_3d'):
-        return _old_theano_pool3d(x, pool_size, strides, border_mode,
-                                  dim_ordering, pool_mode)
-
-    if border_mode == 'same':
+    if padding == 'same':
         w_pad = pool_size[0] - 2 if pool_size[0] % 2 == 1 else pool_size[0] - 1
         h_pad = pool_size[1] - 2 if pool_size[1] % 2 == 1 else pool_size[1] - 1
         d_pad = pool_size[2] - 2 if pool_size[2] % 2 == 1 else pool_size[2] - 1
         padding = (w_pad, h_pad, d_pad)
-    elif border_mode == 'valid':
+    elif padding == 'valid':
         padding = (0, 0, 0)
     else:
-        raise ValueError('Invalid border mode:', border_mode)
-    if dim_ordering not in {'th', 'tf'}:
-        raise ValueError('Unknown dim_ordering:', dim_ordering)
+        raise ValueError('Invalid padding:', padding)
 
-    if dim_ordering == 'tf':
+    if data_format == 'channels_last':
         x = x.dimshuffle((0, 4, 1, 2, 3))
 
     if pool_mode == 'max':
-        # TODO remove the old call once Theano older than 0.9.0dev4 is deprecated
-        try:
-            # new interface (introduced in 0.9.0dev4)
-            pool_out = pool.pool_3d(x, ws=pool_size, stride=strides,
-                                    ignore_border=True,
-                                    pad=padding,
-                                    mode='max')
-        except TypeError:
-            # old interface
-            pool_out = pool.pool_3d(x, ds=pool_size, st=strides,
-                                    ignore_border=True,
-                                    padding=padding,
-                                    mode='max')
+        pool_out = pool.pool_3d(x, ws=pool_size, stride=strides,
+                                ignore_border=True,
+                                pad=padding,
+                                mode='max')
     elif pool_mode == 'avg':
-        # TODO remove the old call once Theano older than 0.9.0dev4 is deprecated
-        try:
-            # new interface (introduced in 0.9.0dev4)
-            pool_out = pool.pool_3d(x, ws=pool_size, stride=strides,
-                                    ignore_border=True,
-                                    pad=padding,
-                                    mode='average_exc_pad')
-        except TypeError:
-            # old interface
-            pool_out = pool.pool_3d(x, ds=pool_size, st=strides,
-                                    ignore_border=True,
-                                    padding=padding,
-                                    mode='average_exc_pad')
+        pool_out = pool.pool_3d(x, ws=pool_size, stride=strides,
+                                ignore_border=True,
+                                pad=padding,
+                                mode='average_exc_pad')
     else:
         raise ValueError('Invalid pooling mode:', pool_mode)
 
-    if border_mode == 'same':
+    if padding == 'same':
         expected_width = (x.shape[2] + strides[0] - 1) // strides[0]
         expected_height = (x.shape[3] + strides[1] - 1) // strides[1]
         expected_depth = (x.shape[4] + strides[2] - 1) // strides[2]
@@ -2055,108 +2405,103 @@ def pool3d(x, pool_size, strides=(1, 1, 1), border_mode='valid',
                             : expected_height,
                             : expected_depth]
 
-    if dim_ordering == 'tf':
+    if data_format == 'channels_last':
         pool_out = pool_out.dimshuffle((0, 2, 3, 4, 1))
     return pool_out
 
 
-# TODO: remove this function when Theano without pool_3d is deprecated
-#       (pool_3d was introduced after 0.9.0dev3)
-def _old_theano_pool3d(x, pool_size, strides=(1, 1, 1), border_mode='valid',
-                       dim_ordering='default', pool_mode='max'):
-    if dim_ordering == 'default':
-        dim_ordering = image_dim_ordering()
-    if dim_ordering not in {'th', 'tf'}:
-        raise ValueError('Unknown dim_ordering:', dim_ordering)
-
-    if border_mode == 'same':
-        # TODO: add implementation for border_mode="same"
-        raise ValueError('border_mode="same" not supported with Theano.')
-    elif border_mode == 'valid':
-        ignore_border = True
-        padding = (0, 0)
+def bias_add(x, bias, data_format=None):
+    if data_format is None:
+        data_format = image_data_format()
+    if data_format not in {'channels_first', 'channels_last'}:
+        raise ValueError('Unknown data_format ' + str(data_format))
+    if ndim(bias) != 1 and ndim(bias) != ndim(x) - 1:
+        raise ValueError('Unexpected bias dimensions %d, '
+                         'expect to be 1 or %d dimensions'
+                         % (ndim(bias), ndim(x) - 1))
+    bias_shape = tuple(bias.shape)
+    if ndim(x) == 5:
+        if data_format == 'channels_first':
+            if ndim(bias) == 1:
+                x += reshape(bias, (1, bias_shape[0], 1, 1, 1))
+            else:
+                x += reshape(bias, (1, bias_shape[3]) + bias_shape[:3])
+        elif data_format == 'channels_last':
+            if ndim(bias) == 1:
+                x += reshape(bias, (1, 1, 1, 1, bias_shape[0]))
+            else:
+                x += reshape(bias, (1,) + bias_shape)
+    elif ndim(x) == 4:
+        if data_format == 'channels_first':
+            if ndim(bias) == 1:
+                x += reshape(bias, (1, bias_shape[0], 1, 1))
+            else:
+                x += reshape(bias, (1, bias_shape[2]) + bias_shape[:2])
+        elif data_format == 'channels_last':
+            if ndim(bias) == 1:
+                x += reshape(bias, (1, 1, 1, bias_shape[0]))
+            else:
+                x += reshape(bias, (1,) + bias_shape)
+    elif ndim(x) == 3:
+        if data_format == 'channels_first':
+            if ndim(bias) == 1:
+                x += reshape(bias, (1, bias_shape[0], 1))
+            else:
+                x += reshape(bias, (1, bias_shape[1], bias_shape[0]))
+        elif data_format == 'channels_last':
+            if ndim(bias) == 1:
+                x += reshape(bias, (1, 1, bias_shape[0]))
+            else:
+                x += reshape(bias, (1,) + bias_shape)
     else:
-        raise ValueError('Invalid border mode:', border_mode)
-
-    if dim_ordering not in {'th', 'tf'}:
-        raise ValueError('Unknown dim_ordering:', dim_ordering)
-
-    if dim_ordering == 'tf':
-        x = x.dimshuffle((0, 4, 1, 2, 3))
-
-    if pool_mode == 'max':
-        # pooling over conv_dim2, conv_dim1 (last two channels)
-        output = pool.pool_2d(input=x.dimshuffle(0, 1, 4, 3, 2),
-                              ds=(pool_size[1], pool_size[0]),
-                              st=(strides[1], strides[0]),
-                              ignore_border=ignore_border,
-                              padding=padding,
-                              mode='max')
-
-        # pooling over conv_dim3
-        pool_out = pool.pool_2d(input=output.dimshuffle(0, 1, 4, 3, 2),
-                                ds=(1, pool_size[2]),
-                                st=(1, strides[2]),
-                                ignore_border=ignore_border,
-                                padding=padding,
-                                mode='max')
-
-    elif pool_mode == 'avg':
-        # pooling over conv_dim2, conv_dim1 (last two channels)
-        output = pool.pool_2d(input=x.dimshuffle(0, 1, 4, 3, 2),
-                              ds=(pool_size[1], pool_size[0]),
-                              st=(strides[1], strides[0]),
-                              ignore_border=ignore_border,
-                              padding=padding,
-                              mode='average_exc_pad')
-
-        # pooling over conv_dim3
-        pool_out = pool.pool_2d(input=output.dimshuffle(0, 1, 4, 3, 2),
-                                ds=(1, pool_size[2]),
-                                st=(1, strides[2]),
-                                ignore_border=ignore_border,
-                                padding=padding,
-                                mode='average_exc_pad')
-    else:
-        raise ValueError('Invalid pooling mode:', pool_mode)
-
-    if dim_ordering == 'tf':
-        pool_out = pool_out.dimshuffle((0, 2, 3, 4, 1))
-    return pool_out
-
+        x += bias
+    return x
 
 
 # RANDOMNESS
 
 
-def random_normal(shape, mean=0.0, std=1.0, dtype=None, seed=None):
+def random_normal(shape, mean=0.0, stddev=1.0, dtype=None, seed=None):
     if dtype is None:
         dtype = floatx()
     if seed is None:
-        seed = np.random.randint(10e6)
+        seed = np.random.randint(1, 10e6)
     rng = RandomStreams(seed=seed)
-    return rng.normal(size=shape, avg=mean, std=std, dtype=dtype)
+    return rng.normal(size=shape, avg=mean, std=stddev, dtype=dtype)
 
 
-def random_uniform(shape, low=0.0, high=1.0, dtype=None, seed=None):
+def random_uniform(shape, minval=0.0, maxval=1.0, dtype=None, seed=None):
     if dtype is None:
         dtype = floatx()
     if seed is None:
-        seed = np.random.randint(10e6)
+        seed = np.random.randint(1, 10e6)
     rng = RandomStreams(seed=seed)
-    return rng.uniform(shape, low=low, high=high, dtype=dtype)
+    return rng.uniform(shape, low=minval, high=maxval, dtype=dtype)
 
 
 def random_binomial(shape, p=0.0, dtype=None, seed=None):
     if dtype is None:
         dtype = floatx()
     if seed is None:
-        seed = np.random.randint(10e6)
+        seed = np.random.randint(1, 10e6)
     rng = RandomStreams(seed=seed)
     return rng.binomial(shape, p=p, dtype=dtype)
 
 
-def random_multinomial(shape, p=0.0, dtype=_FLOATX, seed=None):
+def truncated_normal(shape, mean=0.0, stddev=1.0, dtype=None, seed=None):
+    if dtype is None:
+        dtype = floatx()
+    if seed is None:
+        seed = np.random.randint(1, 10e6)
+    rng = RandomStreams(seed=seed)
+    normal_tensor = rng.normal(size=shape, avg=mean, std=stddev, dtype=dtype)
+    # Poor man's truncated normal: we literally clip the tensor
+    return T.clip(normal_tensor, mean - 2 * stddev, mean + 2 * stddev)
+
+
+def random_multinomial(shape, p=0.0, dtype=None, seed=None):
+    if dtype is None:
+        dtype = floatx()
     if seed is None:
         seed = np.random.randint(10e6)
     rng = RandomStreams(seed=seed)
@@ -2210,6 +2555,7 @@ def conv1d(u, v):
 # https://github.com/shawntan/
 # Note that tensorflow's native CTC code is significantly
 # faster than this
+
 
 def ctc_interleave_blanks(Y):
     Y_ = T.alloc(-1, Y.shape[0] * 2 + 1)
@@ -2281,7 +2627,7 @@ def ctc_cost(predict, Y):
 
 # batchifies original CTC code
 def ctc_batch_cost(y_true, y_pred, input_length, label_length):
-    '''Runs CTC loss algorithm on each batch element.
+    """Runs CTC loss algorithm on each batch element.
 
     # Arguments
         y_true: tensor (samples, max_string_length) containing the truth labels
@@ -2295,7 +2641,7 @@ def ctc_batch_cost(y_true, y_pred, input_length, label_length):
     # Returns
         Tensor with shape (samples,1) containing the
             CTC loss of each element
-    '''
+    """
 
     def ctc_step(y_true_step, y_pred_step, input_length_step, label_length_step):
         y_pred_step = y_pred_step[0: input_length_step[0]]
@@ -2314,8 +2660,8 @@ def ctc_batch_cost(y_true, y_pred, input_length, label_length):
 
 # HIGH ORDER FUNCTIONS
 
-def map_fn(fn, elems, name=None):
-    '''Map the function fn over the elements elems and return the outputs.
+def map_fn(fn, elems, name=None, dtype=None):
+    """Map the function fn over the elements elems and return the outputs.
 
     # Arguments
         fn: Callable that will be called upon each element in elems
@@ -2325,12 +2671,12 @@ def map_fn(fn, elems, name=None):
     # Returns
         Tensor with first dimension equal to the elems and second depending on
         fn
-    '''
+    """
     return theano.map(fn, elems, name=name)[0]
 
 
 def foldl(fn, elems, initializer=None, name=None):
-    '''Reduce elems using fn to combine them from left to right.
+    """Reduce elems using fn to combine them from left to right.
 
     # Arguments
         fn: Callable that will be called upon each element in elems and an
@@ -2341,7 +2687,7 @@ def foldl(fn, elems, initializer=None, name=None):
 
     # Returns
         Same type and shape as initializer
-    '''
+    """
     if initializer is None:
         initializer = elems[0]
         elems = elems[1:]
@@ -2354,7 +2700,7 @@ def foldl(fn, elems, initializer=None, name=None):
 
 
 def foldr(fn, elems, initializer=None, name=None):
-    '''Reduce elems using fn to combine them from right to left.
+    """Reduce elems using fn to combine them from right to left.
 
     # Arguments
         fn: Callable that will be called upon each element in elems and an
@@ -2365,7 +2711,7 @@ def foldr(fn, elems, initializer=None, name=None):
 
     # Returns
         Same type and shape as initializer
-    '''
+    """
     if initializer is None:
         initializer = elems[-1]
         elems = elems[:-1]
@@ -2376,6 +2722,74 @@ def foldr(fn, elems, initializer=None, name=None):
 
     return theano.foldr(fn2, elems, initializer, name=name)[0]
 
+
+def local_conv1d(inputs, kernel, kernel_size, strides, data_format=None):
+    if data_format is None:
+        data_format = image_data_format()
+    if data_format not in {'channels_first', 'channels_last'}:
+        raise ValueError('Unknown data_format ' + str(data_format))
+
+    stride = strides[0]
+    kernel_shape = int_shape(kernel)
+    output_length, feature_dim, filters = kernel_shape
+
+    xs = []
+    for i in range(output_length):
+        slice_length = slice(i * stride,
+                             i * stride + kernel_size[0])
+        xs.append(reshape(inputs[:, slice_length, :],
+                          (1, -1, feature_dim)))
+    x_aggregate = concatenate(xs, axis=0)
+    # Shape: `(output_length, batch_size, filters)`.
+    output = batch_dot(x_aggregate, kernel)
+    return permute_dimensions(output, (1, 0, 2))
+
+
+def local_conv2d(inputs, kernel, kernel_size, strides, output_shape, data_format=None):
+    if data_format is None:
+        data_format = image_data_format()
+    if data_format not in {'channels_first', 'channels_last'}:
+        raise ValueError('Unknown data_format ' + str(data_format))
+
+    stride_row, stride_col = strides
+    output_row, output_col = output_shape
+    kernel_shape = int_shape(kernel)
+    _, feature_dim, filters = kernel_shape
+
+    if data_format == 'channels_first':
+        output = []
+        for i in range(output_row):
+            for j in range(output_col):
+                slice_row = slice(i * stride_row,
+                                  i * stride_row + kernel_size[0])
+                slice_col = slice(j * stride_col,
+                                  j * stride_col + kernel_size[1])
+                x_flatten = reshape(inputs[:, :, slice_row, slice_col],
+                                    (1, -1, feature_dim))
+                output.append(dot(x_flatten,
+                                  kernel[i * output_col + j, :, :]))
+        output = concatenate(output, axis=0)
+        output = reshape(output,
+                         (output_row, output_col, -1, filters))
+        output = permute_dimensions(output, (2, 3, 0, 1))
+    else:
+        xs = []
+        for i in range(output_row):
+            for j in range(output_col):
+                slice_row = slice(i * stride_row,
+                                  i * stride_row + kernel_size[0])
+                slice_col = slice(j * stride_col,
+                                  j * stride_col + kernel_size[1])
+                xs.append(reshape(inputs[:, slice_row, slice_col, :],
+                                  (1, -1, feature_dim)))
+
+        x_aggregate = concatenate(xs, axis=0)
+        output = batch_dot(x_aggregate, kernel)
+        output = reshape(output,
+                         (output_row, output_col, -1, filters))
+        output = permute_dimensions(output, (2, 0, 1, 3))
+
+    return output
 
 # modified from the one included in np_utils.py
 def conv_input_length(output_length, filter_size, border_mode, stride):
