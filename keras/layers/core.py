@@ -157,7 +157,7 @@ class GuidedDropout(Layer):
 
         return modulated_output
 
-    def get_output_shape_for(self, input_shape):
+    def compute_output_shape(self, input_shape):
         return input_shape[0]
 
     def get_config(self):
@@ -636,7 +636,7 @@ class RepeatMatrix(Layer):
         self.dim = dim
         super(RepeatMatrix, self).__init__(**kwargs)
 
-    def get_output_shape_for(self, input_shape):
+    def compute_output_shape(self, input_shape):
         output_shape = list(input_shape[:self.dim]) + [self.n] + list(input_shape[self.dim:])
         return tuple(output_shape)
 
@@ -1086,7 +1086,7 @@ class MaskedMean(Layer):
     def compute_mask(self, input_shape, input_mask=None):
         return None
 
-    def get_output_shape_for(self, input_shape):
+    def compute_output_shape(self, input_shape):
         return (input_shape[0], input_shape[2])
 
     def get_config(self):
@@ -1108,7 +1108,7 @@ class MaskLayer(Layer):
     def compute_mask(self, input_shape, input_mask=None):
         return input_mask
 
-    def get_output_shape_for(self, input_shape):
+    def compute_output_shape(self, input_shape):
         return input_shape
 
     def get_config(self):
@@ -1161,7 +1161,7 @@ class WeightedSum(Layer):
             x = K.sum(x, axis=d)
         return x
 
-    def get_output_shape_for(self, input_shape):
+    def compute_output_shape(self, input_shape):
         out_dim = []
         num_dim = len(input_shape[0])
         for d in range(num_dim):
@@ -1256,7 +1256,7 @@ class WeightedMerge(Layer):
         return s
 
 
-    def get_output_shape_for(self, input_shape):
+    def compute_output_shape(self, input_shape):
         #return tuple(list(input_shape[0][:2]) + self.out_shape)
 
         if not isinstance(input_shape, list):
@@ -1308,7 +1308,7 @@ class SetSubtensor(Layer):
     def compute_mask(self, input_shape, input_mask=None):
         return input_mask[0]
 
-    def get_output_shape_for(self, input_shape):
+    def compute_output_shape(self, input_shape):
         return input_shape[0]
 
     def get_config(self):
@@ -1370,7 +1370,7 @@ class ZeroesLayer(Layer):
         initial_state = K.tile(initial_state, self.output_dim)  # (samples, units)
         return initial_state
 
-    def get_output_shape_for(self, input_shape):
+    def compute_output_shape(self, input_shape):
         output_shape = list(input_shape)
         output_shape[-1] = self.output_dim
         return tuple(output_shape)
@@ -1422,7 +1422,7 @@ class EqualDimensions(Layer):
             raise ValueError('dim_ordering must be in {tf, th}.')
         self.dim_ordering = dim_ordering
 
-    def get_output_shape_for(self, input_shape):
+    def compute_output_shape(self, input_shape):
         assert len(input_shape[0]) == len(input_shape[1])
 
         out_dims = [input_shape[1][0], input_shape[1][1], input_shape[0][2], input_shape[0][3]]
@@ -1474,7 +1474,7 @@ class Concat(Layer):
             cropping[axis] = None
         self.cropping = cropping
 
-    def get_output_shape_for(self, input_shape):
+    def compute_output_shape(self, input_shape):
         input_shapes = autocrop_array_shapes(input_shape, self.cropping)
         # Infer the output shape by grabbing, for each axis, the first
         # input size that is not `None` (if there is any)
