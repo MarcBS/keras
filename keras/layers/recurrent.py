@@ -4263,6 +4263,7 @@ class AttLSTMCond(Recurrent):
         self.recurrent_dropout = min(1., max(0., recurrent_dropout))
         self.conditional_dropout = min(1., max(0., conditional_dropout))
         self.attention_dropout = min(1., max(0., attention_dropout))
+        #TODO: Better (or more flexible way) for doing this?
         # self.state_spec = [InputSpec(shape=(None, self.units)),
         #                   InputSpec(shape=(None, self.units))]
         self.input_spec = [InputSpec(ndim=3), InputSpec(ndim=3),
@@ -4505,8 +4506,7 @@ class AttLSTMCond(Recurrent):
             context = mask_context[:, :, None] * context
 
         # Attention model (see Formulation in class header)
-        p_state_ = K.dot(h_tm1,
-                         self.attention_recurrent_kernel)  # K.dot(h_tm1 * B_Wa[0], self.attention_recurrent_kernel)
+        p_state_ = K.dot(h_tm1 * B_Wa[0], self.attention_recurrent_kernel)
         pctx_ = K.tanh(pctx_ + p_state_[:, None, :])
         e = K.dot(pctx_, self.attention_context_wa) + self.bias_ca
         if mask_context.ndim > 1:  # Mask the context (only if necessary)
