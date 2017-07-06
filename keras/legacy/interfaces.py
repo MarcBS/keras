@@ -445,13 +445,13 @@ def batchnorm_args_preprocessor(args, kwargs):
         raise TypeError('The `BatchNormalization` layer '
                         'does not accept positional arguments. '
                         'Use keyword arguments instead.')
-    if 'mode' in kwargs:
-        value = kwargs.pop('mode')
-        if value != 0:
-            raise TypeError('The `mode` argument of `BatchNormalization` '
-                            'no longer exists. `mode=1` and `mode=2` '
-                            'are no longer supported.')
-        converted.append(('mode', None))
+    #if 'mode' in kwargs:
+    #    value = kwargs.pop('mode')
+    #    if value != 0:
+    #        raise TypeError('The `mode` argument of `BatchNormalization` '
+    #                        'no longer exists. `mode=1` and `mode=2` '
+    #                        'are no longer supported.')
+    #    converted.append(('mode', None))
     return args, kwargs, converted
 
 

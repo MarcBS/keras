@@ -133,6 +133,7 @@ class BatchNormalization(Layer):
     @interfaces.legacy_batchnorm_support
     def __init__(self,
                  axis=-1,
+                 mode=0,
                  momentum=0.99,
                  epsilon=1e-3,
                  center=True,
@@ -148,6 +149,7 @@ class BatchNormalization(Layer):
                  **kwargs):
         super(BatchNormalization, self).__init__(**kwargs)
         self.supports_masking = True
+        self.mode = mode
         self.axis = axis
         self.momentum = momentum
         self.epsilon = epsilon
@@ -189,88 +191,99 @@ class BatchNormalization(Layer):
                                         constraint=self.beta_constraint)
         else:
             self.beta = None
-        self.moving_mean = self.add_weight(
-            shape=shape,
-            name='moving_mean',
-            initializer=self.moving_mean_initializer,
-            trainable=False)
-        self.moving_variance = self.add_weight(
-            shape=shape,
-            name='moving_variance',
-            initializer=self.moving_variance_initializer,
-            trainable=False)
+        if self.mode != 1:
+            self.moving_mean = self.add_weight(
+                shape=shape,
+                name='moving_mean',
+                initializer=self.moving_mean_initializer,
+                trainable=False)
+            self.moving_variance = self.add_weight(
+                shape=shape,
+                name='moving_variance',
+                initializer=self.moving_variance_initializer,
+                trainable=False)
         self.built = True
 
     def call(self, inputs, training=None):
-        input_shape = K.int_shape(inputs)
-        # Prepare broadcasting shape.
-        ndim = len(input_shape)
-        reduction_axes = list(range(len(input_shape)))
-        del reduction_axes[self.axis]
-        broadcast_shape = [1] * len(input_shape)
-        broadcast_shape[self.axis] = input_shape[self.axis]
+        if self.mode == 0 or self.mode == 2:
+            input_shape = K.int_shape(inputs)
+            # Prepare broadcasting shape.
+            ndim = len(input_shape)
+            reduction_axes = list(range(len(input_shape)))
+            del reduction_axes[self.axis]
+            broadcast_shape = [1] * len(input_shape)
+            broadcast_shape[self.axis] = input_shape[self.axis]
 
-        # Determines whether broadcasting is needed.
-        needs_broadcasting = (sorted(reduction_axes) != list(range(ndim))[:-1])
+            # Determines whether broadcasting is needed.
+            needs_broadcasting = (sorted(reduction_axes) != list(range(ndim))[:-1])
 
-        def normalize_inference():
-            if needs_broadcasting:
-                # In this case we must explicitly broadcast all parameters.
-                broadcast_moving_mean = K.reshape(self.moving_mean,
-                                                  broadcast_shape)
-                broadcast_moving_variance = K.reshape(self.moving_variance,
+            def normalize_inference():
+                if needs_broadcasting:
+                    # In this case we must explicitly broadcast all parameters.
+                    broadcast_moving_mean = K.reshape(self.moving_mean,
                                                       broadcast_shape)
-                if self.center:
-                    broadcast_beta = K.reshape(self.beta, broadcast_shape)
+                    broadcast_moving_variance = K.reshape(self.moving_variance,
+                                                          broadcast_shape)
+                    if self.center:
+                        broadcast_beta = K.reshape(self.beta, broadcast_shape)
+                    else:
+                        broadcast_beta = None
+                    if self.scale:
+                        broadcast_gamma = K.reshape(self.gamma,
+                                                    broadcast_shape)
+                    else:
+                        broadcast_gamma = None
+                    return K.batch_normalization(
+                        inputs,
+                        broadcast_moving_mean,
+                        broadcast_moving_variance,
+                        broadcast_beta,
+                        broadcast_gamma,
+                        epsilon=self.epsilon)
                 else:
-                    broadcast_beta = None
-                if self.scale:
-                    broadcast_gamma = K.reshape(self.gamma,
-                                                broadcast_shape)
-                else:
-                    broadcast_gamma = None
-                return K.batch_normalization(
-                    inputs,
-                    broadcast_moving_mean,
-                    broadcast_moving_variance,
-                    broadcast_beta,
-                    broadcast_gamma,
-                    epsilon=self.epsilon)
-            else:
-                return K.batch_normalization(
-                    inputs,
-                    self.moving_mean,
-                    self.moving_variance,
-                    self.beta,
-                    self.gamma,
-                    epsilon=self.epsilon)
+                    return K.batch_normalization(
+                        inputs,
+                        self.moving_mean,
+                        self.moving_variance,
+                        self.beta,
+                        self.gamma,
+                        epsilon=self.epsilon)
 
-        # If the learning phase is *static* and set to inference:
-        if training in {0, False}:
-            return normalize_inference()
+            # If the learning phase is *static* and set to inference:
+            if training in {0, False}:
+                return normalize_inference()
 
-        # If the learning is either dynamic, or set to training:
-        normed_training, mean, variance = K.normalize_batch_in_training(
-            inputs, self.gamma, self.beta, reduction_axes,
-            epsilon=self.epsilon)
+            # If the learning is either dynamic, or set to training:
+            normed_training, mean, variance = K.normalize_batch_in_training(
+                inputs, self.gamma, self.beta, reduction_axes,
+                epsilon=self.epsilon)
 
-        self.add_update([K.moving_average_update(self.moving_mean,
-                                                 mean,
-                                                 self.momentum),
-                         K.moving_average_update(self.moving_variance,
-                                                 variance,
-                                                 self.momentum)],
-                        inputs)
+            self.add_update([K.moving_average_update(self.moving_mean,
+                                                     mean,
+                                                     self.momentum),
+                             K.moving_average_update(self.moving_variance,
+                                                     variance,
+                                                     self.momentum)],
+                            inputs)
 
-        # Pick the normalized form corresponding to the training phase.
-        return K.in_train_phase(normed_training,
-                                normalize_inference,
-                                training=training)
+            # Pick the normalized form corresponding to the training phase.
+            return K.in_train_phase(normed_training,
+                                    normalize_inference,
+                                    training=training)
+        elif self.mode == 1:
+            # sample-wise normalization
+            m = K.mean(inputs, axis=-1, keepdims=True)
+            std = K.sqrt(K.var(inputs, axis=-1, keepdims=True) + self.epsilon)
+            x_normed = (inputs - m) / (std + self.epsilon)
+            x_normed = self.gamma * x_normed + self.beta
+            return x_normed
+
 
     def get_config(self):
         config = {
             'axis': self.axis,
             'momentum': self.momentum,
+            'mode': self.mode,
             'epsilon': self.epsilon,
             'center': self.center,
             'scale': self.scale,
