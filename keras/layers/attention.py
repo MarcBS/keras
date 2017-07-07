@@ -547,7 +547,7 @@ class SoftMultistepsAttention(Layer):
         preprocessed_input = self.preprocess_input(state_below)
 
         last_output, outputs, states = K.rnn(self.attention_step, preprocessed_input,
-                                             [None, None], #self.get_initial_states(x),
+                                             [None, None], #self.get_extra_states(x),
                                              go_backwards=False,
                                              mask=None,
                                              # mask[1], #TODO: What does this mask mean? How should it be applied?
@@ -1216,7 +1216,7 @@ class ConvAtt(Layer):
         config = {'nb_embedding': self.nb_embedding,
                   'nb_glimpses': self.nb_glimpses,
                   'concat_timesteps': self.concat_timesteps,
-                  'return_states': self.return_states,
+                  'return_state': self.return_states,
                   'kernel_initializer': self.init.__name__,
                   'activation': self.activation.__name__,
                   'border_mode': self.border_mode,
@@ -1587,7 +1587,7 @@ class ConvCoAtt(Layer):
         config = {'nb_embedding': self.nb_embedding,
                   'nb_glimpses': self.nb_glimpses,
                   'concat_timesteps': self.concat_timesteps,
-                  'return_states': self.return_states,
+                  'return_state': self.return_states,
                   'kernel_initializer': self.init.__name__,
                   'activation': self.activation.__name__,
                   'border_mode': self.border_mode,
