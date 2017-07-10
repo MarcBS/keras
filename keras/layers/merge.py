@@ -442,6 +442,9 @@ class Dot(_Merge):
         return dict(list(base_config.items()) + list(config.items()))
 
 
+# Alias
+Sum = Add
+
 def add(inputs, **kwargs):
     """Functional interface to the `Add` layer.
 

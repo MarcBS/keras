@@ -104,9 +104,7 @@ def raise_duplicate_arg_error(old_arg, new_arg):
 
 legacy_dense_support = generate_legacy_interface(
     allowed_positional_args=['units'],
-    conversions=[('units', 'units'),
-                 ('inner', 'kernel_initializer'),
-                 ('kernel_initializer', 'kernel_initializer'),
+    conversions=[('output_dim', 'units'),
                  ('init', 'kernel_initializer'),
                  ('W_regularizer', 'kernel_regularizer'),
                  ('b_regularizer', 'bias_regularizer'),
@@ -129,9 +127,8 @@ def embedding_kwargs_preprocessor(args, kwargs):
     return args, kwargs, converted
 
 legacy_embedding_support = generate_legacy_interface(
-    allowed_positional_args=['input_dim', 'units'],
-    conversions=[('kernel_initializer', 'embeddings_initializer'),
-                 ('init', 'embeddings_initializer'),
+    allowed_positional_args=['input_dim', 'output_dim'],
+    conversions=[('init', 'embeddings_initializer'),
                  ('W_regularizer', 'embeddings_regularizer'),
                  ('W_constraint', 'embeddings_constraint')],
     preprocessor=embedding_kwargs_preprocessor)
@@ -144,7 +141,7 @@ legacy_pooling1d_support = generate_legacy_interface(
 
 legacy_prelu_support = generate_legacy_interface(
     allowed_positional_args=['alpha_initializer'],
-    conversions=[('kernel_initializer', 'alpha_initializer')])
+    conversions=[('init', 'alpha_initializer')])
 
 
 legacy_gaussiannoise_support = generate_legacy_interface(
@@ -154,14 +151,14 @@ legacy_gaussiannoise_support = generate_legacy_interface(
 
 def recurrent_args_preprocessor(args, kwargs):
     converted = []
-    if 'forget_bias_initializer' in kwargs:
-        if kwargs['forget_bias_initializer'] == 'one':
-            kwargs.pop('forget_bias_initializer')
+    if 'forget_bias_init' in kwargs:
+        if kwargs['forget_bias_init'] == 'one':
+            kwargs.pop('forget_bias_init')
             kwargs['unit_forget_bias'] = True
-            converted.append(('forget_bias_initializer', 'unit_forget_bias'))
+            converted.append(('forget_bias_init', 'unit_forget_bias'))
         else:
-            kwargs.pop('forget_bias_initializer')
-            warnings.warn('The `forget_bias_initializer` argument '
+            kwargs.pop('forget_bias_init')
+            warnings.warn('The `forget_bias_init` argument '
                           'has been ignored. Use `unit_forget_bias=True` '
                           'instead to initialize with ones.', stacklevel=3)
     if 'input_dim' in kwargs:
@@ -177,13 +174,11 @@ def recurrent_args_preprocessor(args, kwargs):
 
 legacy_recurrent_support = generate_legacy_interface(
     allowed_positional_args=['units'],
-    conversions=[('units', 'units'),
+    conversions=[('output_dim', 'units'),
                  ('init', 'kernel_initializer'),
                  ('inner_init', 'recurrent_initializer'),
                  ('init_att', 'attention_context_initializer'),
-                 ('kernel_initializer', 'kernel_initializer'),
-                 ('recurrent_initializer', 'recurrent_initializer'),
-                 ('recurrent_activation', 'recurrent_activation'),
+                 ('inner_activation', 'recurrent_activation'),
                  ('W_regularizer', 'kernel_regularizer'),
                  ('b_regularizer', 'bias_regularizer'),
                  ('U_regularizer', 'recurrent_regularizer'),
@@ -265,7 +260,7 @@ legacy_conv1d_support = generate_legacy_interface(
                  ('filter_length', 'kernel_size'),
                  ('subsample_length', 'strides'),
                  ('border_mode', 'padding'),
-                 ('kernel_initializer', 'kernel_initializer'),
+                 ('init', 'kernel_initializer'),
                  ('W_regularizer', 'kernel_regularizer'),
                  ('b_regularizer', 'bias_regularizer'),
                  ('W_constraint', 'kernel_constraint'),
@@ -315,7 +310,7 @@ legacy_conv2d_support = generate_legacy_interface(
                  ('subsample', 'strides'),
                  ('border_mode', 'padding'),
                  ('dim_ordering', 'data_format'),
-                 ('kernel_initializer', 'kernel_initializer'),
+                 ('init', 'kernel_initializer'),
                  ('W_regularizer', 'kernel_regularizer'),
                  ('b_regularizer', 'bias_regularizer'),
                  ('W_constraint', 'kernel_constraint'),
@@ -329,11 +324,11 @@ legacy_conv2d_support = generate_legacy_interface(
 
 def separable_conv2d_args_preprocessor(args, kwargs):
     converted = []
-    if 'kernel_initializer' in kwargs:
-        init = kwargs.pop('kernel_initializer')
+    if 'init' in kwargs:
+        init = kwargs.pop('init')
         kwargs['depthwise_initializer'] = init
         kwargs['pointwise_initializer'] = init
-        converted.append(('kernel_initializer', 'depthwise_initializer/pointwise_initializer'))
+        converted.append(('init', 'depthwise_initializer/pointwise_initializer'))
     args, kwargs, _converted = conv2d_args_preprocessor(args, kwargs)
     return args, kwargs, converted + _converted
 
@@ -370,7 +365,7 @@ legacy_deconv2d_support = generate_legacy_interface(
                  ('subsample', 'strides'),
                  ('border_mode', 'padding'),
                  ('dim_ordering', 'data_format'),
-                 ('kernel_initializer', 'kernel_initializer'),
+                 ('init', 'kernel_initializer'),
                  ('W_regularizer', 'kernel_regularizer'),
                  ('b_regularizer', 'bias_regularizer'),
                  ('W_constraint', 'kernel_constraint'),
@@ -435,7 +430,7 @@ legacy_conv3d_support = generate_legacy_interface(
                  ('subsample', 'strides'),
                  ('border_mode', 'padding'),
                  ('dim_ordering', 'data_format'),
-                 ('kernel_initializer', 'kernel_initializer'),
+                 ('init', 'kernel_initializer'),
                  ('W_regularizer', 'kernel_regularizer'),
                  ('b_regularizer', 'bias_regularizer'),
                  ('W_constraint', 'kernel_constraint'),
@@ -465,13 +460,13 @@ def batchnorm_args_preprocessor(args, kwargs):
 
 def convlstm2d_args_preprocessor(args, kwargs):
     converted = []
-    if 'forget_bias_initializer' in kwargs:
-        value = kwargs.pop('forget_bias_initializer')
+    if 'forget_bias_init' in kwargs:
+        value = kwargs.pop('forget_bias_init')
         if value == 'one':
             kwargs['unit_forget_bias'] = True
-            converted.append(('forget_bias_initializer', 'unit_forget_bias'))
+            converted.append(('forget_bias_init', 'unit_forget_bias'))
         else:
-            warnings.warn('The `forget_bias_initializer` argument '
+            warnings.warn('The `forget_bias_init` argument '
                           'has been ignored. Use `unit_forget_bias=True` '
                           'instead to initialize with ones.', stacklevel=3)
     args, kwargs, _converted = conv2d_args_preprocessor(args, kwargs)
@@ -483,12 +478,12 @@ legacy_convlstm2d_support = generate_legacy_interface(
                  ('subsample', 'strides'),
                  ('border_mode', 'padding'),
                  ('dim_ordering', 'data_format'),
-                 ('kernel_initializer', 'kernel_initializer'),
-                 ('recurrent_initializer', 'recurrent_initializer'),
+                 ('init', 'kernel_initializer'),
+                 ('inner_init', 'recurrent_initializer'),
                  ('W_regularizer', 'kernel_regularizer'),
                  ('U_regularizer', 'recurrent_regularizer'),
                  ('b_regularizer', 'bias_regularizer'),
-                 ('recurrent_activation', 'recurrent_activation'),
+                 ('inner_activation', 'recurrent_activation'),
                  ('dropout_W', 'dropout'),
                  ('dropout_U', 'recurrent_dropout'),
                  ('bias', 'use_bias')],
