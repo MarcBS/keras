@@ -2,24 +2,24 @@
 from __future__ import absolute_import
 from __future__ import division
 
-import numpy as np
-
 import copy
 import types as python_types
 import warnings
 
-from .. import backend as K
+import numpy as np
+
 from .. import activations
+from .. import backend as K
+from .. import constraints
 from .. import initializers
 from .. import regularizers
-from .. import constraints
 from ..engine import InputSpec
 from ..engine import Layer
+from ..legacy import interfaces
+from ..utils.generic_utils import deserialize_keras_object
 from ..utils.generic_utils import func_dump
 from ..utils.generic_utils import func_load
-from ..utils.generic_utils import deserialize_keras_object
 from ..utils.generic_utils import has_arg
-from ..legacy import interfaces
 
 
 class Masking(Layer):
@@ -89,6 +89,7 @@ class Dropout(Layer):
     # References
         - [Dropout: A Simple Way to Prevent Neural Networks from Overfitting](http://www.cs.toronto.edu/~rsalakhu/papers/srivastava14a.pdf)
     """
+
     @interfaces.legacy_dropout_support
     def __init__(self, rate, noise_shape=None, seed=None, **kwargs):
         super(Dropout, self).__init__(**kwargs)
@@ -107,6 +108,7 @@ class Dropout(Layer):
             def dropped_inputs():
                 return K.dropout(inputs, self.rate, noise_shape,
                                  seed=self.seed)
+
             return K.in_train_phase(dropped_inputs, inputs,
                                     training=training)
         return inputs
@@ -117,9 +119,8 @@ class Dropout(Layer):
         return dict(list(base_config.items()) + list(config.items()))
 
 
-
 class GuidedDropout(Layer):
-    #TODO: Test this layer
+    # TODO: Test this layer
     '''Applies a guided Dropout to the input, where the output activations are set
     to 0 given by the weights of the layer.
 
@@ -130,6 +131,7 @@ class GuidedDropout(Layer):
     Weights:
         W: (num_dropout_matrices, num_features)
     '''
+
     def __init__(self, weights_shape, weights=None, **kwargs):
         self.weights_shape = weights_shape
         self.initial_weights = [weights]
@@ -137,7 +139,6 @@ class GuidedDropout(Layer):
         super(GuidedDropout, self).__init__(**kwargs)
 
     def build(self, input_shape):
-
         self.W = self.init(self.weights_shape,
                            name='{}_W'.format(self.name))
         self.trainable_weights = [self.W]
@@ -149,7 +150,6 @@ class GuidedDropout(Layer):
         self.trainable = False
 
     def call(self, x, mask=None):
-
         modulated_input = x[0]
         modulator_input = x[1]
 
@@ -498,7 +498,6 @@ class Permute(Layer):
         return dict(list(base_config.items()) + list(config.items()))
 
 
-
 class PermuteGeneral(Layer):
     '''Permutes the dimensions of the input according to a given pattern.
     This is just like the layer Permute, but DOES INCLUDE the batch dimension.
@@ -517,6 +516,7 @@ class PermuteGeneral(Layer):
         Same as the input shape, but with the dimensions re-ordered according
         to the specified pattern.
     '''
+
     def __init__(self, dims, **kwargs):
         super(PermuteGeneral, self).__init__(**kwargs)
         self.dims = tuple(dims)
@@ -564,9 +564,9 @@ class Flatten(Layer):
             raise ValueError('The shape of the input to "Flatten" '
                              'is not fully defined '
                              '(got ' + str(input_shape[1:]) + '. '
-                             'Make sure to pass a complete "input_shape" '
-                             'or "batch_input_shape" argument to the first '
-                             'layer in your model.')
+                                                              'Make sure to pass a complete "input_shape" '
+                                                              'or "batch_input_shape" argument to the first '
+                                                              'layer in your model.')
         return (input_shape[0], np.prod(input_shape[1:]))
 
     def call(self, inputs):
@@ -630,6 +630,7 @@ class RepeatMatrix(Layer):
     # Output shape
         R+1-dimensional tensor of shape `(nb_samples, n, dim2, dim3, ..., dimR)` if dim==1.
     '''
+
     def __init__(self, n, dim=1, **kwargs):
         self.supports_masking = True
         self.n = n
@@ -745,7 +746,6 @@ class Lambda(Layer):
                             "must be a function that computes the new mask")
 
         super(Lambda, self).__init__(**kwargs)
-
 
     def compute_output_shape(self, input_shape):
         if self._output_shape is None:
@@ -967,15 +967,8 @@ class Dense(Layer):
         self.bias_constraint = constraints.get(bias_constraint)
         self.input_spec = InputSpec(min_ndim=2)
         self.supports_masking = True
-        #TODO: Check this layer
+        # TODO: Check this layer
         """
-        self.W_regularizer = regularizers.get(W_regularizer)
-        self.b_regularizer = regularizers.get(b_regularizer)
-        self.activity_regularizer = regularizers.get(activity_regularizer)
-
-        self.W_constraint = constraints.get(W_constraint)
-        self.b_constraint = constraints.get(b_constraint)
-
         self.W_learning_rate_multiplier = W_learning_rate_multiplier
         self.b_learning_rate_multiplier = b_learning_rate_multiplier
         self.learning_rate_multipliers = [self.W_learning_rate_multiplier, self.b_learning_rate_multiplier]
@@ -1033,7 +1026,8 @@ class Dense(Layer):
         }
         base_config = super(Dense, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
-    #TODO: Check this method
+
+    # TODO: Check this method
     def set_lr_multipliers(self, W_learning_rate_multiplier, b_learning_rate_multiplier):
         self.W_learning_rate_multiplier = W_learning_rate_multiplier
         self.b_learning_rate_multiplier = b_learning_rate_multiplier
@@ -1070,12 +1064,14 @@ class ActivityRegularization(Layer):
         base_config = super(ActivityRegularization, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
+
 class MaskedMean(Layer):
     """
     This layer is called after an Embedding layer.
     It averages all of the masked-out embeddings.
     The mask is discarded
     """
+
     def __init__(self, **kwargs):
         self.support_mask = True
         super(MaskedMean, self).__init__(**kwargs)
@@ -1098,6 +1094,7 @@ class MaskLayer(Layer):
     """
     Applies to the input layer its mask
     """
+
     def __init__(self, **kwargs):
         self.support_mask = True
         super(MaskLayer, self).__init__(**kwargs)
@@ -1114,6 +1111,7 @@ class MaskLayer(Layer):
     def get_config(self):
         base_config = super(MaskLayer, self).get_config()
         return dict(list(base_config.items()))
+
 
 class WeightedSum(Layer):
     ''' Applies a weighted sum over a set of vectors input[0] and their respective weights input[1].
@@ -1136,6 +1134,7 @@ class WeightedSum(Layer):
         Vector with the same number of dimensions and length as input[0] but having removed the dimensions
         specified in sum_dims (if any).
     '''
+
     def __init__(self, sum_dims=[], **kwargs):
         assert isinstance(sum_dims, list)
         self.sum_dims = sorted(sum_dims)[::-1]
@@ -1154,8 +1153,8 @@ class WeightedSum(Layer):
         # tile weights before summing
         K.repeatRdim(weights, K.shape(values)[1], axis=1)
 
-        #x = K.dot(values, weights)
-        x = values*weights
+        # x = K.dot(values, weights)
+        x = values * weights
 
         for d in self.sum_dims:
             x = K.sum(x, axis=d)
@@ -1181,7 +1180,6 @@ class WeightedSum(Layer):
 
             return out_mask
 
-
     def get_config(self):
         config = {'sum_dims': self.sum_dims}
         base_config = super(WeightedSum, self).get_config()
@@ -1202,12 +1200,14 @@ class WeightedMerge(Layer):
     # Output shape
         Tensor with the same number of dimensions as the input tensors.
     '''
+
     def __init__(self, mode='sum', init='glorot_uniform', lambdas_regularizer=None, weights=None, **kwargs):
-        #self.out_shape = out_shape
+        # self.out_shape = out_shape
         self._valid_modes = ['sum', 'mul']
 
         if mode not in self._valid_modes:
-            raise NotImplementedError("Merge mode of type '"+ mode +"' is not valid. Valid modes are: "+str(self._valid_modes))
+            raise NotImplementedError(
+                "Merge mode of type '" + mode + "' is not valid. Valid modes are: " + str(self._valid_modes))
         self.mode = mode
 
         self.init = initializations.get(init)
@@ -1222,12 +1222,12 @@ class WeightedMerge(Layer):
         if not isinstance(input_shape, list):
             input_shape = [input_shape]
         s = input_shape[0]
-        for i in range(1,len(input_shape)):
-            for s1,s2 in zip(input_shape[i], s):
+        for i in range(1, len(input_shape)):
+            for s1, s2 in zip(input_shape[i], s):
                 assert s1 == s2 or s1 is None or s2 is None, 'The shapes of some input tensors do not match ' \
                                                              '(' + str(input_shape[i]) + ' vs ' + str(s) + ').'
-            #assert input_shape[i] == s, 'The shapes of some input tensors do not match ' \
-            #                        '('+str(input_shape[i])+' vs '+str(s)+').'
+                # assert input_shape[i] == s, 'The shapes of some input tensors do not match ' \
+                #                        '('+str(input_shape[i])+' vs '+str(s)+').'
 
         self.lambdas = self.init((len(input_shape),), name='{}_lambdas'.format(self.name))
         self.trainable_weights = [self.lambdas]
@@ -1255,9 +1255,8 @@ class WeightedMerge(Layer):
 
         return s
 
-
     def compute_output_shape(self, input_shape):
-        #return tuple(list(input_shape[0][:2]) + self.out_shape)
+        # return tuple(list(input_shape[0][:2]) + self.out_shape)
 
         if not isinstance(input_shape, list):
             input_shape = [input_shape]
@@ -1293,6 +1292,7 @@ class SetSubtensor(Layer):
         K.set_subtensor(input[0][indices[0], input[1][indices[1]])
     # Supports masking: The mask of the first input layer
     """
+
     def __init__(self, indices, **kwargs):
         self.supports_masking = True
         self.indices = indices
@@ -1324,7 +1324,6 @@ class RemoveMask(Layer):
     def compute_mask(self, input, input_mask=None):
         return None
 
-
     def get_config(self):
         base_config = super(RemoveMask, self).get_config()
         return dict(list(base_config.items()))
@@ -1354,7 +1353,8 @@ class ZeroesLayer(Layer):
         For instance, for a 2D input with shape `(nb_samples, input_dim)`,
         the output would have shape `(nb_samples, units)`.
     '''
-    def __init__(self, output_dim,  input_dim=None, **kwargs):
+
+    def __init__(self, output_dim, input_dim=None, **kwargs):
         self.output_dim = output_dim
         self.input_dim = input_dim
         super(ZeroesLayer, self).__init__(**kwargs)
@@ -1429,12 +1429,13 @@ class EqualDimensions(Layer):
         return tuple(out_dims)
 
     def call(self, x, mask=None):
-        return K.equal_dimensions(x[0],x[1])
+        return K.equal_dimensions(x[0], x[1])
 
     def get_config(self):
         config = {}
         base_config = super(EqualDimensions, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
+
 
 class Concat(Layer):
     '''Concatenates multiple inputs along the specified axis. Inputs should have the same
@@ -1457,7 +1458,7 @@ class Concat(Layer):
     '''
 
     def __init__(self, axis=1,
-                cropping=None, dim_ordering='default',
+                 cropping=None, dim_ordering='default',
                  **kwargs):
         super(Concat, self).__init__(**kwargs)
         if dim_ordering == 'default':
@@ -1560,7 +1561,7 @@ def autocrop(inputs, cropping):
             raise ValueError("Not all inputs are of the same ",
                              "dimensionality. Got {0} inputs of "
                              "dimensionalities {1}.".format(
-                             len(inputs), [K.ndim(input) for input in inputs]))
+                                 len(inputs), [K.ndim(input) for input in inputs]))
 
         # Get the shape of each input
         shapes = [K.shape(input) for input in inputs]
@@ -1578,7 +1579,7 @@ def autocrop(inputs, cropping):
         cropping = list(cropping)
         if ndim > len(cropping):
             cropping = list(cropping) + \
-                         [None] * (ndim - len(cropping))
+                       [None] * (ndim - len(cropping))
 
         # For each dimension
         for dim, cr in enumerate(cropping):
@@ -1605,7 +1606,7 @@ def autocrop(inputs, cropping):
                     # Choose `sz` elements from the center
                     for sh, slices in zip(shapes, slices_by_input):
                         offset = (sh[dim] - sz) // 2
-                        slices.append(slice(offset, offset+sz))
+                        slices.append(slice(offset, offset + sz))
                 else:
                     raise ValueError(
                         'Unknown crop mode \'{0}\''.format(cr))
@@ -1641,8 +1642,8 @@ def autocrop_array_shapes(input_shapes, cropping):
             raise ValueError("Not all inputs are of the same "
                              "dimensionality. Got {0} inputs of "
                              "dimensionalities {1}.".format(
-                                len(input_shapes),
-                                [len(sh) for sh in input_shapes]))
+                len(input_shapes),
+                [len(sh) for sh in input_shapes]))
 
         result = []
 
@@ -1651,7 +1652,7 @@ def autocrop_array_shapes(input_shapes, cropping):
         cropping = list(cropping)
         if ndim > len(cropping):
             cropping = list(cropping) + \
-                         [None] * (ndim - len(cropping))
+                       [None] * (ndim - len(cropping))
 
         for sh, cr in zip(zip(*input_shapes), cropping):
             if cr is None:
