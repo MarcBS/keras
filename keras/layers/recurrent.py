@@ -3917,7 +3917,6 @@ class AttLSTMCond(Recurrent):
                  bias_initializer='zeros',
                  bias_ba_initializer='zeros',
                  bias_ca_initializer='zero',
-                 forget_bias_init='one',
                  unit_forget_bias=True,
                  mask_value=0.,
                  kernel_regularizer=None,
@@ -3968,7 +3967,6 @@ class AttLSTMCond(Recurrent):
         self.bias_ba_initializer = initializers.get(bias_ba_initializer)
         self.bias_ca_initializer = initializers.get(bias_ca_initializer)
         self.unit_forget_bias = unit_forget_bias
-        self.forget_bias_initializer = initializers.get(forget_bias_init)
 
         # Regularizers
         self.kernel_regularizer = regularizers.get(kernel_regularizer)
@@ -4373,12 +4371,14 @@ class AttLSTMCond(Recurrent):
         return initial_states + extra_states
 
     def get_config(self):
-        config = {'units': self.units,
+        config = {'return_extra_variables': self.return_extra_variables,
+                  'return_states': self.return_states,
+                  'units': self.units,
                   "att_units": self.att_units,
                   'activation': activations.serialize(self.activation),
                   'recurrent_activation': activations.serialize(self.recurrent_activation),
-                  'return_extra_variables': self.return_extra_variables,
-                  'return_states': self.return_states,
+                  'use_bias': self.use_bias,
+                  'mask_value': self.mask_value,
                   'kernel_initializer': initializers.serialize(self.kernel_initializer),
                   'recurrent_initializer': initializers.serialize(self.recurrent_initializer),
                   'conditional_initializer': initializers.serialize(self.conditional_initializer),
@@ -4412,7 +4412,8 @@ class AttLSTMCond(Recurrent):
                   'recurrent_dropout': self.recurrent_dropout,
                   'conditional_dropout': self.conditional_dropout,
                   'attention_dropout': self.attention_dropout,
-                  'mask_value': self.mask_value
+                  'num_inputs': self.num_inputs,
+                  #'input_spec': self.input_spec
                   }
         base_config = super(AttLSTMCond, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
@@ -4513,7 +4514,6 @@ class AttConditionalLSTMCond(Recurrent):
                  bias_initializer='zeros',
                  bias_ba_initializer='zeros',
                  bias_ca_initializer='zero',
-                 forget_bias_init='one',
                  unit_forget_bias=True,
                  mask_value=0.,
                  kernel_regularizer=None,
@@ -4567,7 +4567,6 @@ class AttConditionalLSTMCond(Recurrent):
         self.bias_ba_initializer = initializers.get(bias_ba_initializer)
         self.bias_ca_initializer = initializers.get(bias_ca_initializer)
         self.unit_forget_bias = unit_forget_bias
-        self.forget_bias_initializer = initializers.get(forget_bias_init)
 
         # Regularizers
         self.kernel_regularizer = regularizers.get(kernel_regularizer)
