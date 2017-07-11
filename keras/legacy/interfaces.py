@@ -175,6 +175,7 @@ def recurrent_args_preprocessor(args, kwargs):
 legacy_recurrent_support = generate_legacy_interface(
     allowed_positional_args=['units'],
     conversions=[('output_dim', 'units'),
+                 ('att_dim', 'att_units'),
                  ('init', 'kernel_initializer'),
                  ('inner_init', 'recurrent_initializer'),
                  ('init_att', 'attention_context_initializer'),

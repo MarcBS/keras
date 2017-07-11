@@ -1422,7 +1422,7 @@ class AttGRUCond(Recurrent):
 
     @interfaces.legacy_recurrent_support
     def __init__(self, units,
-                 att_dim=0,
+                 att_units=0,
                  return_extra_variables=False,
                  return_states=False,
                  activation='tanh',
@@ -1469,7 +1469,7 @@ class AttGRUCond(Recurrent):
 
         # Main parameters
         self.units = units
-        self.att_units = units if att_dim == 0 else att_dim
+        self.att_units = units if att_units == 0 else att_units
         self.activation = activations.get(activation)
         self.recurrent_activation = activations.get(recurrent_activation)
         self.use_bias = use_bias
@@ -1998,7 +1998,7 @@ class AttConditionalGRUCond(Recurrent):
 
     @interfaces.legacy_recurrent_support
     def __init__(self, units,
-                 att_dim=0,
+                 att_units=0,
                  return_extra_variables=False,
                  return_states=False,
                  activation='tanh',
@@ -2045,7 +2045,7 @@ class AttConditionalGRUCond(Recurrent):
 
         # Main parameters
         self.units = units
-        self.att_units = units if att_dim == 0 else att_dim
+        self.att_units = units if att_units == 0 else att_units
         self.activation = activations.get(activation)
         self.recurrent_activation = activations.get(recurrent_activation)
         self.use_bias = use_bias
@@ -3351,7 +3351,7 @@ class AttLSTM(Recurrent):
 
     @interfaces.legacy_recurrent_support
     def __init__(self, units,
-                 att_dim=0,
+                 att_units=0,
                  return_extra_variables=False,
                  return_states=False,
                  activation='tanh',
@@ -3396,7 +3396,7 @@ class AttLSTM(Recurrent):
 
         # Main parameters
         self.units = units
-        self.att_units = units if att_dim == 0 else att_dim
+        self.att_units = units if att_units == 0 else att_units
         self.activation = activations.get(activation)
         self.recurrent_activation = activations.get(recurrent_activation)
         self.use_bias = use_bias
@@ -3902,7 +3902,7 @@ class AttLSTMCond(Recurrent):
 
     @interfaces.legacy_recurrent_support
     def __init__(self, units,
-                 att_dim=0,
+                 att_units=0,
                  return_extra_variables=False,
                  return_states=False,
                  activation='tanh',
@@ -3950,7 +3950,7 @@ class AttLSTMCond(Recurrent):
 
         # Main parameters
         self.units = units
-        self.att_units = units if att_dim == 0 else att_dim
+        self.att_units = units if att_units == 0 else att_units
         self.activation = activations.get(activation)
         self.recurrent_activation = activations.get(recurrent_activation)
         self.use_bias = use_bias
@@ -4499,7 +4499,7 @@ class AttConditionalLSTMCond(Recurrent):
 
     @interfaces.legacy_recurrent_support
     def __init__(self, units,
-                 att_dim=0,
+                 att_units=0,
                  return_extra_variables=False,
                  return_states=False,
                  activation='tanh',
@@ -4548,7 +4548,7 @@ class AttConditionalLSTMCond(Recurrent):
 
         # Main parameters
         self.units = units
-        self.att_units = units if att_dim == 0 else att_dim
+        self.att_units = units if att_units == 0 else att_units
         self.activation = activations.get(activation)
         self.recurrent_activation = activations.get(recurrent_activation)
         self.use_bias = use_bias
@@ -5098,7 +5098,7 @@ class AttLSTMCond2Inputs(Recurrent):
         - [A Theoretically Grounded Application of Dropout in Recurrent Neural Networks](http://arxiv.org/abs/1512.05287)
     '''
 
-    def __init__(self, output_dim, att_dim1=0, att_dim2=0,
+    def __init__(self, output_dim, att_units1=0, att_units2=0,
                  init='glorot_uniform', inner_init='orthogonal', init_att='glorot_uniform',
                  return_states=False, return_extra_variables=False, attend_on_both=False,
                  forget_bias_init='one', activation='tanh',
@@ -5112,8 +5112,8 @@ class AttLSTMCond2Inputs(Recurrent):
                  dropout_wa=0., dropout_Wa=0., dropout_Ua=0.,
                  dropout_wa2=0., dropout_Wa2=0., dropout_Ua2=0., **kwargs):
         self.output_dim = output_dim
-        self.att_dim1 = output_dim if att_dim1 == 0 else att_dim1
-        self.att_dim2 = output_dim if att_dim2 == 0 else att_dim2
+        self.att_units1 = output_dim if att_units1 == 0 else att_units1
+        self.att_units2 = output_dim if att_units2 == 0 else att_units2
         self.return_extra_variables = return_extra_variables
         self.return_states = return_states
         self.init = initializations.get(init)
@@ -5677,8 +5677,8 @@ class AttLSTMCond2Inputs(Recurrent):
 
     def get_config(self):
         config = {"units": self.output_dim,
-                  "att_dim1": self.att_dim1,
-                  "att_dim2": self.att_dim2,
+                  "att_units1": self.att_units1,
+                  "att_units2": self.att_units2,
                   "return_extra_variables": self.return_extra_variables,
                   "return_states": self.return_states,
                   "mask_value": self.mask_value,
@@ -5750,7 +5750,7 @@ class AttLSTMCond3Inputs(Recurrent):
         - [A Theoretically Grounded Application of Dropout in Recurrent Neural Networks](http://arxiv.org/abs/1512.05287)
     '''
 
-    def __init__(self, output_dim, att_dim1, att_dim2, att_dim3,
+    def __init__(self, output_dim, att_units1, att_units2, att_units3,
                  init='glorot_uniform', inner_init='orthogonal', init_att='glorot_uniform',
                  return_states=False, return_extra_variables=False, attend_on_both=False,
                  forget_bias_init='one', activation='tanh',
@@ -5769,9 +5769,9 @@ class AttLSTMCond3Inputs(Recurrent):
                  dropout_wa3=0., dropout_Wa3=0., dropout_Ua3=0.,
                  **kwargs):
         self.output_dim = output_dim
-        self.att_dim1 = output_dim if att_dim1 == 0 else att_dim1
-        self.att_dim2 = output_dim if att_dim2 == 0 else att_dim2
-        self.att_dim3 = output_dim if att_dim3 == 0 else att_dim3
+        self.att_units1 = output_dim if att_units1 == 0 else att_units1
+        self.att_units2 = output_dim if att_units2 == 0 else att_units2
+        self.att_units3 = output_dim if att_units3 == 0 else att_units3
 
         self.return_extra_variables = return_extra_variables
         self.return_states = return_states
@@ -5882,21 +5882,21 @@ class AttLSTMCond3Inputs(Recurrent):
             self.states = [None, None, None, None, None]
 
         # Initialize Att model params (following the same format for any option of self.consume_less)
-        self.wa = self.add_weight((self.att_dim1,),
+        self.wa = self.add_weight((self.att_units1,),
                                   initializer=self.init_att,
                                   name='{}_wa'.format(self.name),
                                   regularizer=self.wa_regularizer)
 
-        self.Wa = self.add_weight((self.output_dim, self.att_dim1),
+        self.Wa = self.add_weight((self.output_dim, self.att_units1),
                                   initializer=self.init_att,
                                   name='{}_Wa'.format(self.name),
                                   regularizer=self.Wa_regularizer)
-        self.Ua = self.add_weight((self.context1_dim, self.att_dim1),
+        self.Ua = self.add_weight((self.context1_dim, self.att_units1),
                                   initializer=self.inner_init,
                                   name='{}_Ua'.format(self.name),
                                   regularizer=self.Ua_regularizer)
 
-        self.ba = self.add_weight(self.att_dim1,
+        self.ba = self.add_weight(self.att_units1,
                                   initializer='zero',
                                   name='{}_ba'.format(self.name),
                                   regularizer=self.ba_regularizer)
@@ -5908,21 +5908,21 @@ class AttLSTMCond3Inputs(Recurrent):
 
         if self.attend_on_both:
             # Initialize Att model params (following the same format for any option of self.consume_less)
-            self.wa2 = self.add_weight((self.att_dim2,),
+            self.wa2 = self.add_weight((self.att_units2,),
                                        initializer=self.init,
                                        name='{}_wa2'.format(self.name),
                                        regularizer=self.wa2_regularizer)
 
-            self.Wa2 = self.add_weight((self.output_dim, self.att_dim2),
+            self.Wa2 = self.add_weight((self.output_dim, self.att_units2),
                                        initializer=self.init,
                                        name='{}_Wa2'.format(self.name),
                                        regularizer=self.Wa2_regularizer)
-            self.Ua2 = self.add_weight((self.context2_dim, self.att_dim2),
+            self.Ua2 = self.add_weight((self.context2_dim, self.att_units2),
                                        initializer=self.inner_init,
                                        name='{}_Ua2'.format(self.name),
                                        regularizer=self.Ua2_regularizer)
 
-            self.ba2 = self.add_weight(self.att_dim2,
+            self.ba2 = self.add_weight(self.att_units2,
                                        initializer='zero',
                                        regularizer=self.ba2_regularizer)
 
@@ -5930,21 +5930,21 @@ class AttLSTMCond3Inputs(Recurrent):
                                        initializer='zero',
                                        regularizer=self.ca2_regularizer)
 
-            self.wa3 = self.add_weight((self.att_dim3,),
+            self.wa3 = self.add_weight((self.att_units3,),
                                        initializer=self.init,
                                        name='{}_wa3'.format(self.name),
                                        regularizer=self.wa3_regularizer)
 
-            self.Wa3 = self.add_weight((self.output_dim, self.att_dim3),
+            self.Wa3 = self.add_weight((self.output_dim, self.att_units3),
                                        initializer=self.init,
                                        name='{}_Wa3'.format(self.name),
                                        regularizer=self.Wa3_regularizer)
-            self.Ua3 = self.add_weight((self.context3_dim, self.att_dim3),
+            self.Ua3 = self.add_weight((self.context3_dim, self.att_units3),
                                        initializer=self.inner_init,
                                        name='{}_Ua3'.format(self.name),
                                        regularizer=self.Ua3_regularizer)
 
-            self.ba3 = self.add_weight(self.att_dim3,
+            self.ba3 = self.add_weight(self.att_units3,
                                        initializer='zero',
                                        regularizer=self.ba3_regularizer)
 
@@ -6479,9 +6479,9 @@ class AttLSTMCond3Inputs(Recurrent):
 
     def get_config(self):
         config = {"units": self.output_dim,
-                  "att_dim1": self.att_dim1,
-                  "att_dim2": self.att_dim2,
-                  "att_dim3": self.att_dim3,
+                  "att_units1": self.att_units1,
+                  "att_units2": self.att_units2,
+                  "att_units3": self.att_units3,
                   "return_extra_variables": self.return_extra_variables,
                   "return_states": self.return_states,
                   "mask_value": self.mask_value,
