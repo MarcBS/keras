@@ -1,43 +1,8 @@
 from __future__ import print_function
-#import inspect
 
 from .conv_utils import convert_kernel
 from .. import backend as K
 import numpy as np
-
-#from ..caffe.extra_layers import *
-
-def layer_from_config(config, custom_objects=None):
-    '''
-    # Arguments
-        config: dict of the form {'class_name': str, 'config': dict}
-        custom_objects: dict mapping class names (or function names)
-            of custom (non-Keras) objects to class/functions
-
-    # Returns
-        Layer instance (may be Model, Sequential, Layer...)
-    '''
-    # Insert custom layers into globals so they can
-    # be accessed by `get_from_module`.
-    if custom_objects:
-        for cls_key in custom_objects:
-            globals()[cls_key] = custom_objects[cls_key]
-
-    class_name = config['class_name']
-
-    if class_name == 'Sequential':
-        layer_class = Sequential
-    elif class_name in ['Model', 'Container']:
-        layer_class = Model
-    else:
-        layer_class = get_from_module(class_name, globals(), 'layer',
-                                      instantiate=False)
-
-    arg_spec = inspect.getargspec(layer_class.from_config)
-    if 'custom_objects' in arg_spec.args:
-        return layer_class.from_config(config['config'], custom_objects=custom_objects)
-    else:
-        return layer_class.from_config(config['config'])
 
 
 def print_summary(model, line_length=None, positions=None, print_fn=print):
