@@ -41,6 +41,9 @@ def clip_norm(g, c, n):
 def optimizer_from_config(config, custom_objects={}):
     all_classes = {
         'sgd': SGD,
+        'pas': PAS,
+        'ppas': PPAS,
+        'pas2': PAS2,
         'rmsprop': RMSprop,
         'adagrad': Adagrad,
         'adadelta': Adadelta,
@@ -143,22 +146,21 @@ class Optimizer(object):
     def from_config(cls, config):
         return cls(**config)
 
-#TODO: Check PAS / PPAS Optimizers
 class PAS(Optimizer):
-    '''Soft Passive-Agressive online learning by subgradient techniques optimizer.
+    """Soft Passive-Agressive online learning by subgradient techniques optimizer.
 
     # Arguments
         lr: float >= 0. Learning rate.
         c: float. Importance of the gradients when updating weights.
-    '''
+    """
 
     def __init__(self, trainable_weights_shapes, lr=0.01, c=1.0, **kwargs):
         super(PAS, self).__init__(**kwargs)
         self.__dict__.update(locals())
-        self.lr = K.variable(lr)
-        self.weights = [K.zeros(shape) for shape in trainable_weights_shapes]
-        self.c = K.variable(c)
-        self.loss_value = K.variable(0.0)
+        self.lr = K.variable(lr, name='lr')
+        self.weights = [K.zeros(shape, name=name) for name, shape in trainable_weights_shapes]
+        self.c = K.variable(c, name='c')
+        self.loss_value = K.variable(0.0, name='loss_value')
 
     def set_weights(self, weights):
         for sw, w in zip(self.weights, weights):
@@ -194,12 +196,12 @@ class PAS(Optimizer):
 
 
 class PAS2(PAS):
-    '''Passive-Agressive online learning by projected subgradient techniques optimizer.
+    """Passive-Agressive online learning by projected subgradient techniques optimizer.
         Alternative 1
     # Arguments
         lr: float >= 0. Learning rate.
         c: float. Weight given to projection operator.
-    '''
+    """
 
     def __init__(self, trainable_weights_shapes, lr=0.01, c=1.0, **kwargs):
         super(PAS2, self).__init__(trainable_weights_shapes, lr, c, **kwargs)
