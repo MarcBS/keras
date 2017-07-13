@@ -1285,6 +1285,7 @@ class AttGRUCond(Recurrent):
                K.zeros((input_shape[0], input_shape[3]))]
 
     def preprocess_input(self, x, B_V):
+            
             return K.dot(x * B_V[0], self.V) + self.b
 
     def get_output_shape_for(self, input_shape):
@@ -1310,8 +1311,8 @@ class AttGRUCond(Recurrent):
         # input shape: (nb_samples, time (padded with zeros), input_dim)
         # note that the .build() method of subclasses MUST define
         # self.input_spec with a complete input shape.
-
-        input_shape = self.input_spec[0].shape
+        
+        input_shape = self.input_spec[0].shape 
         state_below = x[0]
         self.context = x[1]
         if self.num_inputs == 2:  # input: [state_below, context]

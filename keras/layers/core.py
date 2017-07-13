@@ -624,7 +624,6 @@ class Lambda(Layer):
         self.function = function
         self.arguments = arguments if arguments else {}
         self.supports_masking = supports_masking
-
         if output_shape is None:
             self._output_shape = None
         elif isinstance(output_shape, (tuple, list)):
@@ -637,7 +636,7 @@ class Lambda(Layer):
 
         if mask_function is None:
             self._mask_function = None
-            self.supports_masking = False  # can flag masking here or not.  not sure which to do.
+            #self.supports_masking = False  # can flag masking here or not.  not sure which to do.
         elif hasattr(mask_function, '__call__'):
             self._mask_function = mask_function
             self.supports_masking = True
