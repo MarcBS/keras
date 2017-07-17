@@ -1358,9 +1358,6 @@ class AttGRU(Recurrent):
             Can be the name of an existing function (str),
             or a Theano function (see: [initializations](../initializations.md)).
         recurrent_initializer: initialization function of the inner cells.
-        forget_bias_initializer: initialization function for the bias of the forget gate.
-            [Jozefowicz et al.](http://www.jmlr.org/proceedings/papers/v37/jozefowicz15.pdf)
-            recommend initializing with ones.
         activation: activation function.
             Can be the name of an existing function (str),
             or a Theano function (see: [activations](../activations.md)).
@@ -2579,7 +2576,6 @@ class AttConditionalGRUCond(Recurrent):
         self.bias1_initializer = initializers.get(bias_initializer)
         self.bias_ba_initializer = initializers.get(bias_ba_initializer)
         self.bias_ca_initializer = initializers.get(bias_ca_initializer)
-        self.forget_bias_initializer = initializers.get(forget_bias_init)
 
         # Regularizers
         self.kernel_regularizer = regularizers.get(kernel_regularizer)
