@@ -1978,7 +1978,7 @@ class AttGRUCond(Recurrent):
                  recurrent_dropout=0.,
                  conditional_dropout=0.,
                  attention_dropout=0.,
-                 num_inputs=4,
+                 num_inputs=3,
                  **kwargs):
         super(AttGRUCond, self).__init__(**kwargs)
         self.return_extra_variables = return_extra_variables
@@ -2554,7 +2554,7 @@ class AttConditionalGRUCond(Recurrent):
                  recurrent_dropout=0.,
                  conditional_dropout=0.,
                  attention_dropout=0.,
-                 num_inputs=4,
+                 num_inputs=3,
                  **kwargs):
         super(AttConditionalGRUCond, self).__init__(**kwargs)
         self.return_extra_variables = return_extra_variables
