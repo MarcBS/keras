@@ -1341,6 +1341,523 @@ class GRUCond(Recurrent):
         return dict(list(base_config.items()) + list(config.items()))
 
 
+class AttGRU(Recurrent):
+    '''Gated Recurrent Unit with Attention + the previously generated word fed to the current timestep.
+    You should give two inputs to this layer:
+        1. The shifted sequence of words (shape: (mini_batch_size, output_timesteps, embedding_size))
+        2. The complete input sequence (shape: (mini_batch_size, input_timesteps, input_dim))
+    # Arguments
+        units: dimension of the internal projections and the final output.
+        embedding_size: dimension of the word embedding module used for the enconding of the generated words.
+        return_extra_variables: indicates if we only need the LSTM hidden state (False) or we want
+            additional internal variables as outputs (True). The additional variables provided are:
+            - x_att (None, out_timesteps, dim_encoder): feature vector computed after the Att.Model at each timestep
+            - alphas (None, out_timesteps, in_timesteps): weights computed by the Att.Model at each timestep
+        return_states: boolean indicating if we want the intermediate states (hidden_state and memory) as additional outputs
+        output_timesteps: number of output timesteps (# of output vectors generated)
+        kernel_initializer: weight initialization function.
+            Can be the name of an existing function (str),
+            or a Theano function (see: [initializations](../initializations.md)).
+        recurrent_initializer: initialization function of the inner cells.
+        forget_bias_initializer: initialization function for the bias of the forget gate.
+            [Jozefowicz et al.](http://www.jmlr.org/proceedings/papers/v37/jozefowicz15.pdf)
+            recommend initializing with ones.
+        activation: activation function.
+            Can be the name of an existing function (str),
+            or a Theano function (see: [activations](../activations.md)).
+        recurrent_activation: activation function for the inner cells.
+        W_regularizer: instance of [WeightRegularizer](../regularizers.md)
+            (eg. L1 or L2 regularization), applied to the input weights matrices.
+        U_regularizer: instance of [WeightRegularizer](../regularizers.md)
+            (eg. L1 or L2 regularization), applied to the recurrent weights matrices.
+        b_regularizer: instance of [WeightRegularizer](../regularizers.md),
+            applied to the bias.
+        dropout_W: float between 0 and 1. Fraction of the input units to drop for input gates.
+        dropout_U: float between 0 and 1. Fraction of the input units to drop for recurrent connections.
+        w_a_regularizer: instance of [WeightRegularizer](../regularizers.md)
+            (eg. L1 or L2 regularization), applied to the input weights matrices.
+        W_a_regularizer: instance of [WeightRegularizer](../regularizers.md)
+            (eg. L1 or L2 regularization), applied to the input weights matrices.
+        U_a_regularizer: instance of [WeightRegularizer](../regularizers.md)
+            (eg. L1 or L2 regularization), applied to the recurrent weights matrices.
+        b_a_regularizer: instance of [WeightRegularizer](../regularizers.md),
+            applied to the bias.
+        dropout_w_a: float between 0 and 1.
+        dropout_W_a: float between 0 and 1.
+        dropout_U_a: float between 0 and 1.
+
+    # Formulation
+
+        The resulting attention vector 'phi' at time 't' is formed by applying a weighted sum over
+        the set of inputs 'x_i' contained in 'X':
+
+            phi(X, t) = ∑_i alpha_i(t) * x_i,
+
+        where each 'alpha_i' at time 't' is a weighting vector over all the input dimension that
+        accomplishes the following condition:
+
+            ∑_i alpha_i = 1
+
+        and is dynamically adapted at each timestep w.r.t. the following formula:
+
+            alpha_i(t) = exp{e_i(t)} /  ∑_j exp{e_j(t)}
+
+        where each 'e_i' at time 't' is calculated as:
+
+            e_i(t) = wa' * tanh( Wa * x_i  +  Ua * h(t-1)  +  ba ),
+
+        where the following are learnable with the respectively named sizes:
+                wa                Wa                     Ua                 ba
+            [input_dim] [input_dim, input_dim] [units, input_dim] [input_dim]
+
+        The names of 'Ua' and 'Wa' are exchanged w.r.t. the provided reference as well as 'v' being renamed
+        to 'x' for matching Keras LSTM's nomenclature.
+
+    # References
+        -   Yao L, Torabi A, Cho K, Ballas N, Pal C, Larochelle H, Courville A.
+            Describing videos by exploiting temporal structure.
+            InProceedings of the IEEE International Conference on Computer Vision 2015 (pp. 4507-4515).
+    '''
+
+    @interfaces.legacy_recurrent_support
+    def __init__(self, units,
+                 att_units=0,
+                 return_extra_variables=False,
+                 return_states=False,
+                 activation='tanh',
+                 recurrent_activation='sigmoid',
+                 use_bias=True,
+                 kernel_initializer='glorot_uniform',
+                 attention_recurrent_initializer='glorot_uniform',
+                 attention_context_initializer='glorot_uniform',
+                 attention_context_wa_initializer='glorot_uniform',
+                 recurrent_initializer='orthogonal',
+                 bias_initializer='zeros',
+                 bias_ba_initializer='zeros',
+                 bias_ca_initializer='zero',
+                 mask_value=0.,
+                 kernel_regularizer=None,
+                 recurrent_regularizer=None,
+                 attention_recurrent_regularizer=None,
+                 attention_context_regularizer=None,
+                 attention_context_wa_regularizer=None,
+                 bias_regularizer=None,
+                 bias_ba_regularizer=None,
+                 bias_ca_regularizer=None,
+                 activity_regularizer=None,
+                 kernel_constraint=None,
+                 recurrent_constraint=None,
+                 attention_recurrent_constraint=None,
+                 attention_context_constraint=None,
+                 attention_context_wa_constraint=None,
+                 bias_constraint=None,
+                 bias_ba_constraint=None,
+                 bias_ca_constraint=None,
+                 dropout=0.,
+                 recurrent_dropout=0.,
+                 attention_dropout=0.,
+                 num_inputs=3,
+                 **kwargs):
+        super(AttGRU, self).__init__(**kwargs)
+        self.return_extra_variables = return_extra_variables
+        self.return_states = return_states
+
+        # Main parameters
+        self.units = units
+        self.att_units = units if att_units == 0 else att_units
+        self.activation = activations.get(activation)
+        self.recurrent_activation = activations.get(recurrent_activation)
+        self.use_bias = use_bias
+        self.mask_value = mask_value
+
+        # Initializers
+        self.kernel_initializer = initializers.get(kernel_initializer)
+        self.recurrent_initializer = initializers.get(recurrent_initializer)
+        self.attention_recurrent_initializer = initializers.get(attention_recurrent_initializer)
+        self.attention_context_initializer = initializers.get(attention_context_initializer)
+        self.attention_context_wa_initializer = initializers.get(attention_context_wa_initializer)
+        self.bias_initializer = initializers.get(bias_initializer)
+        self.bias_ba_initializer = initializers.get(bias_ba_initializer)
+        self.bias_ca_initializer = initializers.get(bias_ca_initializer)
+
+        # Regularizers
+        self.kernel_regularizer = regularizers.get(kernel_regularizer)
+        self.recurrent_regularizer = regularizers.get(recurrent_regularizer)
+        self.attention_recurrent_regularizer = regularizers.get(attention_recurrent_regularizer)
+        self.attention_context_regularizer = regularizers.get(attention_context_regularizer)
+        self.attention_context_wa_regularizer = regularizers.get(attention_context_wa_regularizer)
+        self.bias_regularizer = regularizers.get(bias_regularizer)
+        self.bias_ba_regularizer = regularizers.get(bias_ba_regularizer)
+        self.bias_ca_regularizer = regularizers.get(bias_ca_regularizer)
+        self.activity_regularizer = regularizers.get(activity_regularizer)
+
+        # Constraints
+        self.kernel_constraint = constraints.get(kernel_constraint)
+        self.recurrent_constraint = constraints.get(recurrent_constraint)
+        self.attention_recurrent_constraint = constraints.get(attention_recurrent_constraint)
+        self.attention_context_constraint = constraints.get(attention_context_constraint)
+        self.attention_context_wa_constraint = constraints.get(attention_context_wa_constraint)
+        self.bias_constraint = constraints.get(bias_constraint)
+        self.bias_ba_constraint = constraints.get(bias_ba_constraint)
+        self.bias_ca_constraint = constraints.get(bias_ca_constraint)
+
+        # Dropouts
+        self.dropout = min(1., max(0., dropout))
+        self.recurrent_dropout = min(1., max(0., recurrent_dropout))
+        self.attention_dropout = min(1., max(0., attention_dropout))
+        self.num_inputs = num_inputs
+        self.input_spec = [InputSpec(ndim=3)]
+        for _ in range(len(self.input_spec), self.num_inputs):
+            self.input_spec.append(InputSpec(ndim=2))
+
+    def build(self, input_shape):
+
+        assert len(input_shape) >= 2, 'You should pass two inputs to AttLSTMCond ' \
+                                      '(previous_embedded_words and context) ' \
+                                      'and two optional inputs (init_state and init_memory)'
+        self.input_dim = input_shape[0][2]
+        self.context_steps = input_shape[0][1]
+        if self.stateful:
+            self.reset_states()
+        else:
+            # initial states: all-zero tensors of shape (units)
+            self.states = [None, None, None]  # [h, c, x_att]
+
+        self.kernel = self.add_weight(shape=(self.input_dim, self.units * 3),
+                                      name='kernel',
+                                      initializer=self.kernel_initializer,
+                                      regularizer=self.kernel_regularizer,
+                                      constraint=self.kernel_constraint)
+        self.recurrent_kernel = self.add_weight(
+            shape=(self.units, self.units * 3),
+            name='recurrent_kernel',
+            initializer=self.recurrent_initializer,
+            regularizer=self.recurrent_regularizer,
+            constraint=self.recurrent_constraint)
+
+        self.attention_recurrent_kernel = self.add_weight(
+            shape=(self.units, self.att_units),
+            name='attention_recurrent_kernel',
+            initializer=self.attention_recurrent_initializer,
+            regularizer=self.attention_recurrent_regularizer,
+            constraint=self.attention_recurrent_constraint)
+
+        self.attention_context_kernel = self.add_weight(
+            shape=(self.input_dim, self.att_units),
+            name='attention_context_kernel',
+            initializer=self.attention_context_initializer,
+            regularizer=self.attention_context_regularizer,
+            constraint=self.attention_context_constraint)
+
+        self.attention_context_wa = self.add_weight(
+            shape=(self.att_units,),
+            name='attention_context_wa',
+            initializer=self.attention_context_wa_initializer,
+            regularizer=self.attention_context_wa_regularizer,
+            constraint=self.attention_context_wa_constraint)
+
+        if self.use_bias:
+            self.bias = self.add_weight(shape=(self.units * 3,),
+                                        name='bias',
+                                        initializer=self.bias_initializer,
+                                        regularizer=self.bias_regularizer,
+                                        constraint=self.bias_constraint)
+        else:
+            self.bias = None
+
+        self.bias_ba = self.add_weight(shape=self.att_units,
+                                       name='bias_ba',
+                                       initializer=self.bias_ba_initializer,
+                                       regularizer=self.bias_ba_regularizer,
+                                       constraint=self.bias_ba_constraint)
+
+        self.bias_ca = self.add_weight(shape=self.context_steps,
+                                       name='bias_ca',
+                                       initializer=self.bias_ca_initializer,
+                                       regularizer=self.bias_ca_regularizer,
+                                       constraint=self.bias_ca_constraint)
+
+        self.built = True
+
+    def reset_states(self, states=None):
+        assert self.stateful, 'Layer must be stateful.'
+        input_shape = self.input_shape
+        if not input_shape[0]:
+            raise Exception('If a RNN is stateful, a complete ' +
+                            'input_shape must be provided (including batch size).')
+        if hasattr(self, 'states'):
+            K.set_value(self.states[0],
+                        np.zeros((input_shape[0], self.units)))
+            K.set_value(self.states[1],
+                        np.zeros((input_shape[0], input_shape[3])))
+        else:
+            self.states = [K.zeros((input_shape[0], self.units)),
+                           K.zeros((input_shape[0], input_shape[3]))]
+
+    def preprocess_input(self, inputs, training=None):
+        return inputs
+
+    def compute_output_shape(self, input_shape):
+        if self.return_sequences:
+            main_out = (input_shape[0][0], input_shape[0][1], self.units)
+        else:
+            main_out = (input_shape[0][0], self.units)
+
+        if self.return_extra_variables:
+            dim_x_att = (input_shape[0][0], input_shape[0][1], self.context_dim)
+            dim_alpha_att = (input_shape[0][0], input_shape[0][1], input_shape[1][1])
+            main_out = [main_out, dim_x_att, dim_alpha_att]
+
+        if self.return_states:
+            if not isinstance(main_out, list):
+                main_out = [main_out]
+            states_dim = (input_shape[0][0], input_shape[0][1], self.units)
+            main_out += [states_dim]
+
+        return main_out
+
+    def call(self, x, mask=None, training=None, initial_state=None):
+        # input shape: (nb_samples, time (padded with zeros), input_dim)
+        # note that the .build() method of subclasses MUST define
+        # self.input_spec with a complete input shape.
+        input_shape = self.input_spec[0].shape
+        state_below = x[0]
+        if self.num_inputs == 1:  # input: [context]
+            self.init_state = None
+        elif self.num_inputs == 2:  # input: [context, init_generic]
+            self.init_state = x[1]
+        if K._BACKEND == 'tensorflow':
+            if not input_shape[1]:
+                raise Exception('When using TensorFlow, you should define '
+                                'explicitly the number of timesteps of '
+                                'your sequences.\n'
+                                'If your first layer is an Embedding, '
+                                'make sure to pass it an "input_length" '
+                                'argument. Otherwise, make sure '
+                                'the first layer has '
+                                'an "input_shape" or "batch_input_shape" '
+                                'argument, including the time axis. '
+                                'Found input shape at layer ' + self.name +
+                                ': ' + str(input_shape))
+        if self.stateful:
+            initial_states = self.states
+        else:
+            initial_states = self.get_initial_states(state_below)
+        constants = self.get_constants(state_below, training=None)
+        preprocessed_input = self.preprocess_input(state_below, training=None)
+        last_output, outputs, states = K.rnn(self.step,
+                                             preprocessed_input,
+                                             initial_states,
+                                             go_backwards=self.go_backwards,
+                                             mask=mask[0],
+                                             constants=constants,
+                                             unroll=self.unroll,
+                                             input_length=state_below.shape[1],
+                                             pos_extra_outputs_states=[1, 2])
+        if self.stateful:
+            self.updates = []
+            for i in range(len(states)):
+                self.updates.append((self.states[i], states[i]))
+
+        # Properly set learning phase
+        if 0 < self.dropout + self.recurrent_dropout:
+            last_output._uses_learning_phase = True
+            outputs._uses_learning_phase = True
+
+        if self.return_sequences:
+            ret = outputs
+        else:
+            ret = last_output
+
+        if self.return_extra_variables:
+            ret = [ret, states[1], states[2]]
+
+        # intermediate states as additional outputs
+        if self.return_states:
+            if not isinstance(ret, list):
+                ret = [ret]
+            ret += [states[0]]
+
+        return ret
+
+    def compute_mask(self, input, mask):
+        if self.return_extra_variables:
+            ret = [mask[0], mask[0], mask[0]]
+        else:
+            ret = mask[0]
+
+        if self.return_states:
+            if not isinstance(ret, list):
+                ret = [ret]
+            ret += [mask[0], mask[0]]
+
+        return ret
+
+    def step(self, x, states):
+        h_tm1 = states[0]  # State
+        non_used_x_att = states[1]  # Placeholder for returning extra variables
+        non_used_alphas_att = states[2]  # Placeholder for returning extra variables
+        dp_mask = states[3]  # Dropout W (input)
+        rec_dp_mask = states[4]  # Dropout U (recurrent)
+        # Att model dropouts
+        att_dp_mask = states[5]  # Dropout Wa
+        pctx_ = states[6]  # Projected context (i.e. context * Ua + ba)
+
+        # Attention model (see Formulation in class header)
+        p_state_ = K.dot(h_tm1 * att_dp_mask[0], self.attention_recurrent_kernel)
+        pctx_ = K.tanh(pctx_ + p_state_[:, None, :])
+        e = K.dot(pctx_, self.attention_context_wa) + self.bias_ca
+        if mask_context.ndim > 1:  # Mask the context (only if necessary)
+            e = mask_context * e
+        alphas_shape = e.shape
+        alphas = K.softmax(e.reshape([alphas_shape[0], alphas_shape[1]]))
+        # sum over the in_timesteps dimension resulting in [batch_size, input_dim]
+        ctx_ = (context * alphas[:, :, None]).sum(axis=1)
+
+        matrix_x = x + K.dot(ctx_ * dp_mask[0], self.kernel)
+        if self.use_bias:
+            matrix_x = K.bias_add(matrix_x, self.bias)
+        matrix_inner = K.dot(h_tm1 * rec_dp_mask[0], self.recurrent_kernel[:, :2 * self.units])
+
+        x_z = matrix_x[:, :self.units]
+        x_r = matrix_x[:, self.units: 2 * self.units]
+        recurrent_z = matrix_inner[:, :self.units]
+        recurrent_r = matrix_inner[:, self.units: 2 * self.units]
+
+        z = self.recurrent_activation(x_z + recurrent_z)
+        r = self.recurrent_activation(x_r + recurrent_r)
+
+        x_h = matrix_x[:, 2 * self.units:]
+        recurrent_h = K.dot(r * h_tm1 * rec_dp_mask[0],
+                            self.recurrent_kernel[:, 2 * self.units:])
+        hh = self.activation(x_h + recurrent_h)
+        h = z * h_tm1 + (1 - z) * hh
+        if 0 < self.dropout + self.recurrent_dropout:
+            h._uses_learning_phase = True
+
+        return h, [h, ctx_, alphas]
+
+    def get_constants(self, inputs, training=None):
+        constants = []
+        # States[4] - Dropout_W
+        if 0 < self.dropout < 1:
+            # TODO: Fails?
+            input_shape = K.int_shape(inputs)
+            input_dim = input_shape[-1]
+            ones = K.ones_like(K.reshape(inputs[:, 0, 0], (-1, 1)))
+            ones = K.tile(ones, (1, int(input_dim)))
+
+            def dropped_inputs():
+                return K.dropout(ones, self.dropout)
+
+            dp_mask = [K.in_train_phase(dropped_inputs,
+                                        ones,
+                                        training=training) for _ in range(3)]
+            constants.append(dp_mask)
+        else:
+            constants.append([K.cast_to_floatx(1.) for _ in range(4)])
+
+        # States[5] - Dropout_U
+        if 0 < self.recurrent_dropout < 1:
+            ones = K.ones_like(K.reshape(inputs[:, 0, 0], (-1, 1)))
+            ones = K.tile(ones, (1, self.units))
+
+            def dropped_inputs():
+                return K.dropout(ones, self.recurrent_dropout)
+
+            rec_dp_mask = [K.in_train_phase(dropped_inputs,
+                                            ones,
+                                            training=training) for _ in range(3)]
+            constants.append(rec_dp_mask)
+        else:
+            constants.append([K.cast_to_floatx(1.) for _ in range(4)])
+
+        # States[6]  - Dropout_Wa
+        if 0 < self.attention_dropout < 1:
+            input_dim = self.units
+            ones = K.ones_like(K.reshape(inputs[:, 0, 0], (-1, 1)))
+            ones = K.concatenate([ones] * input_dim, 1)
+
+            def dropped_inputs():
+                return K.dropout(ones, self.recurrent_dropout)
+
+            att_dp_mask = [K.in_train_phase(dropped_inputs,
+                                            ones,
+                                            training=training)]
+            constants.append(att_dp_mask)
+        else:
+            constants.append([K.cast_to_floatx(1.)])
+
+        if 0 < self.attention_dropout < 1:
+            input_dim = inputs.shape[2]
+            ones = K.ones_like(K.reshape(inputs[:, :, 0], (-1, inputs.shape[1], 1)))
+            ones = K.concatenate([ones] * input_dim, axis=2)
+            B_Ua = [K.in_train_phase(K.dropout(ones, self.attention_dropout), ones)]
+            pctx = K.dot(inputs * B_Ua[0], self.attention_context_kernel)
+        else:
+            pctx = K.dot(inputs, self.attention_context_kernel)
+        if self.use_bias:
+            pctx = K.bias_add(pctx, self.bias_ba)
+        # States[7] - pctx_
+        constants.append(pctx)
+
+        return constants
+
+    def get_initial_states(self, inputs):
+        # build an all-zero tensor of shape (samples, units)
+        if self.init_state is None:
+            initial_state = K.zeros_like(inputs)  # (samples, timesteps, input_dim)
+            initial_state = K.sum(initial_state, axis=(1, 2))  # (samples,)
+            initial_state = K.expand_dims(initial_state)  # (samples, 1)
+            initial_state = K.tile(initial_state, [1, self.units])  # (samples, units)
+        else:
+            initial_state = self.init_state
+        initial_states = [initial_state]
+
+        initial_state = K.zeros_like(self.context)  # (samples, input_timesteps, ctx_dim)
+        initial_state_alphas = K.sum(initial_state, axis=2)  # (samples, input_timesteps)
+        initial_state = K.sum(initial_state, axis=1)  # (samples, ctx_dim)
+        extra_states = [initial_state, initial_state_alphas]  # (samples, ctx_dim)
+
+        return initial_states + extra_states
+
+    def get_config(self):
+        config = {'units': self.units,
+                  "att_units": self.att_units,
+                  'activation': activations.serialize(self.activation),
+                  'recurrent_activation': activations.serialize(self.recurrent_activation),
+                  'return_extra_variables': self.return_extra_variables,
+                  'return_states': self.return_states,
+                  'kernel_initializer': initializers.serialize(self.kernel_initializer),
+                  'recurrent_initializer': initializers.serialize(self.recurrent_initializer),
+                  'attention_recurrent_initializer': initializers.serialize(self.attention_recurrent_initializer),
+                  'bias_initializer': initializers.serialize(self.bias_initializer),
+                  'bias_ba_initializer': initializers.serialize(self.bias_ba_initializer),
+                  'bias_ca_initializer': initializers.serialize(self.bias_ca_initializer),
+                  'kernel_regularizer': regularizers.serialize(self.kernel_regularizer),
+                  'recurrent_regularizer': regularizers.serialize(self.recurrent_regularizer),
+                  'attention_recurrent_regularizer': regularizers.serialize(self.attention_recurrent_regularizer),
+                  'bias_regularizer': regularizers.serialize(self.bias_regularizer),
+                  'bias_ba_regularizer': regularizers.serialize(self.bias_ba_regularizer),
+                  'bias_ca_regularizer': regularizers.serialize(self.bias_ca_regularizer),
+                  'activity_regularizer': regularizers.serialize(self.activity_regularizer),
+                  'kernel_constraint': constraints.serialize(self.kernel_constraint),
+                  'recurrent_constraint': constraints.serialize(self.recurrent_constraint),
+                  'attention_recurrent_constraint': constraints.serialize(self.attention_recurrent_constraint),
+                  'bias_constraint': constraints.serialize(self.bias_constraint),
+                  'bias_ba_constraint': constraints.serialize(self.bias_ba_constraint),
+                  'bias_ca_constraint': constraints.serialize(self.bias_ca_constraint),
+                  'dropout': self.dropout,
+                  'recurrent_dropout': self.recurrent_dropout,
+                  'attention_dropout': self.attention_dropout,
+                  'mask_value': self.mask_value
+                  }
+        base_config = super(AttGRU, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+
+
+
 class AttGRUCond(Recurrent):
     '''Gated Recurrent Unit - Cho et al. 2014. with Attention + the previously generated word fed to the current timestep.
     You should give two inputs to this layer:
@@ -3469,12 +3986,6 @@ class AttLSTM(Recurrent):
             regularizer=self.recurrent_regularizer,
             constraint=self.recurrent_constraint)
 
-        self.conditional_kernel = self.add_weight(shape=(self.input_dim, self.units * 4),
-                                                  name='conditional_kernel',
-                                                  initializer=self.conditional_initializer,
-                                                  regularizer=self.conditional_regularizer,
-                                                  constraint=self.conditional_constraint)
-
         self.attention_recurrent_kernel = self.add_weight(
             shape=(self.units, self.att_units),
             name='attention_recurrent_kernel',
@@ -3600,7 +4111,7 @@ class AttLSTM(Recurrent):
             initial_states = self.states
         else:
             initial_states = self.get_initial_states(state_below)
-        constants = self.get_constants(state_below, mask[1], training=None)
+        constants = self.get_constants(state_below, training=None)
         preprocessed_input = self.preprocess_input(state_below, training=None)
         last_output, outputs, states = K.rnn(self.step,
                                              preprocessed_input,
@@ -3791,7 +4302,6 @@ class AttLSTM(Recurrent):
                   'return_states': self.return_states,
                   'kernel_initializer': initializers.serialize(self.kernel_initializer),
                   'recurrent_initializer': initializers.serialize(self.recurrent_initializer),
-                  'conditional_initializer': initializers.serialize(self.conditional_initializer),
                   'attention_recurrent_initializer': initializers.serialize(self.attention_recurrent_initializer),
                   'bias_initializer': initializers.serialize(self.bias_initializer),
                   'bias_ba_initializer': initializers.serialize(self.bias_ba_initializer),
@@ -3799,7 +4309,6 @@ class AttLSTM(Recurrent):
                   'unit_forget_bias': self.unit_forget_bias,
                   'kernel_regularizer': regularizers.serialize(self.kernel_regularizer),
                   'recurrent_regularizer': regularizers.serialize(self.recurrent_regularizer),
-                  'conditional_regularizer': regularizers.serialize(self.conditional_regularizer),
                   'attention_recurrent_regularizer': regularizers.serialize(self.attention_recurrent_regularizer),
                   'bias_regularizer': regularizers.serialize(self.bias_regularizer),
                   'bias_ba_regularizer': regularizers.serialize(self.bias_ba_regularizer),
@@ -3807,14 +4316,12 @@ class AttLSTM(Recurrent):
                   'activity_regularizer': regularizers.serialize(self.activity_regularizer),
                   'kernel_constraint': constraints.serialize(self.kernel_constraint),
                   'recurrent_constraint': constraints.serialize(self.recurrent_constraint),
-                  'conditional_constraint': constraints.serialize(self.conditional_constraint),
                   'attention_recurrent_constraint': constraints.serialize(self.attention_recurrent_constraint),
                   'bias_constraint': constraints.serialize(self.bias_constraint),
                   'bias_ba_constraint': constraints.serialize(self.bias_ba_constraint),
                   'bias_ca_constraint': constraints.serialize(self.bias_ca_constraint),
                   'dropout': self.dropout,
                   'recurrent_dropout': self.recurrent_dropout,
-                  'conditional_dropout': self.conditional_dropout,
                   'attention_dropout': self.attention_dropout,
                   'mask_value': self.mask_value
                   }
