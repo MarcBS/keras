@@ -794,6 +794,17 @@ class Lambda(Layer):
             return self.mask(inputs, mask)
         return self.mask
 
+    """
+    def compute_mask(self, x, mask=None):
+        ''' can either throw exception or just accept the mask here... not sure which to do'''
+        if not self.supports_masking:
+            return
+        if self._mask_function is not None:
+            return self._mask_function(x, mask)
+        else:
+            return mask
+    """
+    
     def get_config(self):
         if isinstance(self.function, python_types.LambdaType):
             function = func_dump(self.function)
@@ -819,15 +830,6 @@ class Lambda(Layer):
                   'arguments': self.arguments}
         base_config = super(Lambda, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
-
-    def compute_mask(self, x, mask=None):
-        ''' can either throw exception or just accept the mask here... not sure which to do'''
-        if not self.supports_masking:
-            return
-        if self._mask_function is not None:
-            return self._mask_function(x, mask)
-        else:
-            return mask
 
     @classmethod
     def from_config(cls, config, custom_objects=None):
