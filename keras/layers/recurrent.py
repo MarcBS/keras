@@ -1322,7 +1322,6 @@ class GRUCond(Recurrent):
                   'recurrent_initializer': initializers.serialize(self.recurrent_initializer),
                   'conditional_initializer': initializers.serialize(self.conditional_initializer),
                   'bias_initializer': initializers.serialize(self.bias_initializer),
-                  'unit_forget_bias': self.unit_forget_bias,
                   'kernel_regularizer': regularizers.serialize(self.kernel_regularizer),
                   'recurrent_regularizer': regularizers.serialize(self.recurrent_regularizer),
                   'conditional_regularizer': regularizers.serialize(self.conditional_regularizer),
@@ -2580,7 +2579,6 @@ class AttConditionalGRUCond(Recurrent):
         self.bias1_initializer = initializers.get(bias_initializer)
         self.bias_ba_initializer = initializers.get(bias_ba_initializer)
         self.bias_ca_initializer = initializers.get(bias_ca_initializer)
-        self.unit_forget_bias = unit_forget_bias
         self.forget_bias_initializer = initializers.get(forget_bias_init)
 
         # Regularizers
