@@ -18,17 +18,17 @@ class Attention(Layer):
 
     # Arguments
         nb_attention: number of attention mechanisms applied over the input vectors
-        init: weight initialization function.
+        kernel_initializer: weight initialization function.
             Can be the name of an existing function (str),
             or a Theano function (see: [initializations](../initializations.md)).
-        inner_init: initialization function of the inner cells.
-        forget_bias_init: initialization function for the bias of the forget gate.
+        recurrent_initializer: initialization function of the inner cells.
+        forget_bias_initializer: initialization function for the bias of the forget gate.
             [Jozefowicz et al.](http://www.jmlr.org/proceedings/papers/v37/jozefowicz15.pdf)
             recommend initializing with ones.
         activation: activation function.
             Can be the name of an existing function (str),
             or a Theano function (see: [activations](../activations.md)).
-        inner_activation: activation function for the inner cells.
+        recurrent_activation: activation function for the inner cells.
         w_a_regularizer: instance of [WeightRegularizer](../regularizers.md)
             (eg. L1 or L2 regularization), applied to the input weights matrices.
         W_a_regularizer: instance of [WeightRegularizer](../regularizers.md)
@@ -170,11 +170,11 @@ class Attention(Layer):
 
     def get_config(self):
         config = {'nb_attention': self.nb_attention,
-                  'init': self.init.__name__,
-                  'inner_init': self.inner_init.__name__,
-                  'forget_bias_init': self.forget_bias_init.__name__,
+                  'kernel_initializer': self.init.__name__,
+                  'recurrent_initializer': self.inner_init.__name__,
+                  'forget_bias_initializer': self.forget_bias_init.__name__,
                   'activation': self.activation.__name__,
-                  'inner_activation': self.inner_activation.__name__,
+                  'recurrent_activation': self.inner_activation.__name__,
                   'Wa_regularizer': self.Wa_regularizer.get_config() if self.Wa_regularizer else None,
                   'ba_regularizer': self.ba_regularizer.get_config() if self.ba_regularizer else None,
                   'dropout_Wa': self.dropout_Wa}
@@ -187,8 +187,8 @@ class SoftAttention(Layer):
     The output information provided are the attended input an the attention weights 'alpha' over the input data.
 
     # Arguments
-        att_dim: Soft alignment MLP dimension
-        init: weight initialization function.
+        att_units: Soft alignment MLP dimension
+        kernel_initializer: weight initialization function.
             Can be the name of an existing function (str),
             or a Theano function (see: [initializations](../initializations.md)).
         activation: activation function.
@@ -227,7 +227,7 @@ class SoftAttention(Layer):
 
         where the following are learnable with the respectively named sizes:
                 wa                Wa                     Ua                 ba
-            [input_dim] [input_dim, input_dim] [output_dim, input_dim] [input_dim]
+            [input_dim] [input_dim, input_dim] [units, input_dim] [input_dim]
 
     '''
 
@@ -386,8 +386,8 @@ class SoftAttention(Layer):
         return [None, None]
 
     def get_config(self):
-        config = {'att_dim': self.att_dim,
-                  'init': self.init.__name__,
+        config = {'att_units': self.att_dim,
+                  'kernel_initializer': self.init.__name__,
                   'activation': self.activation.__name__,
                   'sum_weighted_output': self.sum_weighted_output,
                   'wa_regularizer': self.wa_regularizer.get_config() if self.wa_regularizer else None,
@@ -408,8 +408,8 @@ class SoftMultistepsAttention(Layer):
     The output information provided are the attended input an the attention weights 'alpha' over the input data.
 
     # Arguments
-        att_dim: Soft alignment MLP dimension
-        init: weight initialization function.
+        att_units: Soft alignment MLP dimension
+        kernel_initializer: weight initialization function.
             Can be the name of an existing function (str),
             or a Theano function (see: [initializations](../initializations.md)).
         activation: activation function.
@@ -448,7 +448,7 @@ class SoftMultistepsAttention(Layer):
 
         where the following are learnable with the respectively named sizes:
                 wa                Wa                     Ua                 ba
-            [input_dim] [input_dim, input_dim] [output_dim, input_dim] [input_dim]
+            [input_dim] [input_dim, input_dim] [units, input_dim] [input_dim]
 
     '''
 
@@ -547,7 +547,7 @@ class SoftMultistepsAttention(Layer):
         preprocessed_input = self.preprocess_input(state_below)
 
         last_output, outputs, states = K.rnn(self.attention_step, preprocessed_input,
-                                             [None, None], #self.get_initial_states(x),
+                                             [None, None], #self.get_extra_states(x),
                                              go_backwards=False,
                                              mask=None,
                                              # mask[1], #TODO: What does this mask mean? How should it be applied?
@@ -628,8 +628,8 @@ class SoftMultistepsAttention(Layer):
         return [None, None]
 
     def get_config(self):
-        config = {'att_dim': self.att_dim,
-                  'init': self.init.__name__,
+        config = {'att_units': self.att_dim,
+                  'kernel_initializer': self.init.__name__,
                   'activation': self.activation.__name__,
                   'sum_weighted_output': self.sum_weighted_output,
                   'return_sequences': self.return_sequences,
@@ -651,17 +651,17 @@ class AttentionComplex(Layer):
 
     # Arguments
         nb_attention: number of attention mechanisms applied over the input vectors
-        init: weight initialization function.
+        kernel_initializer: weight initialization function.
             Can be the name of an existing function (str),
             or a Theano function (see: [initializations](../initializations.md)).
-        inner_init: initialization function of the inner cells.
-        forget_bias_init: initialization function for the bias of the forget gate.
+        recurrent_initializer: initialization function of the inner cells.
+        forget_bias_initializer: initialization function for the bias of the forget gate.
             [Jozefowicz et al.](http://www.jmlr.org/proceedings/papers/v37/jozefowicz15.pdf)
             recommend initializing with ones.
         activation: activation function.
             Can be the name of an existing function (str),
             or a Theano function (see: [activations](../activations.md)).
-        inner_activation: activation function for the inner cells.
+        recurrent_activation: activation function for the inner cells.
         w_a_regularizer: instance of [WeightRegularizer](../regularizers.md)
             (eg. L1 or L2 regularization), applied to the input weights matrices.
         W_a_regularizer: instance of [WeightRegularizer](../regularizers.md)
@@ -728,7 +728,7 @@ class AttentionComplex(Layer):
 
         """
         self.Wa = self.add_weight((self.nb_attention, self.nb_attention),
-                                 initializer=self.init,
+                                 initializer=self.kernel_initializer,
                                  name='{}_Wa'.format(self.name),
                                  regularizer=self.Wa_regularizer)
 
@@ -849,11 +849,11 @@ class AttentionComplex(Layer):
 
     def get_config(self):
         config = {'nb_attention': self.nb_attention,
-                  'init': self.init.__name__,
-                  'inner_init': self.inner_init.__name__,
-                  'forget_bias_init': self.forget_bias_init.__name__,
+                  'kernel_initializer': self.init.__name__,
+                  'recurrent_initializer': self.inner_init.__name__,
+                  'forget_bias_initializer': self.forget_bias_init.__name__,
                   'activation': self.activation.__name__,
-                  'inner_activation': self.inner_activation.__name__,
+                  'recurrent_activation': self.inner_activation.__name__,
                   'w_regularizer': self.w_regularizer.get_config() if self.w_regularizer else None,
                   'W_regularizer': self.W_regularizer.get_config() if self.W_regularizer else None,
                   'b_regularizer': self.b_regularizer.get_config() if self.b_regularizer else None,
@@ -888,7 +888,7 @@ class ConvAtt(Layer):
     ```
     # Arguments
             nb_filter: Number of convolution filters to use.
-            init: name of initialization function for the weights of the layer
+            kernel_initializer: name of initialization function for the weights of the layer
                 (see [initializations](../initializations.md)), or alternatively,
                 Theano function to use for weights initialization.
                 This parameter is only relevant if you don't pass
@@ -1216,8 +1216,8 @@ class ConvAtt(Layer):
         config = {'nb_embedding': self.nb_embedding,
                   'nb_glimpses': self.nb_glimpses,
                   'concat_timesteps': self.concat_timesteps,
-                  'return_states': self.return_states,
-                  'init': self.init.__name__,
+                  'return_state': self.return_states,
+                  'kernel_initializer': self.init.__name__,
                   'activation': self.activation.__name__,
                   'border_mode': self.border_mode,
                   'dim_ordering': self.dim_ordering,
@@ -1267,7 +1267,7 @@ class ConvCoAtt(Layer):
     ```
     # Arguments
             nb_filter: Number of convolution filters to use.
-            init: name of initialization function for the weights of the layer
+            kernel_initializer: name of initialization function for the weights of the layer
                 (see [initializations](../initializations.md)), or alternatively,
                 Theano function to use for weights initialization.
                 This parameter is only relevant if you don't pass
@@ -1587,8 +1587,8 @@ class ConvCoAtt(Layer):
         config = {'nb_embedding': self.nb_embedding,
                   'nb_glimpses': self.nb_glimpses,
                   'concat_timesteps': self.concat_timesteps,
-                  'return_states': self.return_states,
-                  'init': self.init.__name__,
+                  'return_state': self.return_states,
+                  'kernel_initializer': self.init.__name__,
                   'activation': self.activation.__name__,
                   'border_mode': self.border_mode,
                   'dim_ordering': self.dim_ordering,
