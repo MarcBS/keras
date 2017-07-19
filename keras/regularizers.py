@@ -42,6 +42,27 @@ class L1L2(Regularizer):
                 'l2': float(self.l2)}
 
 
+class AlphaRegularizer(Regularizer):
+    """Doubly stochastic regularization for attention weights
+
+    # Arguments
+        alpha_factor: Float; alpha regularization factor.
+    """
+
+    def __init__(self, alpha_factor=0.):
+        self.alpha_factor = K.cast_to_floatx(alpha_factor)
+
+    def __call__(self, x):
+        regularization = 0.
+        if self.alpha_factor:
+            regularization = self.alpha_factor * ((1.-x.sum(0))**2).sum(0).mean()
+        return regularization
+
+    def get_config(self):
+        return {'alpha_factor': float(self.alpha_factor)}
+
+
+
 # Aliases.
 
 
