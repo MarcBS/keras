@@ -170,6 +170,20 @@ def recurrent_args_preprocessor(args, kwargs):
         warnings.warn('The `input_dim` and `input_length` arguments '
                       'in recurrent layers are deprecated. '
                       'Use `input_shape` instead.', stacklevel=3)
+
+    if 'recurrent1_initializer' in kwargs:
+            kwargs.pop('recurrent1_initializer')
+    if 'recurrent1_regularizer' in kwargs:
+            kwargs.pop('recurrent1_regularizer')
+    if 'recurrent1_constraint' in kwargs:
+            kwargs.pop('recurrent1_constraint')
+    if 'bias1_initializer' in kwargs:
+            kwargs.pop('bias1_initializer')
+    if 'bias1_regularizer' in kwargs:
+            kwargs.pop('bias1_regularizer')
+    if 'bias1_constraint' in kwargs:
+            kwargs.pop('bias1_constraint')
+
     return args, kwargs, converted
 
 legacy_recurrent_support = generate_legacy_interface(
