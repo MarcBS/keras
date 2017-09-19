@@ -195,6 +195,16 @@ def create_model(layers, phase, input_dim, debug=False):
 
                 if pad_h + pad_w > 0:
                     input_layers = ZeroPadding2D(padding=(pad_h, pad_w), name=name + '_zeropadding')(input_layers)
+                if (layer.convolution_param.dilation or [layer.convolution_param.dilation])[0]:
+                    dilation = layer.convolution_param.dilation[0]
+                    net_node[layer_nb] = AtrousConvolution2D(nb_filter, nb_row, nb_col, bias=True,
+                                                             subsample=(stride_h, stride_w),
+                                                             atrous_rate=(dilation, dilation), name=name,
+                                                             border_mode='valid')(input_layers)
+                else:
+                    net_node[layer_nb] = Convolution2D(nb_filter, nb_row, nb_col, bias=has_bias,
+                                                       subsample=(stride_h, stride_w), name=name, border_mode='valid')(
+                        input_layers)
                 net_node[layer_nb] = Convolution2D(nb_filter, nb_row, nb_col, bias=has_bias, subsample=(stride_h, stride_w), name=name, border_mode='valid')(input_layers)
                 
             elif type_of_layer == 'deconvolution':
