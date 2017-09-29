@@ -72,6 +72,27 @@ def cosine_proximity(y_true, y_pred):
     y_pred = K.l2_normalize(y_pred, axis=-1)
     return -K.mean(y_true * y_pred, axis=-1)
 
+def log_diff(args):
+    """
+     log prob difference between a GT and a hypothesis
+    :param args: y_pred, y_true, h_pred, h_true
+    :return:
+    """
+    y_pred, y_true, h_pred, h_true = args
+    p_y_x = K.mean(K.categorical_crossentropy(y_pred, y_true))
+    p_h_x = K.mean(K.categorical_crossentropy(h_pred, h_true))
+    return p_y_x - p_h_x
+
+
+def y_true(y_true, y_pred):
+    """
+    Returns the label (y_true)
+    :param y_true:
+    :param y_pred:
+    :return:
+    """
+    return y_true
+
 
 # Aliases.
 
