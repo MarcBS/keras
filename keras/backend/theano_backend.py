@@ -309,7 +309,7 @@ def zeros(shape, dtype=None, name=None):
     return variable(np.zeros(shape), dtype, name)
 
 
-def zeros_symbolic(shape, dtype=_FLOATX):
+def zeros_symbolic(shape, dtype=floatx()):
     '''Instantiate an all-zeros symbolic variable.
     '''
     return T.zeros(shape, dtype=dtype)
