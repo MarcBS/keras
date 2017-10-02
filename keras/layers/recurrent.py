@@ -257,9 +257,10 @@ class Recurrent(Layer):
         # If there are multiple inputs, then
         # they should be the main input and `initial_state`
         # e.g. when loading model from file
-        if isinstance(inputs, (list, tuple)) and len(inputs) > 1 and initial_state is None:
-            initial_state = inputs[1:]
-            inputs = inputs[0]
+        # TODO: This is disabled, accounting for multiple-inputs RNNs. More general way of doing this?
+        #if isinstance(inputs, (list, tuple)) and len(inputs) > 1 and initial_state is None:
+        #    initial_state = inputs[1:]
+        #    inputs = inputs[0]
 
         # If `initial_state` is specified,
         # and if it a Keras tensor,
