@@ -22,7 +22,7 @@ def _time_distributed_dense(x, w, b=None, dropout=None,
         x: input tensor.
         w: weight matrix.
         b: optional bias vector.
-        dropout: wether to apply dropout (same dropout mask
+        dropout: whether to apply dropout (same dropout mask
             for every temporal slice of the input).
         input_dim: integer; optional dimensionality of the input.
         units: integer; optional dimensionality of the output.
@@ -253,6 +253,15 @@ class Recurrent(Layer):
         return inputs
 
     def __call__(self, inputs, initial_state=None, **kwargs):
+
+        # If there are multiple inputs, then
+        # they should be the main input and `initial_state`
+        # e.g. when loading model from file
+        # TODO: This is disabled, accounting for multiple-inputs RNNs. More general way of doing this?
+        #if isinstance(inputs, (list, tuple)) and len(inputs) > 1 and initial_state is None:
+        #    initial_state = inputs[1:]
+        #    inputs = inputs[0]
+
         # If `initial_state` is specified,
         # and if it a Keras tensor,
         # then add it to the inputs and temporarily
@@ -316,9 +325,10 @@ class Recurrent(Layer):
                              str(len(initial_state)) +
                              ' initial states.')
         input_shape = K.int_shape(inputs)
-        if self.unroll and input_shape[1] is None:
+        timesteps = input_shape[1]
+        if self.unroll and timesteps in [None, 1]:
             raise ValueError('Cannot unroll a RNN if the '
-                             'time dimension is undefined. \n'
+                             'time dimension is undefined or equal to 1. \n'
                              '- If using a Sequential model, '
                              'specify the time dimension by passing '
                              'an `input_shape` or `batch_input_shape` '
@@ -337,7 +347,7 @@ class Recurrent(Layer):
                                              mask=mask,
                                              constants=constants,
                                              unroll=self.unroll,
-                                             input_length=input_shape[1])
+                                             input_length=timesteps)
         if self.stateful:
             updates = []
             for i in range(len(states)):

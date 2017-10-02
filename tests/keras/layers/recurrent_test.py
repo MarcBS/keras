@@ -99,8 +99,6 @@ def test_implementation_mode(layer_class):
 
 
 @rnn_test
-@pytest.mark.skipif((K.backend() == 'cntk'),
-                    reason="cntk does not support mask on RNN yet")
 def test_statefulness(layer_class):
     model = Sequential()
     model.add(embeddings.Embedding(embedding_num, embedding_dim,
@@ -171,8 +169,6 @@ def test_regularizer(layer_class):
 
 
 @keras_test
-@pytest.mark.skipif((K.backend() == 'cntk'),
-                    reason="cntk does not support mask on RNN yet")
 def test_masking_layer():
     ''' This test based on a previously failing issue here:
     https://github.com/fchollet/keras/issues/1567
@@ -273,6 +269,29 @@ def test_reset_states_with_values(layer_class):
 
 
 @rnn_test
+def test_initial_states_as_other_inputs(layer_class):
+    num_states = 2 if layer_class is recurrent.LSTM else 1
+
+    # Test with Keras tensor
+    main_inputs = Input((timesteps, embedding_dim))
+    initial_state = [Input((units,)) for _ in range(num_states)]
+    inputs = [main_inputs] + initial_state
+
+    layer = layer_class(units)
+    output = layer(inputs)
+    assert initial_state[0] in layer.inbound_nodes[0].input_tensors
+
+    model = Model(inputs, output)
+    model.compile(loss='categorical_crossentropy', optimizer='adam')
+
+    main_inputs = np.random.random((num_samples, timesteps, embedding_dim))
+    initial_state = [np.random.random((num_samples, units))
+                     for _ in range(num_states)]
+    targets = np.random.random((num_samples, units))
+    model.train_on_batch([main_inputs] + initial_state, targets)
+
+
+@rnn_test
 def test_specify_state_with_masking(layer_class):
     ''' This test based on a previously failing issue here:
     https://github.com/fchollet/keras/issues/1567
@@ -321,6 +340,12 @@ def test_state_reuse(layer_class):
 
     inputs = np.random.random((num_samples, timesteps, embedding_dim))
     outputs = model.predict(inputs)
+
+
+def test_unroll_true_throws_exception_with_one_timestep():
+    model = Sequential()
+    with pytest.raises(ValueError):
+        model.add(recurrent.LSTM(units=5, batch_input_shape=(1, 1, 5), unroll=True))
 
 
 if __name__ == '__main__':
