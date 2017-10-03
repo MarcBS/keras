@@ -2561,9 +2561,8 @@ def __count_sketch(h, s, v,  # Sequences
                    ):
     return T.cast(T.inc_subtensor(y[:, h], T.dot(s, v)), 'float32')
 
-
 # 1d Convolution
-def conv1d(u, v):
+def scan_conv1d(u, v):
     '''1D convolution over a set of vectors. All inputs will be treated by pairs.
         #x must be equal to #kernel
 
@@ -2589,7 +2588,6 @@ def conv1d(u, v):
                                 outputs_info=T.alloc(0., u.shape[1]),#, d),
                                 non_sequences=[], n_steps=u.shape[0])
     return conv_out
-
 
 # Theano implementation of CTC
 # Used with permission from Shawn Tan
