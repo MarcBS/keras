@@ -1,6 +1,5 @@
 
 from keras.layers.core import Layer
-import theano.tensor as T
 
 
 class LRN(Layer):
@@ -13,6 +12,7 @@ class LRN(Layer):
         super(LRN, self).__init__(**kwargs)
     
     def call(self, x, mask=None):
+        import theano.tensor as T
         b, ch, r, c = x.shape
         half_n = self.n // 2 # half the local region
         input_sqr = T.sqr(x) # square the input

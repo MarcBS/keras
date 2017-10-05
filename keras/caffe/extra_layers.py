@@ -1,6 +1,5 @@
 from keras.layers.core import Layer
-
-import theano.tensor as T
+import keras.backend as K
 
 
 class LRN2D(Layer):
@@ -19,13 +18,14 @@ class LRN2D(Layer):
             raise NotImplementedError("Only works with odd n")
       
     def call(self, x, mask=None):
+        import theano.tensor as T
         X = x
         input_dim = X.shape
         half_n = self.n // 2
-        input_sqr = T.sqr(X)
+        input_sqr = K.sqr(X)
         b, ch, r, c = input_dim
         extra_channels = T.alloc(0., b, ch + 2*half_n, r, c)
-        input_sqr = T.set_subtensor(extra_channels[:, half_n:half_n+ch, :, :],input_sqr)
+        input_sqr = K.set_subtensor(extra_channels[:, half_n:half_n+ch, :, :],input_sqr)
         scale = self.k
         norm_alpha = self.alpha / self.n
         for i in range(self.n):
@@ -34,13 +34,14 @@ class LRN2D(Layer):
         return X / scale
         
     def get_output(self, train):
+        import theano.tensor as T
         X = self.get_input(train)
         input_dim = X.shape
         half_n = self.n // 2
-        input_sqr = T.sqr(X)
+        input_sqr = K.sqr(X)
         b, ch, r, c = input_dim
         extra_channels = T.alloc(0., b, ch + 2*half_n, r, c)
-        input_sqr = T.set_subtensor(extra_channels[:, half_n:half_n+ch, :, :],input_sqr)
+        input_sqr = K.set_subtensor(extra_channels[:, half_n:half_n+ch, :, :],input_sqr)
         scale = self.k
         norm_alpha = self.alpha / self.n
         for i in range(self.n):

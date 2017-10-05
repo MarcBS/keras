@@ -1,10 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import
 
-from theano.tensor.shared_randomstreams import RandomStreams
-import theano
-from theano import tensor as T
-
 from .. import backend as K
 from .. import activations
 from .. import initializers
