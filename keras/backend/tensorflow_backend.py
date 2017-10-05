@@ -35,7 +35,7 @@ _GRAPH_LEARNING_PHASES = {}
 
 # This dictionary holds a mapping {graph: UID_DICT}.
 # each UID_DICT is a dictionary mapping name prefixes to a current index,
-# used for generatic graph-specific string UIDs
+# used for generic graph-specific string UIDs
 # for various names (e.g. layer names).
 _GRAPH_UID_DICTS = {}
 
@@ -164,7 +164,22 @@ def get_session():
         session = _SESSION
     if not _MANUAL_VAR_INIT:
         with session.graph.as_default():
-            _initialize_variables()
+            variables = tf.global_variables()
+            candidate_vars = []
+            for v in variables:
+                if not getattr(v, '_keras_initialized', False):
+                    candidate_vars.append(v)
+            # This step is expensive, so we only run it on variables
+            # not already marked as initialized.
+            is_initialized = session.run(
+                [tf.is_variable_initialized(v) for v in candidate_vars])
+            uninitialized_vars = []
+            for flag, v in zip(is_initialized, candidate_vars):
+                if not flag:
+                    uninitialized_vars.append(v)
+                v._keras_initialized = True
+            if uninitialized_vars:
+                session.run(tf.variables_initializer(uninitialized_vars))
     return session
 
 
@@ -179,32 +194,6 @@ def set_session(session):
 
 
 # VARIABLE MANIPULATION
-
-def _convert_string_dtype(dtype):
-    """Get the type from a string.
-
-    # Arguments
-        dtype: A string representation of a type.
-
-    # Returns
-        The type requested.
-
-    # Raises
-        ValueError: if `dtype` is not supported.
-    """
-    mapping = {'float16': tf.float16,
-               'float32': tf.float32,
-               'float64': tf.float64,
-               'int16': tf.int16,
-               'int32': tf.int32,
-               'int64': tf.int64,
-               'uint8': tf.int8,
-               'uint16': tf.uint16}
-
-    if dtype not in mapping:
-        raise ValueError('Unsupported dtype:', dtype)
-    return mapping[dtype]
-
 
 def _to_tensor(x, dtype):
     """Convert the input `x` to a tensor of type `dtype`.
@@ -313,7 +302,7 @@ def variable(value, dtype=None, name=None, constraint=None):
         v._keras_shape = sparse_coo.shape
         v._uses_learning_phase = False
         return v
-    v = tf.Variable(value, dtype=_convert_string_dtype(dtype), name=name)
+    v = tf.Variable(value, dtype=tf.as_dtype(dtype), name=name)
     if isinstance(value, np.ndarray):
         v._keras_shape = value.shape
     elif hasattr(value, 'get_shape'):
@@ -325,20 +314,6 @@ def variable(value, dtype=None, name=None, constraint=None):
     except AttributeError:
         v._constraint = constraint
     return v
-
-
-def _initialize_variables():
-    """Utility to initialize uninitialized variables on the fly.
-    """
-    variables = tf.global_variables()
-    uninitialized_variables = []
-    for v in variables:
-        if not hasattr(v, '_keras_initialized') or not v._keras_initialized:
-            uninitialized_variables.append(v)
-            v._keras_initialized = True
-    if uninitialized_variables:
-        sess = get_session()
-        sess.run(tf.variables_initializer(uninitialized_variables))
 
 
 def constant(value, dtype=None, shape=None, name=None):
@@ -621,7 +596,7 @@ def zeros(shape, dtype=None, name=None):
     """
     if dtype is None:
         dtype = floatx()
-    tf_dtype = _convert_string_dtype(dtype)
+    tf_dtype = tf.as_dtype(dtype)
     return variable(tf.constant_initializer(0., dtype=tf_dtype)(shape),
                     dtype, name)
 
@@ -649,7 +624,7 @@ def ones(shape, dtype=None, name=None):
     """
     if dtype is None:
         dtype = floatx()
-    tf_dtype = _convert_string_dtype(dtype)
+    tf_dtype = tf.as_dtype(dtype)
     return variable(tf.constant_initializer(1., dtype=tf_dtype)(shape),
                     dtype, name)
 
@@ -769,7 +744,7 @@ def random_uniform_variable(shape, low, high, dtype=None,
     """
     if dtype is None:
         dtype = floatx()
-    tf_dtype = _convert_string_dtype(dtype)
+    tf_dtype = tf.as_dtype(dtype)
     if seed is None:
         # ensure that randomness is conditioned by the Numpy RNG
         seed = np.random.randint(10e8)
@@ -806,7 +781,7 @@ def random_normal_variable(shape, mean, scale, dtype=None,
     """
     if dtype is None:
         dtype = floatx()
-    tf_dtype = _convert_string_dtype(dtype)
+    tf_dtype = tf.as_dtype(dtype)
     if seed is None:
         # ensure that randomness is conditioned by the Numpy RNG
         seed = np.random.randint(10e8)
@@ -2154,7 +2129,7 @@ def set_value(x, value):
             (of the same shape).
     """
     value = np.asarray(value, dtype=dtype(x))
-    tf_dtype = _convert_string_dtype(x.dtype.name.split('_')[0])
+    tf_dtype = tf.as_dtype(x.dtype.name.split('_')[0])
     if hasattr(x, '_assign_placeholder'):
         assign_placeholder = x._assign_placeholder
         assign_op = x._assign_op
@@ -2178,7 +2153,7 @@ def batch_set_value(tuples):
         feed_dict = {}
         for x, value in tuples:
             value = np.asarray(value, dtype=dtype(x))
-            tf_dtype = _convert_string_dtype(x.dtype.name.split('_')[0])
+            tf_dtype = tf.as_dtype(x.dtype.name.split('_')[0])
             if hasattr(x, '_assign_placeholder'):
                 assign_placeholder = x._assign_placeholder
                 assign_op = x._assign_op
@@ -2207,6 +2182,15 @@ def get_variable_shape(x):
 
 def print_tensor(x, message=''):
     """Prints `message` and the tensor value when evaluated.
+
+     Note that `print_tensor` returns a new tensor identical to `x`
+     which should be used in the following code. Otherwise the
+     print operation is not taken into account during evaluation.
+
+     # Example
+     ```python
+         >>> x = K.print_tensor(x, message="x is: ")
+     ```
 
     # Arguments
         x: Tensor to print.
@@ -2394,6 +2378,9 @@ def rnn(step_function, inputs, initial_states,
     if constants is None:
         constants = []
 
+    global uses_learning_phase
+    uses_learning_phase = False
+
     if unroll:
         if not inputs.get_shape()[0]:
             raise ValueError('Unrolling requires a '
@@ -2413,6 +2400,8 @@ def rnn(step_function, inputs, initial_states,
 
             for inp, mask_t in zip(input_list, mask_list):
                 output, new_states = step_function(inp, states + constants)
+                if getattr(output, '_uses_learning_phase', False):
+                    uses_learning_phase = True
 
                 # tf.where needs its condition tensor
                 # to be the same shape as its two
@@ -2451,6 +2440,8 @@ def rnn(step_function, inputs, initial_states,
         else:
             for inp in input_list:
                 output, states = step_function(inp, states + constants)
+                if getattr(output, '_uses_learning_phase', False):
+                    uses_learning_phase = True
                 successive_outputs.append(output)
                 successive_states.append(states)
             last_output = successive_outputs[-1]
@@ -2509,6 +2500,9 @@ def rnn(step_function, inputs, initial_states,
                 output, new_states = step_function(current_input,
                                                    tuple(states) +
                                                    tuple(constants))
+                if getattr(output, '_uses_learning_phase', False):
+                    global uses_learning_phase
+                    uses_learning_phase = True
                 for state, new_state in zip(states, new_states):
                     new_state.set_shape(state.get_shape())
                 tiled_mask_t = tf.tile(mask_t,
@@ -2533,6 +2527,9 @@ def rnn(step_function, inputs, initial_states,
                 output, new_states = step_function(current_input,
                                                    tuple(states) +
                                                    tuple(constants))
+                if getattr(output, '_uses_learning_phase', False):
+                    global uses_learning_phase
+                    uses_learning_phase = True
                 for state, new_state in zip(states, new_states):
                     new_state.set_shape(state.get_shape())
                 output_ta_t = output_ta_t.write(time, output)
@@ -2553,6 +2550,7 @@ def rnn(step_function, inputs, initial_states,
 
     axes = [1, 0] + list(range(2, len(outputs.get_shape())))
     outputs = tf.transpose(outputs, axes)
+    last_output._uses_learning_phase = uses_learning_phase
     return last_output, outputs, new_states
 
 
@@ -2563,28 +2561,57 @@ def switch(condition, then_expression, else_expression):
     should be symbolic tensors of the *same shape*.
 
     # Arguments
-        condition: scalar tensor (`int` or `bool`).
+        condition: tensor (`int` or `bool`).
         then_expression: either a tensor, or a callable that returns a tensor.
         else_expression: either a tensor, or a callable that returns a tensor.
 
     # Returns
         The selected tensor.
+
+    # Raises
+        ValueError: If rank of `condition` is greater than rank of expressions.
     """
     if condition.dtype != tf.bool:
         condition = tf.cast(condition, 'bool')
-    if not callable(then_expression):
-        def then_expression_fn():
-            return then_expression
+    cond_ndim = ndim(condition)
+    if not cond_ndim:
+        if not callable(then_expression):
+            def then_expression_fn():
+                return then_expression
+        else:
+            then_expression_fn = then_expression
+        if not callable(else_expression):
+            def else_expression_fn():
+                return else_expression
+        else:
+            else_expression_fn = else_expression
+        x = tf.cond(condition,
+                    then_expression_fn,
+                    else_expression_fn)
     else:
-        then_expression_fn = then_expression
-    if not callable(else_expression):
-        def else_expression_fn():
-            return else_expression
-    else:
-        else_expression_fn = else_expression
-    x = tf.cond(condition,
-                then_expression_fn,
-                else_expression_fn)
+        # tf.where needs its condition tensor
+        # to be the same shape as its two
+        # result tensors
+        if callable(then_expression):
+            then_expression = then_expression()
+        if callable(else_expression):
+            else_expression = else_expression()
+        expr_ndim = ndim(then_expression)
+        if cond_ndim > expr_ndim:
+            raise ValueError('Rank of `condition` should be less than or'
+                             ' equal to rank of `then_expression` and '
+                             '`else_expression`. ndim(condition)=' +
+                             str(cond_ndim) + ', ndim(then_expression)'
+                             '=' + str(expr_ndim))
+        if cond_ndim > 1:
+            ndim_diff = expr_ndim - cond_ndim
+            cond_shape = tf.concat([tf.shape(condition), [1] * ndim_diff], axis=0)
+            condition = tf.reshape(condition, cond_shape)
+            expr_shape = tf.shape(then_expression)
+            shape_diff = expr_shape - cond_shape
+            tile_shape = tf.where(shape_diff > 0, expr_shape, tf.ones_like(expr_shape))
+            condition = tf.tile(condition, tile_shape)
+        x = tf.where(condition, then_expression, else_expression)
     return x
 
 
@@ -2683,7 +2710,7 @@ def elu(x, alpha=1.):
     """Exponential linear unit.
 
     # Arguments
-        x: A tenor or variable to compute the activation function for.
+        x: A tensor or variable to compute the activation function for.
         alpha: A scalar, slope of positive section.
 
     # Returns
@@ -3591,10 +3618,10 @@ def truncated_normal(shape, mean=0.0, stddev=1.0, dtype=None, seed=None):
 
 
 # CTC
-# tensorflow has a native implemenation, but it uses sparse tensors
+# TensorFlow has a native implementation, but it uses sparse tensors
 # and therefore requires a wrapper for Keras. The functions below convert
 # dense to sparse tensors and also wraps up the beam search code that is
-# in tensorflow's CTC implementation
+# in TensorFlow's CTC implementation
 
 
 def ctc_label_dense_to_sparse(labels, label_lengths):
