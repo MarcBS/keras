@@ -52,6 +52,14 @@ _DATA_FORMAT_MAP = {'channels_first': 'NCHW', 'channels_last': 'NHWC'}
 # We assume our devices don't change during our lifetime.
 _LOCAL_DEVICES = device_lib.list_local_devices()
 
+def printing(x, string=''):
+    """Prints the value of a tensor variable
+    :param x: Tensor variable
+    :param string: Prefix to print
+    :return: The same tensor variable as x
+    """
+    return tf.Print(x, [x], message=string)
+
 
 def get_uid(prefix=''):
     """Get the uid for the default graph.
@@ -678,6 +686,12 @@ def zeros(shape, dtype=None, name=None):
                     dtype, name)
 
 
+def zeros_symbolic(shape, dtype=floatx(), name=None):
+    """Instantiate an all-zeros symbolic variable.
+    """
+    return tf.zeros(shape, dtype=dtype, name=name)
+
+
 def ones(shape, dtype=None, name=None):
     """Instantiates an all-ones tensor variable and returns it.
 
@@ -921,6 +935,14 @@ def cast(x, dtype):
     """
     return tf.cast(x, dtype)
 
+
+
+def ceil(x, name=None):
+    return tf.ceil(x, name=name)
+
+
+def floor(x, name=None):
+    return tf.floor(x, name=name)
 
 # UPDATES OPS
 
@@ -1461,6 +1483,14 @@ def log(x):
     return tf.log(x)
 
 
+def log2(x):
+    """log in base 2
+    """
+    numerator = tf.log(x)
+    denominator = tf.log(tf.constant(2, dtype=numerator.dtype))
+    return numerator / denominator
+
+
 def logsumexp(x, axis=None, keepdims=False):
     """Computes log(sum(exp(elements across dimensions of a tensor))).
 
@@ -1924,6 +1954,40 @@ def repeat(x, n):
     return tf.tile(x, pattern)
 
 
+def repeatRdim(x, n, axis=1):
+    """Repeats an RD tensor.
+
+    If x has shape (samples, dim1, dim2) and n=2 and axis=1,
+    the output will have shape (samples, 2, dim1, dim2).
+    """
+    new_dim = range(axis) + ['x'] + range(axis, ndim(x))
+    x = permute_dimensions(x, tuple(new_dim))
+    return tf.expand_dims(x, n)
+
+
+def set_subtensor(x, v):
+    return tf.assign(x, v)
+
+
+def inc_subtensor(x, v):
+    return tf.add(x, v)
+
+
+def equal_dimensions(x, y):
+    y_shape = int_shape(y)
+    x_shape = int_shape(x)
+    fun_comp = x_shape[2] == y_shape[2] and x_shape[3] == y_shape[3]
+
+    return tf.cond(fun_comp, y, funequal(x,y))
+
+
+def funequal(x,y):
+    y_shape = int_shape(y)
+    x_shape = int_shape(x)
+    new_y = zeros([1,1,1,1])
+    new_y = set_subtensor(new_y[:, :, :-1, :-1], y)
+    return new_y
+
 def arange(start, stop=None, step=1, dtype='int32'):
     """Creates a 1D tensor containing a sequence of integers.
 
@@ -2179,6 +2243,8 @@ def get_value(x):
     # Returns
         A Numpy array.
     """
+    if isinstance(x, np.ndarray):
+        return x
     return x.eval(session=get_session())
 
 
@@ -2812,6 +2878,21 @@ def softmax(x):
     return tf.nn.softmax(x)
 
 
+def softmax_3d(x):
+    '''Softmax on the last axis of a 2d or 3d tensor.
+    '''
+    nd = ndim(x)
+    if nd == 2:
+        return softmax(x)
+    elif nd == 3:
+        e = exp(x - max(x, axis=-1, keepdims=True))
+        s = sum(e, axis=-1, keepdims=True)
+        return e / s
+    else:
+        raise Exception('Cannot apply softmax to a tensor that is not 2D or 3D. ' +
+                        'Here, ndim=' + str(nd))
+
+
 def softplus(x):
     """Softplus of a tensor.
 
@@ -2926,6 +3007,15 @@ def binary_crossentropy(target, output, from_logits=False):
                                                    logits=output)
 
 
+def weighted_binary_crossentropy(target, output, from_logits=False, lambda_w_rec=1.0, lambda_w_pre=1.0):
+    if from_logits:
+        output = tf.nn.sigmoid(output)
+    # avoid numerical instability with _EPSILON clipping
+    _epsilon = _to_tensor(epsilon(), output.dtype.base_dtype)
+    output = tf.clip_by_value(output, _epsilon, 1.0 - _epsilon)
+    return -(lambda_w_rec * target * log(output) + lambda_w_pre * (1.0 - target) * log(1.0 - output))
+
+
 def sigmoid(x):
     """Element-wise sigmoid.
 
@@ -3003,6 +3093,20 @@ def l2_normalize(x, axis=None):
         A tensor.
     """
     return tf.nn.l2_normalize(x, dim=axis)
+
+
+def l1_normalize(x, axis):
+    """Normalizes a tensor wrt the L1 norm alongside the specified axis.
+
+    # Arguments
+        x: Tensor or variable.
+        axis: axis along which to perform normalization.
+
+    # Returns
+        A tensor.
+    """
+    norm = max(sum(abs(x), axis=axis, keepdims=True))
+    return x / norm
 
 
 def in_top_k(predictions, targets, k):
@@ -3702,6 +3806,36 @@ def truncated_normal(shape, mean=0.0, stddev=1.0, dtype=None, seed=None):
     return tf.truncated_normal(shape, mean, stddev, dtype=dtype, seed=seed)
 
 
+def random_multinomial(shape, p=0.0, dtype=None, seed=None):
+    if dtype is None:
+        dtype = floatx()
+    if seed is None:
+        seed = np.random.randint(10e6)
+    rng = RandomStreams(seed=seed)
+    return rng.multinomial(shape, pvals=p, dtype=dtype)
+
+# COUNT SKETCH
+def count_sketch(h, s, x, d=16000):
+    raise NotImplementedError, 'count_sketch is not implemented in the tensorflow backend'
+
+def __count_sketch(h, s, v,  # Sequences
+                   y, # Outputs info
+                   ):
+    raise NotImplementedError, '__count_sketch is not implemented in the tensorflow backend'
+
+# 1d Convolution
+def scan_conv1d(u, v):
+    '''1D convolution over a set of vectors. All inputs will be treated by pairs.
+        #x must be equal to #kernel
+
+    # Arguments
+        u: first set of vectors
+        v: second set of vectors
+    '''
+
+    raise NotImplementedError, 'scan_conv1d is not implemented in the tensorflow backend'
+
+
 # CTC
 # TensorFlow has a native implementation, but it uses sparse tensors
 # and therefore requires a wrapper for Keras. The functions below convert
@@ -3975,3 +4109,24 @@ def local_conv2d(inputs, kernel, kernel_size, strides, output_shape, data_format
     else:
         output = permute_dimensions(output, (2, 0, 1, 3))
     return output
+
+
+# modified from the one included in np_utils.py
+def conv_input_length(output_length, filter_size, border_mode, stride):
+    if output_length is None:
+        return None
+    assert border_mode in {'same', 'valid', 'full'}
+    add_extra = 0
+    if border_mode == 'same':
+        pad = filter_size // 2
+        add_extra = +1
+    elif border_mode == 'valid':
+        pad = 0
+    elif border_mode == 'full':
+        pad = filter_size - 1
+    return (output_length - 1) * stride - 2 * pad + filter_size + add_extra
+
+
+def as_tensor_variable(x, name=None, ndim=None):
+    return variable(x, name=name)
+
