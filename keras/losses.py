@@ -80,8 +80,8 @@ def log_diff(args):
     :return:
     """
     y_pred, y_true, h_pred, h_true = args
-    p_y_x = K.mean(K.categorical_crossentropy(y_pred, y_true))
-    p_h_x = K.mean(K.categorical_crossentropy(h_pred, h_true))
+    p_y_x = K.mean(K.categorical_crossentropy(y_true, y_pred ))
+    p_h_x = K.mean(K.categorical_crossentropy(h_true, h_pred))
     return p_y_x - p_h_x
 
 

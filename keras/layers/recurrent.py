@@ -1052,7 +1052,7 @@ class GRUCell(Layer):
                  bias_constraint=None,
                  dropout=0.,
                  recurrent_dropout=0.,
-                 implementation=1,
+                 implementation=2,
                  **kwargs):
         super(GRUCell, self).__init__(**kwargs)
         self.units = units
@@ -1294,11 +1294,11 @@ class GRU(RNN):
                  bias_constraint=None,
                  dropout=0.,
                  recurrent_dropout=0.,
-                 implementation=1,
+                 implementation=2,
                  **kwargs):
         if implementation == 0:
             warnings.warn('`implementation=0` has been deprecated, '
-                          'and now defaults to `implementation=1`.'
+                          'and now defaults to `implementation=2`.'
                           'Please update your layer call.')
         if K.backend() == 'cntk':
             if not kwargs.get('unroll') and (dropout > 0 or recurrent_dropout > 0):
@@ -1429,6 +1429,7 @@ class GRU(RNN):
         if 'implementation' in config and config['implementation'] == 0:
             config['implementation'] = 1
         return cls(**config)
+
 
 class GRUCond(Recurrent):
     '''Gated Recurrent Unit - Cho et al. 2014. with the previously generated word fed to the current timestep.
@@ -3571,6 +3572,7 @@ class AttConditionalGRUCond(Recurrent):
         return dict(list(base_config.items()) + list(config.items()))
 
 
+
 class LSTMCell(Layer):
     """Cell class for the LSTM layer.
 
@@ -3641,7 +3643,7 @@ class LSTMCell(Layer):
                  bias_constraint=None,
                  dropout=0.,
                  recurrent_dropout=0.,
-                 implementation=1,
+                 implementation=2,
                  **kwargs):
         super(LSTMCell, self).__init__(**kwargs)
         self.units = units
@@ -3902,11 +3904,11 @@ class LSTM(RNN):
                  bias_constraint=None,
                  dropout=0.,
                  recurrent_dropout=0.,
-                 implementation=1,
+                 implementation=2,
                  **kwargs):
         if implementation == 0:
             warnings.warn('`implementation=0` has been deprecated, '
-                          'and now defaults to `implementation=1`.'
+                          'and now defaults to `implementation=2`.'
                           'Please update your layer call.')
         if K.backend() == 'cntk':
             if not kwargs.get('unroll') and (dropout > 0 or recurrent_dropout > 0):

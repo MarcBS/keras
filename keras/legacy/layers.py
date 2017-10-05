@@ -764,6 +764,7 @@ class Recurrent(Layer):
 
     Do not use in a model -- it's not a valid layer!
     Use its children classes `LSTM`, `GRU` and `SimpleRNN` instead.
+
     All recurrent layers (`LSTM`, `GRU`, `SimpleRNN`) also
     follow the specifications of this class and accept
     the keyword arguments listed below.
@@ -776,8 +777,10 @@ class Recurrent(Layer):
         model.add(LSTM(32, input_shape=(10, 64)))
         # now model.output_shape == (None, 32)
         # note: `None` is the batch dimension.
+
         # for subsequent layers, no need to specify the input size:
         model.add(LSTM(16))
+
         # to stack recurrent layers, you must use return_sequences=True
         # on any recurrent layer that feeds into another recurrent layer.
         # note that you only need to specify the input size on the first layer.
@@ -790,7 +793,7 @@ class Recurrent(Layer):
     # Arguments
         weights: list of Numpy arrays to set as initial weights.
             The list should have 3 elements, of shapes:
-            `[(input_dim, output_dim), (output_dim, output_dim), (output_dim,)]`.
+            `[(input_dim, units), (units, units), (units,)]`.
         return_sequences: Boolean. Whether to return the last output
             in the output sequence, or the full sequence.
         return_state: Boolean. Whether to return the last state
@@ -835,7 +838,7 @@ class Recurrent(Layer):
 
     # Input shapes
         3D tensor with shape `(batch_size, timesteps, input_dim)`,
-        (Optional) 2D tensors with shape `(batch_size, output_dim)`.
+        (Optional) 2D tensors with shape `(batch_size, units)`.
 
     # Output shape
         - if `return_state`: a list of tensors. The first tensor is
@@ -856,6 +859,7 @@ class Recurrent(Layer):
         computed for the samples in one batch will be reused as initial states
         for the samples in the next batch. This assumes a one-to-one mapping
         between samples in different successive batches.
+
         To enable statefulness:
             - specify `stateful=True` in the layer constructor.
             - specify a fixed batch size for your model, by passing
@@ -867,6 +871,7 @@ class Recurrent(Layer):
                 *including the batch size*.
                 It should be a tuple of integers, e.g. `(32, 10, 100)`.
             - specify `shuffle=False` when calling fit().
+
         To reset the states of your model, call `.reset_states()` on either
         a specific layer, or on your entire model.
 
@@ -875,6 +880,7 @@ class Recurrent(Layer):
         calling them with the keyword argument `initial_state`. The value of
         `initial_state` should be a tensor or list of tensors representing
         the initial state of the RNN layer.
+
         You can specify the initial state of RNN layers numerically by
         calling `reset_states` with the keyword argument `states`. The value of
         `states` should be a numpy array or list of numpy arrays representing
@@ -886,7 +892,7 @@ class Recurrent(Layer):
                  go_backwards=False,
                  stateful=False,
                  unroll=False,
-                 implementation=0,
+                 implementation=2,
                  **kwargs):
         super(Recurrent, self).__init__(**kwargs)
         self.return_sequences = return_sequences
@@ -934,11 +940,11 @@ class Recurrent(Layer):
         return []
 
     def get_initial_state(self, inputs):
-        # build an all-zero tensor of shape (samples, output_dim)
+        # build an all-zero tensor of shape (samples, units)
         initial_state = K.zeros_like(inputs)  # (samples, timesteps, input_dim)
         initial_state = K.sum(initial_state, axis=(1, 2))  # (samples,)
         initial_state = K.expand_dims(initial_state)  # (samples, 1)
-        initial_state = K.tile(initial_state, [1, self.units])  # (samples, output_dim)
+        initial_state = K.tile(initial_state, [1, self.units])  # (samples, units)
         initial_state = [initial_state for _ in range(len(self.states))]
         return initial_state
 
@@ -950,9 +956,10 @@ class Recurrent(Layer):
         # If there are multiple inputs, then
         # they should be the main input and `initial_state`
         # e.g. when loading model from file
-        if isinstance(inputs, (list, tuple)) and len(inputs) > 1 and initial_state is None:
-            initial_state = inputs[1:]
-            inputs = inputs[0]
+        # TODO: This is disabled, accounting for multiple-inputs RNNs. More general way of doing this?
+        #if isinstance(inputs, (list, tuple)) and len(inputs) > 1 and initial_state is None:
+        #    initial_state = inputs[1:]
+        #    inputs = inputs[0]
 
         # If `initial_state` is specified,
         # and if it a Keras tensor,
@@ -1093,7 +1100,7 @@ class Recurrent(Layer):
             if len(states) != len(self.states):
                 raise ValueError('Layer ' + self.name + ' expects ' +
                                  str(len(self.states)) + ' states, '
-                                 'but it received ' + str(len(states)) +
+                                                         'but it received ' + str(len(states)) +
                                  ' state values. Input received: ' +
                                  str(states))
             for index, (value, state) in enumerate(zip(states, self.states)):
@@ -1114,3 +1121,4 @@ class Recurrent(Layer):
                   'implementation': self.implementation}
         base_config = super(Recurrent, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
+
