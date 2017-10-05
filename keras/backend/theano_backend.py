@@ -33,12 +33,11 @@ _LEARNING_PHASE = T.scalar(dtype='uint8', name='keras_learning_phase')  # 0 = te
 _UID_PREFIXES = defaultdict(int)
 
 def printing(x, string=''):
-    '''
-    Print the value of a tensor variable
+    """Prints the value of a tensor variable
     :param x: Tensor variable
     :param string: Prefix to print
-    :return:
-    '''
+    :return: The same tensor variable as x
+    """
     return theano.printing.Print(string)(x)
 
 
@@ -310,8 +309,8 @@ def zeros(shape, dtype=None, name=None):
 
 
 def zeros_symbolic(shape, dtype=floatx()):
-    '''Instantiate an all-zeros symbolic variable.
-    '''
+    """Instantiate an all-zeros symbolic variable.
+    """
     return T.zeros(shape, dtype=dtype)
 
 
@@ -1853,8 +1852,8 @@ def binary_crossentropy(target, output, from_logits=False):
 def weighted_binary_crossentropy(target, output, from_logits=False, lambda_w_rec=1.0, lambda_w_pre=1.0):
     if from_logits:
         output = T.nnet.sigmoid(output)
-    # avoid numerical instability with _EPSILON clipping
-    output = T.clip(output, _EPSILON, 1.0 - _EPSILON)
+    # avoid numerical instability with _epsilon clipping
+    output = T.clip(output, _epsilon(), 1.0 - _epsilon())
     return -(lambda_w_rec * target * T.log(output) + lambda_w_pre * (1.0 - target) * T.log(1.0 - output))
 
 
@@ -1904,12 +1903,30 @@ def dropout(x, level, noise_shape=None, seed=None):
 
 
 def l2_normalize(x, axis=None):
+    """Normalizes a tensor wrt the L2 norm alongside the specified axis.
+
+    # Arguments
+        x: Tensor or variable.
+        axis: axis along which to perform normalization.
+
+    # Returns
+        A tensor.
+    """
     square_sum = T.sum(T.square(x), axis=axis, keepdims=True)
     norm = T.sqrt(T.maximum(square_sum, epsilon()))
     return x / norm
 
 
 def l1_normalize(x, axis):
+    """Normalizes a tensor wrt the L1 norm alongside the specified axis.
+
+    # Arguments
+        x: Tensor or variable.
+        axis: axis along which to perform normalization.
+
+    # Returns
+        A tensor.
+    """
     norm = T.max(T.sum(abs(x), axis=axis, keepdims=True))
     return x / norm
 
