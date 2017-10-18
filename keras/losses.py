@@ -75,7 +75,7 @@ def cosine_proximity(y_true, y_pred):
 
 def log_diff(args):
     """
-     log prob difference between a GT and a hypothesis
+     Cross-entropy difference between a GT and a hypothesis
     :param args: y_pred, y_true, h_pred, h_true
     :return:
     """

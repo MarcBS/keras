@@ -978,7 +978,7 @@ class Model(Container):
     def _make_test_function_only_metrics(self):
         if not hasattr(self, 'test_function'):
             raise RuntimeError('You must compile your model before using it.')
-        if self.metrics_tensors == []:
+        if not self.metrics_tensors:
             raise RuntimeError('You must specify at least one metric to the model.')
         if self.test_function is None:
             if self.uses_learning_phase and not isinstance(K.learning_phase(), int):
@@ -987,10 +987,8 @@ class Model(Container):
                 inputs = self.inputs + self.targets + self.sample_weights
             # return loss and metrics, no gradient updates.
             # Does update the network states.
-            self.test_function_only_metrics = K.function(inputs,
-                                            self.metrics_tensors,
-                                            updates=self.state_updates,
-                                            **self._function_kwargs)
+            self.test_function_only_metrics = K.function(inputs, self.metrics_tensors,
+                                                         updates=self.state_updates, **self._function_kwargs)
 
 
     def _make_test_function(self):
