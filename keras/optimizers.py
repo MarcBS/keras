@@ -185,10 +185,9 @@ class PAS(Optimizer):
             fd = wk - wt + l * C * g
             new_wk = wk - lr * lmul * fd
 
-            # apply constraints
-            if wk in constraints:
-                c = constraints[wk]
-                new_wk = c(new_wk)
+            # Apply constraints.
+            if getattr(wk, 'constraint', None) is not None:
+                new_wk = wk.constraint(new_wk)
 
             self.updates.append(K.update(wk, new_wk))
         return self.updates
@@ -224,10 +223,9 @@ class PAS2(PAS):
 
             fd = g + C * (wk - wt)
             new_wk = wk - lr * lmul * fd
-            # apply constraints
-            if wk in constraints:
-                c = constraints[wk]
-                new_wk = c(new_wk)
+            # Apply constraints.
+            if getattr(wk, 'constraint', None) is not None:
+                new_wk = wk.constraint(new_wk)
 
             self.updates.append(K.update(wk, new_wk))
         return self.updates
@@ -262,10 +260,9 @@ class PPAS(PAS):
         for wk, g, lmul, wt in zip(params, grads, learning_rate_multipliers, weights_init):
             new_wk = wk - lr * lmul * l * g
             p_new_wk = ((new_wk - wt) / (K.epsilon() + K.sqrt(K.sum(K.square(new_wk - wt))))) * b + wt
-            # apply constraints
-            if wk in constraints:
-                c = constraints[wk]
-                p_new_wk = c(p_new_wk)
+            # Apply constraints.
+            if getattr(new_wk, 'constraint', None) is not None:
+                p_new_wk = wk.constraint(p_new_wk)
 
             self.updates.append(K.update(wk, p_new_wk))
         return self.updates
