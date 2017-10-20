@@ -1791,8 +1791,8 @@ class GRUCond(Recurrent):
             initial_states = self.states
         else:
             initial_states = self.get_initial_states(state_below)
-        constants = self.get_constants(state_below, mask[1], training=None)
-        preprocessed_input = self.preprocess_input(state_below, training=None)
+        constants = self.get_constants(state_below, mask[1], training=training)
+        preprocessed_input = self.preprocess_input(state_below, training=training)
         last_output, outputs, states = K.rnn(self.step,
                                              preprocessed_input,
                                              initial_states,
@@ -2242,8 +2242,8 @@ class AttGRU(Recurrent):
             initial_states = self.states
         else:
             initial_states = self.get_initial_states(state_below)
-        constants = self.get_constants(state_below, training=None)
-        preprocessed_input = self.preprocess_input(state_below, training=None)
+        constants = self.get_constants(state_below, training=training)
+        preprocessed_input = self.preprocess_input(state_below, training=training)
         last_output, outputs, states = K.rnn(self.step,
                                              preprocessed_input,
                                              initial_states,
@@ -2733,20 +2733,15 @@ class AttGRUCond(Recurrent):
     def preprocess_input(self, inputs, training=None):
 
         if 0 < self.conditional_dropout < 1:
-            input_dim = self.input_dim
-            ones = K.ones_like(K.reshape(inputs[:, :, 0], (-1, inputs.shape[1], 1)))  # (bs, timesteps, 1)
-            ones = K.concatenate([ones] * input_dim, axis=2)
-
+            ones = K.ones_like(K.squeeze(inputs[:, 0:1, :], axis=1))
             def dropped_inputs():
-                return K.dropout(ones, self.recurrent_dropout)
-
+                return K.dropout(ones, self.conditional_dropout)
             cond_dp_mask = [K.in_train_phase(dropped_inputs,
                                              ones,
                                              training=training) for _ in range(3)]
+            return K.dot(inputs * cond_dp_mask[0][:, None, :], self.conditional_kernel)
         else:
-            cond_dp_mask = [K.cast_to_floatx(1.) for _ in range(3)]
-
-        return K.dot(inputs * cond_dp_mask, self.conditional_kernel)
+            return K.dot(inputs, self.conditional_kernel)
 
     def compute_output_shape(self, input_shape):
         if self.return_sequences:
@@ -2797,8 +2792,8 @@ class AttGRUCond(Recurrent):
             initial_states = self.states
         else:
             initial_states = self.get_initial_states(state_below)
-        constants = self.get_constants(state_below, mask[1], training=None)
-        preprocessed_input = self.preprocess_input(state_below, training=None)
+        constants = self.get_constants(state_below, mask[1], training=training)
+        preprocessed_input = self.preprocess_input(state_below, training=training)
         last_output, outputs, states = K.rnn(self.step,
                                              preprocessed_input,
                                              initial_states,
@@ -2900,15 +2895,9 @@ class AttGRUCond(Recurrent):
         constants = []
         # States[4] - Dropout_W
         if 0 < self.dropout < 1:
-            # TODO: Fails?
-            input_shape = K.int_shape(self.context)
-            input_dim = input_shape[-1]
-            ones = K.ones_like(K.reshape(inputs[:, 0, 0], (-1, 1)))
-            ones = K.tile(ones, (1, int(input_dim)))
-
+            ones = K.ones_like(K.squeeze(self.context[:, 0:1, :], axis=1))
             def dropped_inputs():
                 return K.dropout(ones, self.dropout)
-
             dp_mask = [K.in_train_phase(dropped_inputs,
                                         ones,
                                         training=training) for _ in range(3)]
@@ -3326,20 +3315,16 @@ class AttConditionalGRUCond(Recurrent):
     def preprocess_input(self, inputs, training=None):
 
         if 0 < self.conditional_dropout < 1:
-            input_dim = self.input_dim
-            ones = K.ones_like(K.reshape(inputs[:, :, 0], (-1, inputs.shape[1], 1)))  # (bs, timesteps, 1)
-            ones = K.concatenate([ones] * input_dim, axis=2)
-
+            ones = K.ones_like(K.squeeze(inputs[:, 0:1, :], axis=1))
             def dropped_inputs():
-                return K.dropout(ones, self.recurrent_dropout)
-
+                return K.dropout(ones, self.conditional_dropout)
             cond_dp_mask = [K.in_train_phase(dropped_inputs,
                                              ones,
                                              training=training) for _ in range(3)]
-        else:
-            cond_dp_mask = [K.cast_to_floatx(1.) for _ in range(3)]
+            return K.dot(inputs * cond_dp_mask[0][:, None, :], self.conditional_kernel)
 
-        return K.dot(inputs * cond_dp_mask, self.conditional_kernel)
+        else:
+            return K.dot(inputs, self.conditional_kernel)
 
     def compute_output_shape(self, input_shape):
         if self.return_sequences:
@@ -3390,8 +3375,8 @@ class AttConditionalGRUCond(Recurrent):
             initial_states = self.states
         else:
             initial_states = self.get_initial_states(state_below)
-        constants = self.get_constants(state_below, mask[1], training=None)
-        preprocessed_input = self.preprocess_input(state_below, training=None)
+        constants = self.get_constants(state_below, mask[1], training=training)
+        preprocessed_input = self.preprocess_input(state_below, training=training)
         last_output, outputs, states = K.rnn(self.step,
                                              preprocessed_input,
                                              initial_states,
@@ -3509,18 +3494,15 @@ class AttConditionalGRUCond(Recurrent):
         constants = []
         # States[4] - Dropout_W
         if 0 < self.dropout < 1:
-            # TODO: Fails?
-            input_shape = K.int_shape(self.context)
-            input_dim = input_shape[-1]
-            ones = K.ones_like(K.reshape(inputs[:, 0, 0], (-1, 1)))
-            ones = K.tile(ones, (1, int(input_dim)))
+            ones = K.ones_like(K.squeeze(self.context[:, 0:1, :], axis=1))
 
             def dropped_inputs():
                 return K.dropout(ones, self.dropout)
 
             dp_mask = [K.in_train_phase(dropped_inputs,
                                         ones,
-                                        training=training) for _ in range(3)]
+                                        training=training)
+                       for _ in range(3)]
             constants.append(dp_mask)
         else:
             constants.append([K.cast_to_floatx(1.) for _ in range(3)])
@@ -4426,8 +4408,8 @@ class LSTMCond(Recurrent):
             initial_states = self.states
         else:
             initial_states = self.get_initial_states(state_below)
-        constants = self.get_constants(state_below, mask[1], training=None)
-        preprocessed_input = self.preprocess_input(state_below, training=None)
+        constants = self.get_constants(state_below, mask[1], training=training)
+        preprocessed_input = self.preprocess_input(state_below, training=training)
         last_output, outputs, states = K.rnn(self.step,
                                              preprocessed_input,
                                              initial_states,
@@ -4914,8 +4896,8 @@ class AttLSTM(Recurrent):
             initial_states = self.states
         else:
             initial_states = self.get_initial_states(state_below)
-        constants = self.get_constants(state_below, training=None)
-        preprocessed_input = self.preprocess_input(state_below, training=None)
+        constants = self.get_constants(state_below, training=training)
+        preprocessed_input = self.preprocess_input(state_below, training=training)
         last_output, outputs, states = K.rnn(self.step,
                                              preprocessed_input,
                                              initial_states,
@@ -5005,17 +4987,11 @@ class AttLSTM(Recurrent):
 
     def get_constants(self, inputs, training=None):
         constants = []
-        # States[4] - Dropout_W
+        # States[4] - Dropout W (input dropout)
         if 0 < self.dropout < 1:
-            # TODO: Fails?
-            input_shape = K.int_shape(inputs)
-            input_dim = input_shape[-1]
-            ones = K.ones_like(K.reshape(inputs[:, 0, 0], (-1, 1)))
-            ones = K.tile(ones, (1, int(input_dim)))
-
+            ones = K.ones_like(K.squeeze(self.context[:, 0:1, :], axis=1))
             def dropped_inputs():
                 return K.dropout(ones, self.dropout)
-
             dp_mask = [K.in_train_phase(dropped_inputs,
                                         ones,
                                         training=training) for _ in range(4)]
@@ -5416,20 +5392,15 @@ class AttLSTMCond(Recurrent):
     def preprocess_input(self, inputs, training=None):
 
         if 0 < self.conditional_dropout < 1:
-            input_dim = self.input_dim
-            ones = K.ones_like(K.reshape(inputs[:, :, 0], (-1, inputs.shape[1], 1)))  # (bs, timesteps, 1)
-            ones = K.concatenate([ones] * input_dim, axis=2)
-
+            ones = K.ones_like(K.squeeze(inputs[:, 0:1, :], axis=1))
             def dropped_inputs():
-                return K.dropout(ones, self.recurrent_dropout)
-
+                return K.dropout(ones, self.conditional_dropout)
             cond_dp_mask = [K.in_train_phase(dropped_inputs,
                                              ones,
                                              training=training) for _ in range(4)]
+            return K.dot(inputs * cond_dp_mask[0][:, None, :], self.conditional_kernel)
         else:
-            cond_dp_mask = [K.cast_to_floatx(1.) for _ in range(4)]
-
-        return K.dot(inputs * cond_dp_mask, self.conditional_kernel)
+            return K.dot(inputs, self.conditional_kernel)
 
     def compute_output_shape(self, input_shape):
         if self.return_sequences:
@@ -5483,8 +5454,8 @@ class AttLSTMCond(Recurrent):
             initial_states = self.states
         else:
             initial_states = self.get_initial_states(state_below)
-        constants = self.get_constants(state_below, mask[1], training=None)
-        preprocessed_input = self.preprocess_input(state_below, training=None)
+        constants = self.get_constants(state_below, mask[1], training=training)
+        preprocessed_input = self.preprocess_input(state_below, training=training)
         last_output, outputs, states = K.rnn(self.step,
                                              preprocessed_input,
                                              initial_states,
@@ -5583,15 +5554,9 @@ class AttLSTMCond(Recurrent):
         constants = []
         # States[4] - Dropout_W
         if 0 < self.dropout < 1:
-            # TODO: Fails?
-            input_shape = K.int_shape(self.context)
-            input_dim = input_shape[-1]
-            ones = K.ones_like(K.reshape(inputs[:, 0, 0], (-1, 1)))
-            ones = K.tile(ones, (1, int(input_dim)))
-
+            ones = K.ones_like(K.squeeze(self.context[:, 0:1, :], axis=1))
             def dropped_inputs():
                 return K.dropout(ones, self.dropout)
-
             dp_mask = [K.in_train_phase(dropped_inputs,
                                         ones,
                                         training=training) for _ in range(4)]
@@ -5917,7 +5882,7 @@ class AttConditionalLSTMCond(Recurrent):
 
     def build(self, input_shape):
 
-        assert len(input_shape) >= 2, 'You should pass two inputs to AttLSTMCond ' \
+        assert len(input_shape) >= 2, 'You should pass two inputs to AttConditionalLSTMCond ' \
                                       '(previous_embedded_words and context) ' \
                                       'and two optional inputs (init_state and init_memory)'
         self.input_dim = input_shape[0][2]
@@ -6046,20 +6011,15 @@ class AttConditionalLSTMCond(Recurrent):
     def preprocess_input(self, inputs, training=None):
 
         if 0 < self.conditional_dropout < 1:
-            input_dim = self.input_dim
-            ones = K.ones_like(K.reshape(inputs[:, :, 0], (-1, inputs.shape[1], 1)))  # (bs, timesteps, 1)
-            ones = K.concatenate([ones] * input_dim, axis=2)
-
+            ones = K.ones_like(K.squeeze(inputs[:, 0:1, :], axis=1))
             def dropped_inputs():
-                return K.dropout(ones, self.recurrent_dropout)
-
+                return K.dropout(ones, self.conditional_dropout)
             cond_dp_mask = [K.in_train_phase(dropped_inputs,
                                              ones,
                                              training=training) for _ in range(4)]
+            return K.dot(inputs * cond_dp_mask[0][:, None, :], self.conditional_kernel)
         else:
-            cond_dp_mask = [K.cast_to_floatx(1.) for _ in range(4)]
-
-        return K.dot(inputs * cond_dp_mask, self.conditional_kernel)
+            return K.dot(inputs, self.conditional_kernel)
 
     def compute_output_shape(self, input_shape):
         if self.return_sequences:
@@ -6113,8 +6073,8 @@ class AttConditionalLSTMCond(Recurrent):
             initial_states = self.states
         else:
             initial_states = self.get_initial_states(state_below)
-        constants = self.get_constants(state_below, mask[1], training=None)
-        preprocessed_input = self.preprocess_input(state_below, training=None)
+        constants = self.get_constants(state_below, mask[1], training=training)
+        preprocessed_input = self.preprocess_input(state_below, training=training)
         last_output, outputs, states = K.rnn(self.step,
                                              preprocessed_input,
                                              initial_states,
@@ -6168,8 +6128,8 @@ class AttConditionalLSTMCond(Recurrent):
         c_tm1 = states[1]  # Memory
         non_used_x_att = states[2]  # Placeholder for returning extra variables
         non_used_alphas_att = states[3]  # Placeholder for returning extra variables
-        dp_mask = states[4]  # Dropout U
-        rec_dp_mask = states[5]  # Dropout W
+        ctx_dp_mask = states[4]  # Dropout W
+        rec_dp_mask = states[5]  # Dropout U
         # Att model dropouts
         att_dp_mask = states[6]  # Dropout Wa
         pctx_ = states[7]  # Projected context (i.e. context * Ua + ba)
@@ -6206,7 +6166,7 @@ class AttConditionalLSTMCond(Recurrent):
 
         # LSTM
         z = K.dot(h_ * rec_dp_mask[0], self.recurrent_kernel) + \
-            K.dot(ctx_ * dp_mask[0], self.kernel)
+            K.dot(ctx_ * ctx_dp_mask[0], self.kernel)
         if self.use_bias:
             z = K.bias_add(z, self.bias)
         z0 = z[:, :self.units]
@@ -6224,17 +6184,11 @@ class AttConditionalLSTMCond(Recurrent):
 
     def get_constants(self, inputs, mask_context, training=None):
         constants = []
-        # States[4] - Dropout_W
+        # States[4] - Dropout W (input dropout)
         if 0 < self.dropout < 1:
-            # TODO: Fails?
-            input_shape = K.int_shape(self.context)
-            input_dim = input_shape[-1]
-            ones = K.ones_like(K.reshape(inputs[:, 0, 0], (-1, 1)))
-            ones = K.tile(ones, (1, int(input_dim)))
-
+            ones = K.ones_like(K.squeeze(self.context[:, 0:1, :], axis=1))
             def dropped_inputs():
                 return K.dropout(ones, self.dropout)
-
             dp_mask = [K.in_train_phase(dropped_inputs,
                                         ones,
                                         training=training) for _ in range(4)]
