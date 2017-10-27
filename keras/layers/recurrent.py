@@ -1095,6 +1095,8 @@ class GRUCell(Layer):
                  bias_constraint=None,
                  dropout=0.,
                  recurrent_dropout=0.,
+                 layer_normalization=False,
+                 epsilon_layer_normalization=1e-5,
                  implementation=2,
                  **kwargs):
         super(GRUCell, self).__init__(**kwargs)
@@ -1121,6 +1123,12 @@ class GRUCell(Layer):
         self.state_size = self.units
         self._dropout_mask = None
         self._recurrent_dropout_mask = None
+
+        # Layer normalization
+        self.layer_normalization = layer_normalization
+        self.gamma_init = initializers.get('ones')
+        self.beta_init = initializers.get('zeros')
+        self.epsilon_layer_normalization = epsilon_layer_normalization
 
     def build(self, input_shape):
         input_dim = input_shape[-1]
@@ -1162,6 +1170,37 @@ class GRUCell(Layer):
             self.bias_z = None
             self.bias_r = None
             self.bias_h = None
+
+        if self.layer_normalization:
+            assert self.implementation != 1, 'Layer normalization is not implemented with implementation == 1'
+            self.gamma_state_below0 = self.add_weight(shape=(2*self.units,),
+                                                     name='gamma_state_below0',
+                                                     initializer=self.gamma_init)
+            self.beta_state_below0 = self.add_weight(shape=(2*self.units,),
+                                                     name='beta_state_below0',
+                                                     initializer=self.beta_init)
+
+            self.gamma_state_below1 = self.add_weight(shape=(self.units,),
+                                                     name='gamma_state_below1',
+                                                     initializer=self.gamma_init)
+            self.beta_state_below1 = self.add_weight(shape=(self.units,),
+                                                     name='beta_state_below1',
+                                                     initializer=self.beta_init)
+
+            self.gamma_preact0 = self.add_weight(shape=(2*self.units,),
+                                                     name='gamma_preact0',
+                                                     initializer=self.gamma_init)
+            self.beta_preact0 = self.add_weight(shape=(2*self.units,),
+                                                     name='beta_preact0',
+                                                     initializer=self.beta_init)
+
+            self.gamma_preact1 = self.add_weight(shape=(self.units,),
+                                                     name='gamma_preact1',
+                                                     initializer=self.gamma_init)
+            self.beta_preact1 = self.add_weight(shape=(self.units,),
+                                                     name='beta_preact1',
+                                                     initializer=self.beta_init)
+
         self.built = True
 
     def _generate_dropout_mask(self, inputs, training=None):
@@ -1194,6 +1233,14 @@ class GRUCell(Layer):
                 for _ in range(3)]
         else:
             self._recurrent_dropout_mask = None
+
+    def _ln(self, x, slc):
+        # sample-wise normalization
+        m = K.mean(x, axis=-1, keepdims=True)
+        std = K.sqrt(K.var(x, axis=-1, keepdims=True) + self.epsilon_layer_normalization)
+        x_normed = (x - m) / (std + self.epsilon_layer_normalization)
+        x_normed = eval('self.gamma_' + slc) * x_normed + eval('self.beta_' + slc)
+        return x_normed
 
     def call(self, inputs, states, training=None):
         h_tm1 = states[0]  # previous memory
@@ -1243,20 +1290,33 @@ class GRUCell(Layer):
                 matrix_x = K.bias_add(matrix_x, self.bias)
             if 0. < self.recurrent_dropout < 1.:
                 h_tm1 *= rec_dp_mask[0]
-            matrix_inner = K.dot(h_tm1,
-                                 self.recurrent_kernel[:, :2 * self.units])
 
-            x_z = matrix_x[:, :self.units]
-            x_r = matrix_x[:, self.units: 2 * self.units]
+            if self.layer_normalization:
+                x_ = self._ln(matrix_x[:, : 2 * self.units], 'state_below0')
+                xx_ = self._ln(matrix_x[:, 2 * self.units:], 'state_below1')
+                matrix_inner = self._ln(K.dot(h_tm1,
+                                             self.recurrent_kernel[:, :2 * self.units]), 'preact0')
+                x_z = x_[:, :self.units]
+                x_r = x_[:, self.units: 2 * self.units]
+            else:
+                matrix_inner = K.dot(h_tm1,
+                                     self.recurrent_kernel[:, :2 * self.units])
+
+                x_z = matrix_x[:, :self.units]
+                x_r = matrix_x[:, self.units: 2 * self.units]
+
             recurrent_z = matrix_inner[:, :self.units]
             recurrent_r = matrix_inner[:, self.units: 2 * self.units]
 
             z = self.recurrent_activation(x_z + recurrent_z)
             r = self.recurrent_activation(x_r + recurrent_r)
-
-            x_h = matrix_x[:, 2 * self.units:]
-            recurrent_h = K.dot(r * h_tm1,
-                                self.recurrent_kernel[:, 2 * self.units:])
+            if self.layer_normalization:
+                x_h = xx_
+                recurrent_h = self._ln(K.dot(r * h_tm1, self.recurrent_kernel[:, 2 * self.units:]), 'preact1')
+            else:
+                x_h = matrix_x[:, 2 * self.units:]
+                recurrent_h = K.dot(r * h_tm1,
+                                    self.recurrent_kernel[:, 2 * self.units:])
             hh = self.activation(x_h + recurrent_h)
         h = z * h_tm1 + (1 - z) * hh
         if 0 < self.dropout + self.recurrent_dropout:
@@ -1353,6 +1413,8 @@ class GRU(RNN):
                  bias_constraint=None,
                  dropout=0.,
                  recurrent_dropout=0.,
+                 layer_normalization=False,
+                 epsilon_layer_normalization=1e-5,
                  implementation=2,
                  return_sequences=False,
                  return_state=False,
@@ -1390,6 +1452,8 @@ class GRU(RNN):
                        bias_constraint=bias_constraint,
                        dropout=dropout,
                        recurrent_dropout=recurrent_dropout,
+                       layer_normalization=layer_normalization,
+                       epsilon_layer_normalization=epsilon_layer_normalization,
                        implementation=implementation)
         super(GRU, self).__init__(cell,
                                   return_sequences=return_sequences,
@@ -1469,6 +1533,14 @@ class GRU(RNN):
         return self.cell.recurrent_dropout
 
     @property
+    def layer_normalization(self):
+        return self.cell.layer_normalization
+
+    @property
+    def epsilon_layer_normalization(self):
+        return self.cell.epsilon_layer_normalization
+
+    @property
     def implementation(self):
         return self.cell.implementation
 
@@ -1489,6 +1561,8 @@ class GRU(RNN):
                   'bias_constraint': constraints.serialize(self.bias_constraint),
                   'dropout': self.dropout,
                   'recurrent_dropout': self.recurrent_dropout,
+                  'layer_normalization':self.layer_normalization,
+                  'epsilon_layer_normalization':self.epsilon_layer_normalization,
                   'implementation': self.implementation}
         base_config = super(GRU, self).get_config()
         del base_config['cell']
@@ -2579,6 +2653,7 @@ class AttGRUCond(Recurrent):
                  attention_dropout=0.,
                  num_inputs=3,
                  layer_normalization=False,
+                 epsilon_layer_normalization=1e-5,
                  **kwargs):
         super(AttGRUCond, self).__init__(**kwargs)
         self.return_extra_variables = return_extra_variables
@@ -2636,7 +2711,7 @@ class AttGRUCond(Recurrent):
         self.layer_normalization = layer_normalization
         self.gamma_init = initializers.get('ones')
         self.beta_init = initializers.get('zeros')
-        self.epsilon = 1e-5
+        self.epsilon_layer_normalization = epsilon_layer_normalization
 
         self.num_inputs = num_inputs
         self.input_spec = [InputSpec(ndim=3), InputSpec(ndim=3)]
@@ -2801,11 +2876,11 @@ class AttGRUCond(Recurrent):
 
         return main_out
 
-    def ln(self, x, slc):
+    def _ln(self, x, slc):
         # sample-wise normalization
         m = K.mean(x, axis=-1, keepdims=True)
-        std = K.sqrt(K.var(x, axis=-1, keepdims=True) + self.epsilon)
-        x_normed = (x - m) / (std + self.epsilon)
+        std = K.sqrt(K.var(x, axis=-1, keepdims=True) + self.epsilon_layer_normalization)
+        x_normed = (x - m) / (std + self.epsilon_layer_normalization)
         x_normed = eval('self.gamma_' + slc) * x_normed + eval('self.beta_' + slc)
         return x_normed
 
@@ -2920,9 +2995,9 @@ class AttGRUCond(Recurrent):
             matrix_x = K.bias_add(matrix_x, self.bias)
 
         if self.layer_normalization:
-            x_ = self.ln(matrix_x[:, : 2 * self.units], 'state_below0')
-            xx_ = self.ln(matrix_x[:, 2 * self.units:], 'state_below1')
-            matrix_inner = self.ln(K.dot(h_tm1 * rec_dp_mask[0], self.recurrent_kernel[:, :2 * self.units]), 'preact0')
+            x_ = self._ln(matrix_x[:, : 2 * self.units], 'state_below0')
+            xx_ = self._ln(matrix_x[:, 2 * self.units:], 'state_below1')
+            matrix_inner = self._ln(K.dot(h_tm1 * rec_dp_mask[0], self.recurrent_kernel[:, :2 * self.units]), 'preact0')
             x_z = x_[:, :self.units]
             x_r = x_[:, self.units: 2 * self.units]
         else:
@@ -2937,7 +3012,7 @@ class AttGRUCond(Recurrent):
         r = self.recurrent_activation(x_r + recurrent_r)
         if self.layer_normalization:
             x_h = xx_
-            recurrent_h = self.ln(K.dot(r * h_tm1 * rec_dp_mask[0], self.recurrent_kernel[:, 2 * self.units:]), 'preact1')
+            recurrent_h = self._ln(K.dot(r * h_tm1 * rec_dp_mask[0], self.recurrent_kernel[:, 2 * self.units:]), 'preact1')
         else:
             x_h = matrix_x[:, 2 * self.units:]
             recurrent_h = K.dot(r * h_tm1 * rec_dp_mask[0],
@@ -3202,6 +3277,7 @@ class AttConditionalGRUCond(Recurrent):
                  conditional_dropout=0.,
                  attention_dropout=0.,
                  layer_normalization=False,
+                 epsilon_layer_normalization=1e-5,
                  num_inputs=3,
                  **kwargs):
         super(AttConditionalGRUCond, self).__init__(**kwargs)
@@ -3266,7 +3342,7 @@ class AttConditionalGRUCond(Recurrent):
         self.layer_normalization = layer_normalization
         self.gamma_init = initializers.get('ones')
         self.beta_init = initializers.get('zeros')
-        self.epsilon = 1e-5
+        self.epsilon_layer_normalization = epsilon_layer_normalization
 
         self.num_inputs = num_inputs
         self.input_spec = [InputSpec(ndim=3), InputSpec(ndim=3)]
@@ -3472,11 +3548,11 @@ class AttConditionalGRUCond(Recurrent):
 
         return main_out
 
-    def ln(self, x, slc):
+    def _ln(self, x, slc):
         # sample-wise normalization
         m = K.mean(x, axis=-1, keepdims=True)
-        std = K.sqrt(K.var(x, axis=-1, keepdims=True) + self.epsilon)
-        x_normed = (x - m) / (std + self.epsilon)
+        std = K.sqrt(K.var(x, axis=-1, keepdims=True) + self.epsilon_layer_normalization)
+        x_normed = (x - m) / (std + self.epsilon_layer_normalization)
         x_normed = eval('self.gamma_' + slc) * x_normed + eval('self.beta_' + slc)
         return x_normed
 
@@ -3581,9 +3657,9 @@ class AttConditionalGRUCond(Recurrent):
             matrix_x_ = K.bias_add(matrix_x_, self.bias1)
 
         if self.layer_normalization:
-            x__ = self.ln(matrix_x_[:, : 2 * self.units], 'state_below_0')
-            xx__ = self.ln(matrix_x_[:, 2 * self.units:], 'state_below_1')
-            matrix_inner_ = self.ln(K.dot(h_tm1 * rec_dp_mask[0], self.recurrent1_kernel[:, :2 * self.units]), 'preact_0')
+            x__ = self._ln(matrix_x_[:, : 2 * self.units], 'state_below_0')
+            xx__ = self._ln(matrix_x_[:, 2 * self.units:], 'state_below_1')
+            matrix_inner_ = self._ln(K.dot(h_tm1 * rec_dp_mask[0], self.recurrent1_kernel[:, :2 * self.units]), 'preact_0')
             x_z_ = x__[:, :self.units]
             x_r_ = x__[:, self.units: 2 * self.units]
         else:
@@ -3597,7 +3673,7 @@ class AttConditionalGRUCond(Recurrent):
 
         if self.layer_normalization:
             x_h_ = xx__
-            recurrent_h = self.ln(K.dot(r_ * h_tm1 * rec_dp_mask[0], self.recurrent1_kernel[:, 2 * self.units:]), 'preact_1')
+            recurrent_h = self._ln(K.dot(r_ * h_tm1 * rec_dp_mask[0], self.recurrent1_kernel[:, 2 * self.units:]), 'preact_1')
         else:
             x_h_ = matrix_x_[:, 2 * self.units:]
             recurrent_h = K.dot(r_ * h_tm1 * rec_dp_mask[0], self.recurrent1_kernel[:, 2 * self.units:])
@@ -3619,9 +3695,9 @@ class AttConditionalGRUCond(Recurrent):
         if self.use_bias:
             matrix_x = K.bias_add(matrix_x, self.bias)
         if self.layer_normalization:
-            x_ = self.ln(matrix_x[:, : 2 * self.units], 'state_below0')
-            xx_ = self.ln(matrix_x[:, 2 * self.units:], 'state_below1')
-            matrix_inner = self.ln(K.dot(h_ * rec_dp_mask[0], self.recurrent_kernel[:, :2 * self.units]), 'preact0')
+            x_ = self._ln(matrix_x[:, : 2 * self.units], 'state_below0')
+            xx_ = self._ln(matrix_x[:, 2 * self.units:], 'state_below1')
+            matrix_inner = self._ln(K.dot(h_ * rec_dp_mask[0], self.recurrent_kernel[:, :2 * self.units]), 'preact0')
             x_z = x_[:, :self.units]
             x_r = x_[:, self.units: 2 * self.units]
         else:
@@ -3635,7 +3711,7 @@ class AttConditionalGRUCond(Recurrent):
         r = self.recurrent_activation(x_r + recurrent_r)
         if self.layer_normalization:
             x_h = xx_
-            recurrent_h = self.ln(K.dot(r * h_tm1 * rec_dp_mask[0], self.recurrent_kernel[:, 2 * self.units:]), 'preact1')
+            recurrent_h = self._ln(K.dot(r * h_tm1 * rec_dp_mask[0], self.recurrent_kernel[:, 2 * self.units:]), 'preact1')
         else:
             x_h = matrix_x[:, 2 * self.units:]
             recurrent_h = K.dot(r * h_tm1 * rec_dp_mask[0],
@@ -3853,6 +3929,8 @@ class LSTMCell(Layer):
                  bias_constraint=None,
                  dropout=0.,
                  recurrent_dropout=0.,
+                 layer_normalization=False,
+                 epsilon_layer_normalization=1e-5,
                  implementation=2,
                  **kwargs):
         super(LSTMCell, self).__init__(**kwargs)
@@ -3880,6 +3958,12 @@ class LSTMCell(Layer):
         self.state_size = (self.units, self.units)
         self._dropout_mask = None
         self._recurrent_dropout_mask = None
+
+        # Layer normalization
+        self.layer_normalization = layer_normalization
+        self.gamma_init = initializers.get('ones')
+        self.beta_init = initializers.get('zeros')
+        self.epsilon_layer_normalization = epsilon_layer_normalization
 
     def build(self, input_shape):
         input_dim = input_shape[-1]
@@ -3933,6 +4017,63 @@ class LSTMCell(Layer):
             self.bias_f = None
             self.bias_c = None
             self.bias_o = None
+
+        if self.layer_normalization:
+            assert self.implementation != 1, 'Layer normalization is not implemented with implementation == 1'
+            self.gamma_state_below0 = self.add_weight(shape=(self.units,),
+                                                     name='gamma_state_below0',
+                                                     initializer=self.gamma_init)
+            self.beta_state_below0 = self.add_weight(shape=(self.units,),
+                                                     name='beta_state_below0',
+                                                     initializer=self.beta_init)
+
+            self.gamma_state_below1 = self.add_weight(shape=(self.units,),
+                                                     name='gamma_state_below1',
+                                                     initializer=self.gamma_init)
+            self.beta_state_below1 = self.add_weight(shape=(self.units,),
+                                                     name='beta_state_below1',
+                                                     initializer=self.beta_init)
+            self.gamma_state_below2 = self.add_weight(shape=(self.units,),
+                                                     name='gamma_state_below2',
+                                                     initializer=self.gamma_init)
+            self.beta_state_below2 = self.add_weight(shape=(self.units,),
+                                                     name='beta_state_below2',
+                                                     initializer=self.beta_init)
+
+            self.gamma_state_below3 = self.add_weight(shape=(self.units,),
+                                                     name='gamma_state_below3',
+                                                     initializer=self.gamma_init)
+            self.beta_state_below3 = self.add_weight(shape=(self.units,),
+                                                     name='beta_state_below3',
+                                                     initializer=self.beta_init)
+
+            self.gamma_preact0 = self.add_weight(shape=(self.units,),
+                                                     name='gamma_preact0',
+                                                     initializer=self.gamma_init)
+            self.beta_preact0 = self.add_weight(shape=(self.units,),
+                                                     name='beta_preact0',
+                                                     initializer=self.beta_init)
+
+            self.gamma_preact1 = self.add_weight(shape=(self.units,),
+                                                     name='gamma_preact1',
+                                                     initializer=self.gamma_init)
+            self.beta_preact1 = self.add_weight(shape=(self.units,),
+                                                     name='beta_preact1',
+                                                     initializer=self.beta_init)
+
+            self.gamma_preact2 = self.add_weight(shape=(self.units,),
+                                                     name='gamma_preact2',
+                                                     initializer=self.gamma_init)
+            self.beta_preact2 = self.add_weight(shape=(self.units,),
+                                                     name='beta_preact2',
+                                                     initializer=self.beta_init)
+
+            self.gamma_preact3 = self.add_weight(shape=(self.units,),
+                                                     name='gamma_preact3',
+                                                     initializer=self.gamma_init)
+            self.beta_preact3 = self.add_weight(shape=(self.units,),
+                                                     name='beta_preact3',
+                                                     initializer=self.beta_init)
         self.built = True
 
     def _generate_dropout_mask(self, inputs, training=None):
@@ -3965,6 +4106,14 @@ class LSTMCell(Layer):
                 for _ in range(4)]
         else:
             self._recurrent_dropout_mask = None
+
+    def _ln(self, x, slc):
+        # sample-wise normalization
+        m = K.mean(x, axis=-1, keepdims=True)
+        std = K.sqrt(K.var(x, axis=-1, keepdims=True) + self.epsilon_layer_normalization)
+        x_normed = (x - m) / (std + self.epsilon_layer_normalization)
+        x_normed = eval('self.gamma_' + slc) * x_normed + eval('self.beta_' + slc)
+        return x_normed
 
     def call(self, inputs, states, training=None):
         # dropout matrices for input units
@@ -4012,17 +4161,28 @@ class LSTMCell(Layer):
         else:
             if 0. < self.dropout < 1.:
                 inputs *= dp_mask[0]
-            z = K.dot(inputs, self.kernel)
+            x = K.dot(inputs, self.kernel)
+            if self.layer_normalization:
+                x0 = self._ln(x[:, :self.units], 'state_below0')
+                x1 = self._ln(x[:, self.units: 2 * self.units], 'state_below1')
+                x2 = self._ln(x[:, 2 * self.units: 3 * self.units], 'state_below2')
+                x3 = self._ln(x[:, 3 * self.units:], 'state_below3')
             if 0. < self.recurrent_dropout < 1.:
                 h_tm1 *= rec_dp_mask[0]
-            z += K.dot(h_tm1, self.recurrent_kernel)
+            z = K.dot(h_tm1, self.recurrent_kernel)
             if self.use_bias:
                 z = K.bias_add(z, self.bias)
-
-            z0 = z[:, :self.units]
-            z1 = z[:, self.units: 2 * self.units]
-            z2 = z[:, 2 * self.units: 3 * self.units]
-            z3 = z[:, 3 * self.units:]
+            if self.layer_normalization:
+                z0 = self._ln(z[:, :self.units], 'preact0') + x0
+                z1 = self._ln(z[:, self.units: 2 * self.units], 'preact1') + x1
+                z2 = self._ln(z[:, 2 * self.units: 3 * self.units], 'preact2') + x2
+                z3 = self._ln(z[:, 3 * self.units:], 'preact3') + x3
+            else:
+                z += x
+                z0 = z[:, :self.units]
+                z1 = z[:, self.units: 2 * self.units]
+                z2 = z[:, 2 * self.units: 3 * self.units]
+                z3 = z[:, 3 * self.units:]
 
             i = self.recurrent_activation(z0)
             f = self.recurrent_activation(z1)
@@ -4130,6 +4290,8 @@ class LSTM(RNN):
                  bias_constraint=None,
                  dropout=0.,
                  recurrent_dropout=0.,
+                 layer_normalization=False,
+                 epsilon_layer_normalization=1e-5,
                  implementation=2,
                  return_sequences=False,
                  return_state=False,
@@ -4168,6 +4330,8 @@ class LSTM(RNN):
                         bias_constraint=bias_constraint,
                         dropout=dropout,
                         recurrent_dropout=recurrent_dropout,
+                        layer_normalization=layer_normalization,
+                        epsilon_layer_normalization=epsilon_layer_normalization,
                         implementation=implementation)
         super(LSTM, self).__init__(cell,
                                    return_sequences=return_sequences,
@@ -4251,6 +4415,14 @@ class LSTM(RNN):
         return self.cell.recurrent_dropout
 
     @property
+    def layer_normalization(self):
+        return self.cell.layer_normalization
+
+    @property
+    def epsilon_layer_normalization(self):
+        return self.cell.epsilon_layer_normalization
+
+    @property
     def implementation(self):
         return self.cell.implementation
 
@@ -4272,6 +4444,8 @@ class LSTM(RNN):
                   'bias_constraint': constraints.serialize(self.bias_constraint),
                   'dropout': self.dropout,
                   'recurrent_dropout': self.recurrent_dropout,
+                  'layer_normalization':self.layer_normalization,
+                  'epsilon_layer_normalization':self.epsilon_layer_normalization,
                   'implementation': self.implementation}
         base_config = super(LSTM, self).get_config()
         del base_config['cell']
@@ -5387,6 +5561,7 @@ class AttLSTMCond(Recurrent):
                  conditional_dropout=0.,
                  attention_dropout=0.,
                  layer_normalization=False,
+                 epsilon_layer_normalization=1e-5,
                  num_inputs=4,
                  **kwargs):
         super(AttLSTMCond, self).__init__(**kwargs)
@@ -5446,7 +5621,7 @@ class AttLSTMCond(Recurrent):
         self.layer_normalization = layer_normalization
         self.gamma_init = initializers.get('ones')
         self.beta_init = initializers.get('zeros')
-        self.epsilon = 1e-5
+        self.epsilon_layer_normalization = epsilon_layer_normalization
 
         self.num_inputs = num_inputs
         self.input_spec = [InputSpec(ndim=3), InputSpec(ndim=3)]
@@ -5676,11 +5851,11 @@ class AttLSTMCond(Recurrent):
 
         return main_out
 
-    def ln(self, x, slc):
+    def _ln(self, x, slc):
         # sample-wise normalization
         m = K.mean(x, axis=-1, keepdims=True)
-        std = K.sqrt(K.var(x, axis=-1, keepdims=True) + self.epsilon)
-        x_normed = (x - m) / (std + self.epsilon)
+        std = K.sqrt(K.var(x, axis=-1, keepdims=True) + self.epsilon_layer_normalization)
+        x_normed = (x - m) / (std + self.epsilon_layer_normalization)
         x_normed = eval('self.gamma_' + slc) * x_normed + eval('self.beta_' + slc)
         return x_normed
 
@@ -5796,23 +5971,23 @@ class AttLSTMCond(Recurrent):
 
         if self.layer_normalization:
             ct = K.dot(ctx_ * dp_mask[0], self.kernel)
-            ct0 = self.ln(ct[:, :self.units], 'ctx0')
-            ct1 = self.ln(ct[:, self.units: 2 * self.units], 'ctx1')
-            ct2 = self.ln(ct[:, 2 * self.units: 3 * self.units], 'ctx2')
-            ct3 = self.ln(ct[:, 3 * self.units:], 'ctx3')
+            ct0 = self._ln(ct[:, :self.units], 'ctx0')
+            ct1 = self._ln(ct[:, self.units: 2 * self.units], 'ctx1')
+            ct2 = self._ln(ct[:, 2 * self.units: 3 * self.units], 'ctx2')
+            ct3 = self._ln(ct[:, 3 * self.units:], 'ctx3')
 
-            x0 = self.ln(x[:, :self.units], 'state_below0')
-            x1 = self.ln(x[:, self.units: 2 * self.units], 'state_below1')
-            x2 = self.ln(x[:, 2 * self.units: 3 * self.units], 'state_below2')
-            x3 = self.ln(x[:, 3 * self.units:], 'state_below3')
+            x0 = self._ln(x[:, :self.units], 'state_below0')
+            x1 = self._ln(x[:, self.units: 2 * self.units], 'state_below1')
+            x2 = self._ln(x[:, 2 * self.units: 3 * self.units], 'state_below2')
+            x3 = self._ln(x[:, 3 * self.units:], 'state_below3')
 
             preact = K.dot(h_tm1 * rec_dp_mask[0], self.recurrent_kernel)
             if self.use_bias:
                 preact = K.bias_add(preact, self.bias)
-            preact0 = self.ln(preact[:, :self.units], 'preact0')
-            preact1 = self.ln(preact[:, self.units: 2 * self.units], 'preact1')
-            preact2 = self.ln(preact[:, 2 * self.units: 3 * self.units], 'preact2')
-            preact3 = self.ln(preact[:, 3 * self.units:], 'preact3')
+            preact0 = self._ln(preact[:, :self.units], 'preact0')
+            preact1 = self._ln(preact[:, self.units: 2 * self.units], 'preact1')
+            preact2 = self._ln(preact[:, 2 * self.units: 3 * self.units], 'preact2')
+            preact3 = self._ln(preact[:, 3 * self.units:], 'preact3')
             z0 = ct0 + x0 + preact0
             z1 = ct1 + x1 + preact1
             z2 = ct2 + x2 + preact2
@@ -6103,6 +6278,7 @@ class AttConditionalLSTMCond(Recurrent):
                  conditional_dropout=0.,
                  attention_dropout=0.,
                  layer_normalization=False,
+                 epsilon_layer_normalization=1e-5,
                  num_inputs=4,
                  **kwargs):
         super(AttConditionalLSTMCond, self).__init__(**kwargs)
@@ -6169,7 +6345,7 @@ class AttConditionalLSTMCond(Recurrent):
         self.layer_normalization = layer_normalization
         self.gamma_init = initializers.get('ones')
         self.beta_init = initializers.get('zeros')
-        self.epsilon = 1e-5
+        self.epsilon_layer_normalization = epsilon_layer_normalization
 
         self.num_inputs = num_inputs
         self.input_spec = [InputSpec(ndim=3), InputSpec(ndim=3)]
@@ -6454,11 +6630,11 @@ class AttConditionalLSTMCond(Recurrent):
 
         return main_out
 
-    def ln(self, x, slc):
+    def _ln(self, x, slc):
         # sample-wise normalization
         m = K.mean(x, axis=-1, keepdims=True)
-        std = K.sqrt(K.var(x, axis=-1, keepdims=True) + self.epsilon)
-        x_normed = (x - m) / (std + self.epsilon)
+        std = K.sqrt(K.var(x, axis=-1, keepdims=True) + self.epsilon_layer_normalization)
+        x_normed = (x - m) / (std + self.epsilon_layer_normalization)
         x_normed = eval('self.gamma_' + slc) * x_normed + eval('self.beta_' + slc)
         return x_normed
 
@@ -6563,18 +6739,18 @@ class AttConditionalLSTMCond(Recurrent):
 
         # LSTM_1
         if self.layer_normalization:
-            x0 = self.ln(x[:, :self.units], 'state_below0')
-            x1 = self.ln(x[:, self.units: 2 * self.units], 'state_below1')
-            x2 = self.ln(x[:, 2 * self.units: 3 * self.units], 'state_below2')
-            x3 = self.ln(x[:, 3 * self.units:], 'state_below3')
+            x0 = self._ln(x[:, :self.units], 'state_below0')
+            x1 = self._ln(x[:, self.units: 2 * self.units], 'state_below1')
+            x2 = self._ln(x[:, 2 * self.units: 3 * self.units], 'state_below2')
+            x3 = self._ln(x[:, 3 * self.units:], 'state_below3')
 
             preact_ = K.dot(h_tm1 * rec_dp_mask[0], self.recurrent1_kernel)
             if self.use_bias:
                 preact_ = K.bias_add(preact_, self.bias1)
-            preact_0 = self.ln(preact_[:, :self.units], 'preact_0')
-            preact_1 = self.ln(preact_[:, self.units: 2 * self.units], 'preact_1')
-            preact_2 = self.ln(preact_[:, 2 * self.units: 3 * self.units], 'preact_2')
-            preact_3 = self.ln(preact_[:, 3 * self.units:], 'preact_3')
+            preact_0 = self._ln(preact_[:, :self.units], 'preact_0')
+            preact_1 = self._ln(preact_[:, self.units: 2 * self.units], 'preact_1')
+            preact_2 = self._ln(preact_[:, 2 * self.units: 3 * self.units], 'preact_2')
+            preact_3 = self._ln(preact_[:, 3 * self.units:], 'preact_3')
             z_0 = x0 + preact_0
             z_1 = x1 + preact_1
             z_2 = x2 + preact_2
@@ -6608,18 +6784,18 @@ class AttConditionalLSTMCond(Recurrent):
         # LSTM_2
         if self.layer_normalization:
             ct = K.dot(ctx_ * ctx_dp_mask[0], self.kernel)
-            ct0 = self.ln(ct[:, :self.units], 'ctx0')
-            ct1 = self.ln(ct[:, self.units: 2 * self.units], 'ctx1')
-            ct2 = self.ln(ct[:, 2 * self.units: 3 * self.units], 'ctx2')
-            ct3 = self.ln(ct[:, 3 * self.units:], 'ctx3')
+            ct0 = self._ln(ct[:, :self.units], 'ctx0')
+            ct1 = self._ln(ct[:, self.units: 2 * self.units], 'ctx1')
+            ct2 = self._ln(ct[:, 2 * self.units: 3 * self.units], 'ctx2')
+            ct3 = self._ln(ct[:, 3 * self.units:], 'ctx3')
 
             preact = K.dot(h_ * rec_dp_mask[0], self.recurrent_kernel)
             if self.use_bias:
                 preact = K.bias_add(preact, self.bias)
-            preact0 = self.ln(preact[:, :self.units], 'preact0')
-            preact1 = self.ln(preact[:, self.units: 2 * self.units], 'preact1')
-            preact2 = self.ln(preact[:, 2 * self.units: 3 * self.units], 'preact2')
-            preact3 = self.ln(preact[:, 3 * self.units:], 'preact3')
+            preact0 = self._ln(preact[:, :self.units], 'preact0')
+            preact1 = self._ln(preact[:, self.units: 2 * self.units], 'preact1')
+            preact2 = self._ln(preact[:, 2 * self.units: 3 * self.units], 'preact2')
+            preact3 = self._ln(preact[:, 3 * self.units:], 'preact3')
             z0 = ct0 + preact0
             z1 = ct1 + preact1
             z2 = ct2 + preact2
