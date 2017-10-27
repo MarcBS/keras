@@ -129,6 +129,9 @@ class Optimizer(object):
             weight_value_tuples.append((p, w))
         K.batch_set_value(weight_value_tuples)
 
+    def set_lr(self, lr):
+        K.set_value(self.lr, lr)
+
     def get_weights(self):
         """Returns the current value of the weights of the optimizer.
 

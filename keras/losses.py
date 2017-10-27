@@ -79,10 +79,15 @@ def log_diff(args):
     :param args: y_pred, y_true, h_pred, h_true
     :return:
     """
-    y_pred, y_true, h_pred, h_true = args
-    p_y_x = K.mean(K.categorical_crossentropy(y_true, y_pred ))
+    y_true, y_pred, h_true, h_pred = args
+    p_y_x = K.mean(K.categorical_crossentropy(y_true, y_pred))
     p_h_x = K.mean(K.categorical_crossentropy(h_true, h_pred))
     return p_y_x - p_h_x
+
+
+def linear_interpolation_categorical_crossentropy(args):
+    y_true, y_pred, additional_metric, weight = args
+    return K.mean(K.categorical_crossentropy(y_true, y_pred)) + weight * additional_metric
 
 
 def y_true(y_true, y_pred):
@@ -93,6 +98,35 @@ def y_true(y_true, y_pred):
     :return:
     """
     return y_true
+
+
+def nce_correct_prob(y_pred, y_noise):
+    """
+    p(correct| x, y) used in NCE.
+    :param y_pred: Model distribution (p_m(y|x; \theta))
+    :param y_noise: Noisy distribution (p_n(y|x))
+    :return: Probability that a given example is predicted to be a correct training (p(correct|x, y))
+    """
+    return y_pred / (y_pred + y_noise)
+
+
+def noise_contrastive_loss(args):
+    """
+    :param y_distribution:
+    :param y_noise:
+    :return:
+    """
+    #TODO: We are assuming that |U_t| == |U_n|
+    pred_true_model, y_true_model, pred_noise_model, y_true_noise_model = args
+    y_distribution_pred = K.mean(K.categorical_crossentropy(y_true_model, pred_true_model))
+    y_distribution_noise = K.mean(K.categorical_crossentropy(y_true_model, pred_noise_model))
+
+    y_noise_pred = K.mean(K.categorical_crossentropy(y_true_noise_model, pred_true_model))
+    y_noise_noise = K.mean(K.categorical_crossentropy(y_true_noise_model, pred_noise_model))
+
+    return K.mean(K.log(nce_correct_prob(y_distribution_pred, y_distribution_noise))) +\
+           K.mean(K.log(1 - nce_correct_prob(y_noise_pred, y_noise_noise)))
+
 
 
 # Aliases.

@@ -266,7 +266,8 @@ def _check_loss_and_target_compatibility(targets, loss_fns, output_shapes):
     """
     key_losses = {'mean_squared_error',
                   'binary_crossentropy',
-                  'categorical_crossentropy'}
+                  'categorical_crossentropy',
+                  'linear_interpolation_categorical_crossentropy'}
     for y, loss, shape in zip(targets, loss_fns, output_shapes):
         if loss is None:
             continue

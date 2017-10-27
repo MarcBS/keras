@@ -419,6 +419,11 @@ def he_uniform(seed=None):
                            distribution='uniform',
                            seed=seed)
 
+ # Layer normalization
+def gamma_init_func(shape, c=1, **kwargs):
+    if c == 1.:
+        return ones()(shape, kwargs)
+    return K.variable(np.ones(shape) * c, **kwargs)
 
 # Compatibility aliases
 
