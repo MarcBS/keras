@@ -2111,7 +2111,7 @@ class AttGRU(Recurrent):
 
     def build(self, input_shape):
 
-        assert len(input_shape) >= 2, 'You should pass two inputs to AttLSTMCond ' \
+        assert len(input_shape) >= 2, 'You should pass two inputs to AttGRU ' \
                                       '(previous_embedded_words and context) ' \
                                       'and two optional inputs (init_state and init_memory)'
         self.input_dim = input_shape[0][2]
@@ -2637,7 +2637,7 @@ class AttGRUCond(Recurrent):
 
     def build(self, input_shape):
 
-        assert len(input_shape) >= 2, 'You should pass two inputs to AttLSTMCond ' \
+        assert len(input_shape) >= 2, 'You should pass two inputs to AttGRUCond ' \
                                       '(previous_embedded_words and context) ' \
                                       'and two optional inputs (init_state and init_memory)'
         self.input_dim = input_shape[0][2]
@@ -3208,7 +3208,7 @@ class AttConditionalGRUCond(Recurrent):
 
     def build(self, input_shape):
 
-        assert len(input_shape) >= 2, 'You should pass two inputs to AttLSTMCond ' \
+        assert len(input_shape) >= 2, 'You should pass two inputs to AttConditionalGRUCond ' \
                                       '(previous_embedded_words and context) ' \
                                       'and two optional inputs (init_state and init_memory)'
         self.input_dim = input_shape[0][2]
@@ -4748,7 +4748,7 @@ class AttLSTM(Recurrent):
 
     def build(self, input_shape):
 
-        assert len(input_shape) >= 2, 'You should pass two inputs to AttLSTMCond ' \
+        assert len(input_shape) >= 2, 'You should pass two inputs to AttLSTM ' \
                                       '(previous_embedded_words and context) ' \
                                       'and two optional inputs (init_state and init_memory)'
         self.input_dim = input_shape[0][2]
@@ -5228,6 +5228,7 @@ class AttLSTMCond(Recurrent):
                  recurrent_dropout=0.,
                  conditional_dropout=0.,
                  attention_dropout=0.,
+                 layer_normalization=False,
                  num_inputs=4,
                  **kwargs):
         super(AttLSTMCond, self).__init__(**kwargs)
@@ -5282,6 +5283,13 @@ class AttLSTMCond(Recurrent):
         self.recurrent_dropout = min(1., max(0., recurrent_dropout))
         self.conditional_dropout = min(1., max(0., conditional_dropout))
         self.attention_dropout = min(1., max(0., attention_dropout))
+
+        # Layer normalization
+        self.layer_normalization = layer_normalization
+        self.gamma_init = initializers.get('ones')
+        self.beta_init = initializers.get('zeros')
+        self.epsilon = 1e-5
+
         self.num_inputs = num_inputs
         self.input_spec = [InputSpec(ndim=3), InputSpec(ndim=3)]
         for _ in range(len(self.input_spec), self.num_inputs):
@@ -5369,6 +5377,95 @@ class AttLSTMCond(Recurrent):
                                        initializer=self.bias_ca_initializer,
                                        regularizer=self.bias_ca_regularizer,
                                        constraint=self.bias_ca_constraint)
+
+        if self.layer_normalization:
+            self.gamma_state_below0 = self.add_weight(shape=(self.units,),
+                                                     name='gamma_state_below0',
+                                                     initializer=self.gamma_init)
+            self.beta_state_below0 = self.add_weight(shape=(self.units,),
+                                                     name='beta_state_below0',
+                                                     initializer=self.beta_init)
+
+            self.gamma_state_below1 = self.add_weight(shape=(self.units,),
+                                                     name='gamma_state_below1',
+                                                     initializer=self.gamma_init)
+            self.beta_state_below1 = self.add_weight(shape=(self.units,),
+                                                     name='beta_state_below1',
+                                                     initializer=self.beta_init)
+
+            self.gamma_state_below2 = self.add_weight(shape=(self.units,),
+                                                     name='gamma_state_below2',
+                                                     initializer=self.gamma_init)
+            self.beta_state_below2 = self.add_weight(shape=(self.units,),
+                                                     name='beta_state_below2',
+                                                     initializer=self.beta_init)
+
+            self.gamma_state_below3 = self.add_weight(shape=(self.units,),
+                                                     name='gamma_state_below3',
+                                                     initializer=self.gamma_init)
+            self.beta_state_below3 = self.add_weight(shape=(self.units,),
+                                                     name='beta_state_below3',
+                                                     initializer=self.beta_init)
+
+
+            self.gamma_ctx0 = self.add_weight(shape=(self.units,),
+                                                     name='gamma_ctx0',
+                                                     initializer=self.gamma_init)
+            self.beta_ctx0 = self.add_weight(shape=(self.units,),
+                                                     name='beta_ctx0',
+                                                     initializer=self.beta_init)
+
+            self.gamma_ctx1 = self.add_weight(shape=(self.units,),
+                                                     name='gamma_ctx1',
+                                                     initializer=self.gamma_init)
+            self.beta_ctx1 = self.add_weight(shape=(self.units,),
+                                                     name='beta_ctx1',
+                                                     initializer=self.beta_init)
+
+
+            self.gamma_ctx2 = self.add_weight(shape=(self.units,),
+                                                     name='gamma_ctx2',
+                                                     initializer=self.gamma_init)
+            self.beta_ctx2 = self.add_weight(shape=(self.units,),
+                                                     name='beta_ctx2',
+                                                     initializer=self.beta_init)
+
+            self.gamma_ctx3 = self.add_weight(shape=(self.units,),
+                                                     name='gamma_ctx3',
+                                                     initializer=self.gamma_init)
+            self.beta_ctx3 = self.add_weight(shape=(self.units,),
+                                                     name='beta_ctx3',
+                                                     initializer=self.beta_init)
+
+
+            self.gamma_preact0 = self.add_weight(shape=(self.units,),
+                                                     name='gamma_preact0',
+                                                     initializer=self.gamma_init)
+            self.beta_preact0 = self.add_weight(shape=(self.units,),
+                                                     name='beta_preact0',
+                                                     initializer=self.beta_init)
+
+            self.gamma_preact1 = self.add_weight(shape=(self.units,),
+                                                     name='gamma_preact1',
+                                                     initializer=self.gamma_init)
+            self.beta_preact1 = self.add_weight(shape=(self.units,),
+                                                     name='beta_preact1',
+                                                     initializer=self.beta_init)
+
+            self.gamma_preact2 = self.add_weight(shape=(self.units,),
+                                                     name='gamma_preact2',
+                                                     initializer=self.gamma_init)
+            self.beta_preact2 = self.add_weight(shape=(self.units,),
+                                                     name='beta_preact2',
+                                                     initializer=self.beta_init)
+
+            self.gamma_preact3 = self.add_weight(shape=(self.units,),
+                                                     name='gamma_preact3',
+                                                     initializer=self.gamma_init)
+            self.beta_preact3 = self.add_weight(shape=(self.units,),
+                                                     name='beta_preact3',
+                                                     initializer=self.beta_init)
+
         self.built = True
 
     def reset_states(self, states=None):
@@ -5420,6 +5517,14 @@ class AttLSTMCond(Recurrent):
             main_out += [states_dim, states_dim]
 
         return main_out
+
+    def ln(self, x, slc):
+        # sample-wise normalization
+        m = K.mean(x, axis=-1, keepdims=True)
+        std = K.sqrt(K.var(x, axis=-1, keepdims=True) + self.epsilon)
+        x_normed = (x - m) / (std + self.epsilon)
+        x_normed = eval('self.gamma_' + slc) * x_normed + eval('self.beta_' + slc)
+        return x_normed
 
     def call(self, x, mask=None, training=None, initial_state=None):
         # input shape: (nb_samples, time (padded with zeros), input_dim)
@@ -5531,16 +5636,41 @@ class AttLSTMCond(Recurrent):
         # sum over the in_timesteps dimension resulting in [batch_size, input_dim]
         ctx_ = (context * alphas[:, :, None]).sum(axis=1)
 
-        # LSTM
-        z = x + \
-            K.dot(h_tm1 * rec_dp_mask[0], self.recurrent_kernel) + \
-            K.dot(ctx_ * dp_mask[0], self.kernel)
-        if self.use_bias:
-            z = K.bias_add(z, self.bias)
-        z0 = z[:, :self.units]
-        z1 = z[:, self.units: 2 * self.units]
-        z2 = z[:, 2 * self.units: 3 * self.units]
-        z3 = z[:, 3 * self.units:]
+        if self.layer_normalization:
+            ct = K.dot(ctx_ * dp_mask[0], self.kernel)
+            ct0 = self.ln(ct[:, :self.units], 'ctx0')
+            ct1 = self.ln(ct[:, self.units: 2 * self.units], 'ctx1')
+            ct2 = self.ln(ct[:, 2 * self.units: 3 * self.units], 'ctx2')
+            ct3 = self.ln(ct[:, 3 * self.units:], 'ctx3')
+
+            x0 = self.ln(x[:, :self.units], 'state_below0')
+            x1 = self.ln(x[:, self.units: 2 * self.units], 'state_below1')
+            x2 = self.ln(x[:, 2 * self.units: 3 * self.units], 'state_below2')
+            x3 = self.ln(x[:, 3 * self.units:], 'state_below3')
+
+            preact = K.dot(h_tm1 * rec_dp_mask[0], self.recurrent_kernel)
+            if self.use_bias:
+                preact = K.bias_add(preact, self.bias)
+            preact0 = self.ln(preact[:, :self.units], 'preact0')
+            preact1 = self.ln(preact[:, self.units: 2 * self.units], 'preact1')
+            preact2 = self.ln(preact[:, 2 * self.units: 3 * self.units], 'preact2')
+            preact3 = self.ln(preact[:, 3 * self.units:], 'preact3')
+            z0 = ct0 + x0 + preact0
+            z1 = ct1 + x1 + preact1
+            z2 = ct2 + x2 + preact2
+            z3 = ct3 + x3 + preact3
+        else:
+            # LSTM
+            z = x + \
+                K.dot(ctx_ * dp_mask[0], self.kernel) +\
+                K.dot(h_tm1 * rec_dp_mask[0], self.recurrent_kernel)
+
+            if self.use_bias:
+                z = K.bias_add(z, self.bias)
+            z0 = z[:, :self.units]
+            z1 = z[:, self.units: 2 * self.units]
+            z2 = z[:, 2 * self.units: 3 * self.units]
+            z3 = z[:, 3 * self.units:]
         i = self.recurrent_activation(z0)
         f = self.recurrent_activation(z1)
         o = self.recurrent_activation(z3)
@@ -5687,8 +5817,8 @@ class AttLSTMCond(Recurrent):
                   'recurrent_dropout': self.recurrent_dropout,
                   'conditional_dropout': self.conditional_dropout,
                   'attention_dropout': self.attention_dropout,
+                  'layer_normalization': self.layer_normalization,
                   'num_inputs': self.num_inputs,
-                  #'input_spec': self.input_spec
                   }
         base_config = super(AttLSTMCond, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
@@ -5814,6 +5944,7 @@ class AttConditionalLSTMCond(Recurrent):
                  recurrent_dropout=0.,
                  conditional_dropout=0.,
                  attention_dropout=0.,
+                 layer_normalization=False,
                  num_inputs=4,
                  **kwargs):
         super(AttConditionalLSTMCond, self).__init__(**kwargs)
@@ -5875,6 +6006,13 @@ class AttConditionalLSTMCond(Recurrent):
         self.recurrent_dropout = min(1., max(0., recurrent_dropout))
         self.conditional_dropout = min(1., max(0., conditional_dropout))
         self.attention_dropout = min(1., max(0., attention_dropout))
+
+        # Layer normalization
+        self.layer_normalization = layer_normalization
+        self.gamma_init = initializers.get('ones')
+        self.beta_init = initializers.get('zeros')
+        self.epsilon = 1e-5
+
         self.num_inputs = num_inputs
         self.input_spec = [InputSpec(ndim=3), InputSpec(ndim=3)]
         for _ in range(len(self.input_spec), self.num_inputs):
@@ -5988,6 +6126,124 @@ class AttConditionalLSTMCond(Recurrent):
             self.bias_ba = None
             self.bias_ca = None
 
+
+        if self.layer_normalization:
+
+            self.gamma_state_below0 = self.add_weight(shape=(self.units,),
+                                                     name='gamma_state_below0',
+                                                     initializer=self.gamma_init)
+            self.beta_state_below0 = self.add_weight(shape=(self.units,),
+                                                     name='beta_state_below0',
+                                                     initializer=self.beta_init)
+
+            self.gamma_state_below1 = self.add_weight(shape=(self.units,),
+                                                     name='gamma_state_below1',
+                                                     initializer=self.gamma_init)
+            self.beta_state_below1 = self.add_weight(shape=(self.units,),
+                                                     name='beta_state_below1',
+                                                     initializer=self.beta_init)
+
+            self.gamma_state_below2 = self.add_weight(shape=(self.units,),
+                                                     name='gamma_state_below2',
+                                                     initializer=self.gamma_init)
+            self.beta_state_below2 = self.add_weight(shape=(self.units,),
+                                                     name='beta_state_below2',
+                                                     initializer=self.beta_init)
+
+            self.gamma_state_below3 = self.add_weight(shape=(self.units,),
+                                                     name='gamma_state_below3',
+                                                     initializer=self.gamma_init)
+            self.beta_state_below3 = self.add_weight(shape=(self.units,),
+                                                     name='beta_state_below3',
+                                                     initializer=self.beta_init)
+
+
+            self.gamma_ctx0 = self.add_weight(shape=(self.units,),
+                                                     name='gamma_ctx0',
+                                                     initializer=self.gamma_init)
+            self.beta_ctx0 = self.add_weight(shape=(self.units,),
+                                                     name='beta_ctx0',
+                                                     initializer=self.beta_init)
+
+            self.gamma_ctx1 = self.add_weight(shape=(self.units,),
+                                                     name='gamma_ctx1',
+                                                     initializer=self.gamma_init)
+            self.beta_ctx1 = self.add_weight(shape=(self.units,),
+                                                     name='beta_ctx1',
+                                                     initializer=self.beta_init)
+
+
+            self.gamma_ctx2 = self.add_weight(shape=(self.units,),
+                                                     name='gamma_ctx2',
+                                                     initializer=self.gamma_init)
+            self.beta_ctx2 = self.add_weight(shape=(self.units,),
+                                                     name='beta_ctx2',
+                                                     initializer=self.beta_init)
+
+            self.gamma_ctx3 = self.add_weight(shape=(self.units,),
+                                                     name='gamma_ctx3',
+                                                     initializer=self.gamma_init)
+            self.beta_ctx3 = self.add_weight(shape=(self.units,),
+                                                     name='beta_ctx3',
+                                                     initializer=self.beta_init)
+
+            self.gamma_preact0 = self.add_weight(shape=(self.units,),
+                                                     name='gamma_preact0',
+                                                     initializer=self.gamma_init)
+            self.beta_preact0 = self.add_weight(shape=(self.units,),
+                                                     name='beta_preact0',
+                                                     initializer=self.beta_init)
+
+            self.gamma_preact1 = self.add_weight(shape=(self.units,),
+                                                     name='gamma_preact1',
+                                                     initializer=self.gamma_init)
+            self.beta_preact1 = self.add_weight(shape=(self.units,),
+                                                     name='beta_preact1',
+                                                     initializer=self.beta_init)
+
+            self.gamma_preact2 = self.add_weight(shape=(self.units,),
+                                                     name='gamma_preact2',
+                                                     initializer=self.gamma_init)
+            self.beta_preact2 = self.add_weight(shape=(self.units,),
+                                                     name='beta_preact2',
+                                                     initializer=self.beta_init)
+
+            self.gamma_preact3 = self.add_weight(shape=(self.units,),
+                                                     name='gamma_preact3',
+                                                     initializer=self.gamma_init)
+            self.beta_preact3 = self.add_weight(shape=(self.units,),
+                                                     name='beta_preact3',
+                                                     initializer=self.beta_init)
+
+            self.gamma_preact_0 = self.add_weight(shape=(self.units,),
+                                                     name='gamma_preact_0',
+                                                     initializer=self.gamma_init)
+            self.beta_preact_0 = self.add_weight(shape=(self.units,),
+                                                     name='beta_preact_0',
+                                                     initializer=self.beta_init)
+
+            self.gamma_preact_1 = self.add_weight(shape=(self.units,),
+                                                     name='gamma_preact_1',
+                                                     initializer=self.gamma_init)
+            self.beta_preact_1 = self.add_weight(shape=(self.units,),
+                                                     name='beta_preact_1',
+                                                     initializer=self.beta_init)
+
+            self.gamma_preact_2 = self.add_weight(shape=(self.units,),
+                                                     name='gamma_preact_2',
+                                                     initializer=self.gamma_init)
+            self.beta_preact_2 = self.add_weight(shape=(self.units,),
+                                                     name='beta_preact_2',
+                                                     initializer=self.beta_init)
+
+            self.gamma_preact_3 = self.add_weight(shape=(self.units,),
+                                                     name='gamma_preact_3',
+                                                     initializer=self.gamma_init)
+            self.beta_preact_3 = self.add_weight(shape=(self.units,),
+                                                     name='beta_preact_3',
+                                                     initializer=self.beta_init)
+
+
         self.built = True
 
     def reset_states(self, states=None):
@@ -6039,6 +6295,14 @@ class AttConditionalLSTMCond(Recurrent):
             main_out += [states_dim, states_dim]
 
         return main_out
+
+    def ln(self, x, slc):
+        # sample-wise normalization
+        m = K.mean(x, axis=-1, keepdims=True)
+        std = K.sqrt(K.var(x, axis=-1, keepdims=True) + self.epsilon)
+        x_normed = (x - m) / (std + self.epsilon)
+        x_normed = eval('self.gamma_' + slc) * x_normed + eval('self.beta_' + slc)
+        return x_normed
 
     def call(self, x, mask=None, training=None, initial_state=None):
         # input shape: (nb_samples, time (padded with zeros), input_dim)
@@ -6140,13 +6404,32 @@ class AttConditionalLSTMCond(Recurrent):
             context = mask_context[:, :, None] * context
 
         # LSTM_1
-        z_ = x + K.dot(h_tm1 * rec_dp_mask[0], self.recurrent1_kernel)
-        if self.use_bias:
-            z_ = K.bias_add(z_, self.bias1)
-        z_0 = z_[:, :self.units]
-        z_1 = z_[:, self.units: 2 * self.units]
-        z_2 = z_[:, 2 * self.units: 3 * self.units]
-        z_3 = z_[:, 3 * self.units:]
+        if self.layer_normalization:
+            x0 = self.ln(x[:, :self.units], 'state_below0')
+            x1 = self.ln(x[:, self.units: 2 * self.units], 'state_below1')
+            x2 = self.ln(x[:, 2 * self.units: 3 * self.units], 'state_below2')
+            x3 = self.ln(x[:, 3 * self.units:], 'state_below3')
+
+            preact_ = K.dot(h_tm1 * rec_dp_mask[0], self.recurrent1_kernel)
+            if self.use_bias:
+                preact_ = K.bias_add(preact_, self.bias1)
+            preact_0 = self.ln(preact_[:, :self.units], 'preact_0')
+            preact_1 = self.ln(preact_[:, self.units: 2 * self.units], 'preact_1')
+            preact_2 = self.ln(preact_[:, 2 * self.units: 3 * self.units], 'preact_2')
+            preact_3 = self.ln(preact_[:, 3 * self.units:], 'preact_3')
+            z_0 = x0 + preact_0
+            z_1 = x1 + preact_1
+            z_2 = x2 + preact_2
+            z_3 = x3 + preact_3
+        else:
+            z_ = x + K.dot(h_tm1 * rec_dp_mask[0], self.recurrent1_kernel)
+            if self.use_bias:
+                z_ = K.bias_add(z_, self.bias1)
+            z_0 = z_[:, :self.units]
+            z_1 = z_[:, self.units: 2 * self.units]
+            z_2 = z_[:, 2 * self.units: 3 * self.units]
+            z_3 = z_[:, 3 * self.units:]
+
         i_ = self.recurrent_activation(z_0)
         f_ = self.recurrent_activation(z_1)
         o_ = self.recurrent_activation(z_3)
@@ -6164,15 +6447,34 @@ class AttConditionalLSTMCond(Recurrent):
         # sum over the in_timesteps dimension resulting in [batch_size, input_dim]
         ctx_ = (context * alphas[:, :, None]).sum(axis=1)
 
-        # LSTM
-        z = K.dot(h_ * rec_dp_mask[0], self.recurrent_kernel) + \
-            K.dot(ctx_ * ctx_dp_mask[0], self.kernel)
-        if self.use_bias:
-            z = K.bias_add(z, self.bias)
-        z0 = z[:, :self.units]
-        z1 = z[:, self.units: 2 * self.units]
-        z2 = z[:, 2 * self.units: 3 * self.units]
-        z3 = z[:, 3 * self.units:]
+        # LSTM_2
+        if self.layer_normalization:
+            ct = K.dot(ctx_ * ctx_dp_mask[0], self.kernel)
+            ct0 = self.ln(ct[:, :self.units], 'ctx0')
+            ct1 = self.ln(ct[:, self.units: 2 * self.units], 'ctx1')
+            ct2 = self.ln(ct[:, 2 * self.units: 3 * self.units], 'ctx2')
+            ct3 = self.ln(ct[:, 3 * self.units:], 'ctx3')
+
+            preact = K.dot(h_ * rec_dp_mask[0], self.recurrent_kernel)
+            if self.use_bias:
+                preact = K.bias_add(preact, self.bias)
+            preact0 = self.ln(preact[:, :self.units], 'preact0')
+            preact1 = self.ln(preact[:, self.units: 2 * self.units], 'preact1')
+            preact2 = self.ln(preact[:, 2 * self.units: 3 * self.units], 'preact2')
+            preact3 = self.ln(preact[:, 3 * self.units:], 'preact3')
+            z0 = ct0 + preact0
+            z1 = ct1 + preact1
+            z2 = ct2 + preact2
+            z3 = ct3 + preact3
+        else:
+            z = K.dot(h_ * rec_dp_mask[0], self.recurrent_kernel) + \
+                K.dot(ctx_ * ctx_dp_mask[0], self.kernel)
+            if self.use_bias:
+                z = K.bias_add(z, self.bias)
+            z0 = z[:, :self.units]
+            z1 = z[:, self.units: 2 * self.units]
+            z2 = z[:, 2 * self.units: 3 * self.units]
+            z3 = z[:, 3 * self.units:]
         i = self.recurrent_activation(z0)
         f = self.recurrent_activation(z1)
         o = self.recurrent_activation(z3)
@@ -6317,6 +6619,7 @@ class AttConditionalLSTMCond(Recurrent):
                   'recurrent_dropout': self.recurrent_dropout,
                   'conditional_dropout': self.conditional_dropout,
                   'attention_dropout': self.attention_dropout,
+                  'layer_normalization': self.layer_normalization,
                   'mask_value': self.mask_value
                   }
         base_config = super(AttConditionalLSTMCond, self).get_config()
