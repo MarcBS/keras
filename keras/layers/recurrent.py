@@ -2578,6 +2578,7 @@ class AttGRUCond(Recurrent):
                  conditional_dropout=0.,
                  attention_dropout=0.,
                  num_inputs=3,
+                 layer_normalization=False,
                  **kwargs):
         super(AttGRUCond, self).__init__(**kwargs)
         self.return_extra_variables = return_extra_variables
@@ -2630,6 +2631,13 @@ class AttGRUCond(Recurrent):
         self.recurrent_dropout = min(1., max(0., recurrent_dropout))
         self.conditional_dropout = min(1., max(0., conditional_dropout))
         self.attention_dropout = min(1., max(0., attention_dropout))
+
+        # Layer normalization
+        self.layer_normalization = layer_normalization
+        self.gamma_init = initializers.get('ones')
+        self.beta_init = initializers.get('zeros')
+        self.epsilon = 1e-5
+
         self.num_inputs = num_inputs
         self.input_spec = [InputSpec(ndim=3), InputSpec(ndim=3)]
         for _ in range(len(self.input_spec), self.num_inputs):
@@ -2711,6 +2719,37 @@ class AttGRUCond(Recurrent):
                                        initializer=self.bias_ca_initializer,
                                        regularizer=self.bias_ca_regularizer,
                                        constraint=self.bias_ca_constraint)
+
+
+        if self.layer_normalization:
+            self.gamma_state_below0 = self.add_weight(shape=(2*self.units,),
+                                                     name='gamma_state_below0',
+                                                     initializer=self.gamma_init)
+            self.beta_state_below0 = self.add_weight(shape=(2*self.units,),
+                                                     name='beta_state_below0',
+                                                     initializer=self.beta_init)
+
+            self.gamma_state_below1 = self.add_weight(shape=(self.units,),
+                                                     name='gamma_state_below1',
+                                                     initializer=self.gamma_init)
+            self.beta_state_below1 = self.add_weight(shape=(self.units,),
+                                                     name='beta_state_below1',
+                                                     initializer=self.beta_init)
+
+            self.gamma_preact0 = self.add_weight(shape=(2*self.units,),
+                                                     name='gamma_preact0',
+                                                     initializer=self.gamma_init)
+            self.beta_preact0 = self.add_weight(shape=(2*self.units,),
+                                                     name='beta_preact0',
+                                                     initializer=self.beta_init)
+
+            self.gamma_preact1 = self.add_weight(shape=(self.units,),
+                                                     name='gamma_preact1',
+                                                     initializer=self.gamma_init)
+            self.beta_preact1 = self.add_weight(shape=(self.units,),
+                                                     name='beta_preact1',
+                                                     initializer=self.beta_init)
+
         self.built = True
 
     def reset_states(self, states=None):
@@ -2761,6 +2800,14 @@ class AttGRUCond(Recurrent):
             main_out += [states_dim]
 
         return main_out
+
+    def ln(self, x, slc):
+        # sample-wise normalization
+        m = K.mean(x, axis=-1, keepdims=True)
+        std = K.sqrt(K.var(x, axis=-1, keepdims=True) + self.epsilon)
+        x_normed = (x - m) / (std + self.epsilon)
+        x_normed = eval('self.gamma_' + slc) * x_normed + eval('self.beta_' + slc)
+        return x_normed
 
     def call(self, x, mask=None, training=None, initial_state=None):
         # input shape: (nb_samples, time (padded with zeros), input_dim)
@@ -2867,23 +2914,34 @@ class AttGRUCond(Recurrent):
         alphas = K.softmax(e.reshape([alphas_shape[0], alphas_shape[1]]))
         # sum over the in_timesteps dimension resulting in [batch_size, input_dim]
         ctx_ = (context * alphas[:, :, None]).sum(axis=1)
-
         matrix_x = x + K.dot(ctx_ * dp_mask[0], self.kernel)
+
         if self.use_bias:
             matrix_x = K.bias_add(matrix_x, self.bias)
-        matrix_inner = K.dot(h_tm1 * rec_dp_mask[0], self.recurrent_kernel[:, :2 * self.units])
 
-        x_z = matrix_x[:, :self.units]
-        x_r = matrix_x[:, self.units: 2 * self.units]
+        if self.layer_normalization:
+            x_ = self.ln(matrix_x[:, : 2 * self.units], 'state_below0')
+            xx_ = self.ln(matrix_x[:, 2 * self.units:], 'state_below1')
+            matrix_inner = self.ln(K.dot(h_tm1 * rec_dp_mask[0], self.recurrent_kernel[:, :2 * self.units]), 'preact0')
+            x_z = x_[:, :self.units]
+            x_r = x_[:, self.units: 2 * self.units]
+        else:
+            matrix_inner = K.dot(h_tm1 * rec_dp_mask[0], self.recurrent_kernel[:, :2 * self.units])
+            x_z = matrix_x[:, :self.units]
+            x_r = matrix_x[:, self.units: 2 * self.units]
+
         recurrent_z = matrix_inner[:, :self.units]
         recurrent_r = matrix_inner[:, self.units: 2 * self.units]
 
         z = self.recurrent_activation(x_z + recurrent_z)
         r = self.recurrent_activation(x_r + recurrent_r)
-
-        x_h = matrix_x[:, 2 * self.units:]
-        recurrent_h = K.dot(r * h_tm1 * rec_dp_mask[0],
-                            self.recurrent_kernel[:, 2 * self.units:])
+        if self.layer_normalization:
+            x_h = xx_
+            recurrent_h = self.ln(K.dot(r * h_tm1 * rec_dp_mask[0], self.recurrent_kernel[:, 2 * self.units:]), 'preact1')
+        else:
+            x_h = matrix_x[:, 2 * self.units:]
+            recurrent_h = K.dot(r * h_tm1 * rec_dp_mask[0],
+                                self.recurrent_kernel[:, 2 * self.units:])
         hh = self.activation(x_h + recurrent_h)
         h = z * h_tm1 + (1 - z) * hh
         if 0 < self.dropout + self.recurrent_dropout:
@@ -3016,6 +3074,7 @@ class AttGRUCond(Recurrent):
                   'recurrent_dropout': self.recurrent_dropout,
                   'conditional_dropout': self.conditional_dropout,
                   'attention_dropout': self.attention_dropout,
+                  'layer_normalization': self.layer_normalization,
                   'mask_value': self.mask_value
                   }
         base_config = super(AttGRUCond, self).get_config()
@@ -3142,6 +3201,7 @@ class AttConditionalGRUCond(Recurrent):
                  recurrent_dropout=0.,
                  conditional_dropout=0.,
                  attention_dropout=0.,
+                 layer_normalization=False,
                  num_inputs=3,
                  **kwargs):
         super(AttConditionalGRUCond, self).__init__(**kwargs)
@@ -3201,6 +3261,13 @@ class AttConditionalGRUCond(Recurrent):
         self.recurrent_dropout = min(1., max(0., recurrent_dropout))
         self.conditional_dropout = min(1., max(0., conditional_dropout))
         self.attention_dropout = min(1., max(0., attention_dropout))
+
+        # Layer normalization
+        self.layer_normalization = layer_normalization
+        self.gamma_init = initializers.get('ones')
+        self.beta_init = initializers.get('zeros')
+        self.epsilon = 1e-5
+
         self.num_inputs = num_inputs
         self.input_spec = [InputSpec(ndim=3), InputSpec(ndim=3)]
         for _ in range(len(self.input_spec), self.num_inputs):
@@ -3293,6 +3360,66 @@ class AttConditionalGRUCond(Recurrent):
                                        initializer=self.bias_ca_initializer,
                                        regularizer=self.bias_ca_regularizer,
                                        constraint=self.bias_ca_constraint)
+
+
+        if self.layer_normalization:
+
+            self.gamma_state_below_0 = self.add_weight(shape=(2*self.units,),
+                                                     name='gamma_state_below_0',
+                                                     initializer=self.gamma_init)
+            self.beta_state_below_0 = self.add_weight(shape=(2*self.units,),
+                                                     name='beta_state_below_0',
+                                                     initializer=self.beta_init)
+
+            self.gamma_state_below_1 = self.add_weight(shape=(self.units,),
+                                                     name='gamma_state_below_1',
+                                                     initializer=self.gamma_init)
+            self.beta_state_below_1 = self.add_weight(shape=(self.units,),
+                                                     name='beta_state_below_1',
+                                                     initializer=self.beta_init)
+
+            self.gamma_preact_0 = self.add_weight(shape=(2*self.units,),
+                                                     name='gamma_preact_0',
+                                                     initializer=self.gamma_init)
+            self.beta_preact_0 = self.add_weight(shape=(2*self.units,),
+                                                     name='beta_preact_0',
+                                                     initializer=self.beta_init)
+
+            self.gamma_preact_1 = self.add_weight(shape=(self.units,),
+                                                     name='gamma_preact_1',
+                                                     initializer=self.gamma_init)
+            self.beta_preact_1 = self.add_weight(shape=(self.units,),
+                                                     name='beta_preact_1',
+                                                     initializer=self.beta_init)
+
+            self.gamma_state_below0 = self.add_weight(shape=(2*self.units,),
+                                                     name='gamma_state_below0',
+                                                     initializer=self.gamma_init)
+            self.beta_state_below0 = self.add_weight(shape=(2*self.units,),
+                                                     name='beta_state_below0',
+                                                     initializer=self.beta_init)
+
+            self.gamma_state_below1 = self.add_weight(shape=(self.units,),
+                                                     name='gamma_state_below1',
+                                                     initializer=self.gamma_init)
+            self.beta_state_below1 = self.add_weight(shape=(self.units,),
+                                                     name='beta_state_below1',
+                                                     initializer=self.beta_init)
+
+            self.gamma_preact0 = self.add_weight(shape=(2*self.units,),
+                                                     name='gamma_preact0',
+                                                     initializer=self.gamma_init)
+            self.beta_preact0 = self.add_weight(shape=(2*self.units,),
+                                                     name='beta_preact0',
+                                                     initializer=self.beta_init)
+
+            self.gamma_preact1 = self.add_weight(shape=(self.units,),
+                                                     name='gamma_preact1',
+                                                     initializer=self.gamma_init)
+            self.beta_preact1 = self.add_weight(shape=(self.units,),
+                                                     name='beta_preact1',
+                                                     initializer=self.beta_init)
+
         self.built = True
 
     def reset_states(self, states=None):
@@ -3344,6 +3471,14 @@ class AttConditionalGRUCond(Recurrent):
             main_out += [states_dim]
 
         return main_out
+
+    def ln(self, x, slc):
+        # sample-wise normalization
+        m = K.mean(x, axis=-1, keepdims=True)
+        std = K.sqrt(K.var(x, axis=-1, keepdims=True) + self.epsilon)
+        x_normed = (x - m) / (std + self.epsilon)
+        x_normed = eval('self.gamma_' + slc) * x_normed + eval('self.beta_' + slc)
+        return x_normed
 
     def call(self, x, mask=None, training=None, initial_state=None):
         # input shape: (nb_samples, time (padded with zeros), input_dim)
@@ -3444,16 +3579,29 @@ class AttConditionalGRUCond(Recurrent):
         matrix_x_ = x
         if self.use_bias:
             matrix_x_ = K.bias_add(matrix_x_, self.bias1)
-        matrix_inner_ = K.dot(h_tm1 * rec_dp_mask[0], self.recurrent1_kernel[:, :2 * self.units])
-        x_z_ = matrix_x_[:, :self.units]
-        x_r_ = matrix_x_[:, self.units: 2 * self.units]
-        inner_z_ = matrix_inner_[:, :self.units]
-        inner_r_ = matrix_inner_[:, self.units: 2 * self.units]
-        z_ = self.recurrent_activation(x_z_ + inner_z_)
-        r_ = self.recurrent_activation(x_r_ + inner_r_)
-        x_h_ = matrix_x_[:, 2 * self.units:]
-        inner_h_ = K.dot(r_ * h_tm1 * rec_dp_mask[0], self.recurrent1_kernel[:, 2 * self.units:])
-        hh_ = self.activation(x_h_ + inner_h_)
+
+        if self.layer_normalization:
+            x__ = self.ln(matrix_x_[:, : 2 * self.units], 'state_below_0')
+            xx__ = self.ln(matrix_x_[:, 2 * self.units:], 'state_below_1')
+            matrix_inner_ = self.ln(K.dot(h_tm1 * rec_dp_mask[0], self.recurrent1_kernel[:, :2 * self.units]), 'preact_0')
+            x_z_ = x__[:, :self.units]
+            x_r_ = x__[:, self.units: 2 * self.units]
+        else:
+            matrix_inner_ = K.dot(h_tm1 * rec_dp_mask[0], self.recurrent1_kernel[:, :2 * self.units])
+            x_z_ = matrix_x_[:, :self.units]
+            x_r_ = matrix_x_[:, self.units: 2 * self.units]
+        recurrent_z_ = matrix_inner_[:, :self.units]
+        recurrent_r_ = matrix_inner_[:, self.units: 2 * self.units]
+        z_ = self.recurrent_activation(x_z_ + recurrent_z_)
+        r_ = self.recurrent_activation(x_r_ + recurrent_r_)
+
+        if self.layer_normalization:
+            x_h_ = xx__
+            recurrent_h = self.ln(K.dot(r_ * h_tm1 * rec_dp_mask[0], self.recurrent1_kernel[:, 2 * self.units:]), 'preact_1')
+        else:
+            x_h_ = matrix_x_[:, 2 * self.units:]
+            recurrent_h = K.dot(r_ * h_tm1 * rec_dp_mask[0], self.recurrent1_kernel[:, 2 * self.units:])
+        hh_ = self.activation(x_h_ + recurrent_h)
         h_ = z_ * h_tm1 + (1 - z_) * hh_
 
         # Attention model (see Formulation in class header)
@@ -3470,19 +3618,28 @@ class AttConditionalGRUCond(Recurrent):
         matrix_x = K.dot(ctx_ * dp_mask[0], self.kernel)
         if self.use_bias:
             matrix_x = K.bias_add(matrix_x, self.bias)
-        matrix_inner = K.dot(h_ * rec_dp_mask[0], self.recurrent_kernel[:, :2 * self.units])
-
-        x_z = matrix_x[:, :self.units]
-        x_r = matrix_x[:, self.units: 2 * self.units]
+        if self.layer_normalization:
+            x_ = self.ln(matrix_x[:, : 2 * self.units], 'state_below0')
+            xx_ = self.ln(matrix_x[:, 2 * self.units:], 'state_below1')
+            matrix_inner = self.ln(K.dot(h_ * rec_dp_mask[0], self.recurrent_kernel[:, :2 * self.units]), 'preact0')
+            x_z = x_[:, :self.units]
+            x_r = x_[:, self.units: 2 * self.units]
+        else:
+            matrix_inner = K.dot(h_ * rec_dp_mask[0], self.recurrent_kernel[:, :2 * self.units])
+            x_z = matrix_x[:, :self.units]
+            x_r = matrix_x[:, self.units: 2 * self.units]
         recurrent_z = matrix_inner[:, :self.units]
         recurrent_r = matrix_inner[:, self.units: 2 * self.units]
 
         z = self.recurrent_activation(x_z + recurrent_z)
         r = self.recurrent_activation(x_r + recurrent_r)
-
-        x_h = matrix_x[:, 2 * self.units:]
-        recurrent_h = K.dot(r * h_tm1 * rec_dp_mask[0],
-                            self.recurrent_kernel[:, 2 * self.units:])
+        if self.layer_normalization:
+            x_h = xx_
+            recurrent_h = self.ln(K.dot(r * h_tm1 * rec_dp_mask[0], self.recurrent_kernel[:, 2 * self.units:]), 'preact1')
+        else:
+            x_h = matrix_x[:, 2 * self.units:]
+            recurrent_h = K.dot(r * h_tm1 * rec_dp_mask[0],
+                                self.recurrent_kernel[:, 2 * self.units:])
         hh = self.activation(x_h + recurrent_h)
         h = z * h_tm1 + (1 - z) * hh
         if 0 < self.dropout + self.recurrent_dropout:
@@ -3618,6 +3775,7 @@ class AttConditionalGRUCond(Recurrent):
                   'recurrent_dropout': self.recurrent_dropout,
                   'conditional_dropout': self.conditional_dropout,
                   'attention_dropout': self.attention_dropout,
+                  'layer_normalization': self.layer_normalization,
                   'mask_value': self.mask_value
                   }
         base_config = super(AttConditionalGRUCond, self).get_config()
