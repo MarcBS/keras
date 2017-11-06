@@ -7,7 +7,7 @@ by converting voc-fcn8s .prototxt and .caffemodel present in the caffe/models/se
 
 import numpy as np
 import keras.caffe.convert as convert
-import cv2
+from scipy import misc
 import matplotlib.pyplot as plt 
 import os
 
@@ -21,7 +21,7 @@ model = convert.caffe_to_keras("./deploy.prototxt", "./fcn8s-heavy-pascal.caffem
 print "Yay!"
 
 # 1. load image
-img = cv2.imread("./horse.png")
+img = misc.imread("./horse.png")
 
 # modify it
 img = np.rollaxis(img,2)
