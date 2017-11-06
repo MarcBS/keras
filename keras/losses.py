@@ -82,7 +82,36 @@ def log_diff(args):
     y_true, y_pred, h_true, h_pred = args
     p_y_x = K.mean(K.categorical_crossentropy(y_true, y_pred))
     p_h_x = K.mean(K.categorical_crossentropy(h_true, h_pred))
-    return p_y_x - p_h_x
+    cost_difference = p_y_x - p_h_x
+    cost_difference = K.switch(cost_difference > -1., cost_difference, 0.)
+    return cost_difference
+
+
+
+def weighted_log_diff(args):
+    """
+     Weighted Cross-entropy difference between a GT and a hypothesis
+    :param args: y_pred, y_true, h_pred, h_true
+    :return:
+    """
+    y_true, y_pred, h_true, h_pred, weight = args
+    p_y_x =  K.mean(K.categorical_crossentropy(y_true, y_pred))
+    p_h_x = K.mean(K.categorical_crossentropy(h_true, h_pred))
+    return p_y_x - weight * p_h_x
+
+def log_diff_plus_categorical_crossentropy(args):
+    """
+     Weighted cross-entropy difference between a GT and a hypothesis and weigthed log-diff
+    :param args: y_pred, y_true, h_pred, h_true
+    :return:
+    """
+    y_true, y_pred, h1_true, h1_pred, h2_true, h2_pred, weight = args
+    p_y_x =  K.mean(K.categorical_crossentropy(y_true, y_pred))
+    p_h1_x = K.mean(K.categorical_crossentropy(h1_true, h1_pred))
+    p_h2_x = K.mean(K.categorical_crossentropy(h2_true, h2_pred))
+    cost_difference = p_h1_x - p_h2_x
+    #cost_difference = K.switch(cost_difference > -1., cost_difference, 0.)
+    return weight * p_y_x + (1 - weight) * cost_difference
 
 
 def linear_interpolation_categorical_crossentropy(args):
