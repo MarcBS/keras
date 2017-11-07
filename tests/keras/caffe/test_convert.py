@@ -13,12 +13,12 @@ def test_convertGoogleNet():
     assert(model.__class__.__name__ == 'Model')
 
     # Save converted model structure
-    json_string = model.to_json()
-    open(store_path + '/Keras_model_structure.json', 'w').write(json_string)
-    # Save converted model weights
-    model.save_weights(store_path + '/Keras_model_weights.h5', overwrite=True)
+    #json_string = model.to_json()
+    #open(store_path + '/Keras_model_structure.json', 'w').write(json_string)
+    ## Save converted model weights
+    #model.save_weights(store_path + '/Keras_model_weights.h5', overwrite=True)
 
 
 if __name__ == '__main__':
     pytest.main([__file__]) 
-    # test_convertGoogleNet()
+    #test_convertGoogleNet()
