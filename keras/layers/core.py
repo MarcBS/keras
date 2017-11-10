@@ -143,7 +143,7 @@ class GuidedDropout(Layer):
     def __init__(self, weights_shape, weights=None, **kwargs):
         self.weights_shape = weights_shape
         self.initial_weights = [weights]
-        self.init = initializations.get('uniform', dim_ordering='th')
+        self.init = initializers.get('uniform', dim_ordering='th')
         super(GuidedDropout, self).__init__(**kwargs)
 
     def build(self, input_shape):
@@ -715,7 +715,8 @@ class Lambda(Layer):
 
     @interfaces.legacy_lambda_support
     def __init__(self, function, output_shape=None,
-                 mask=None, arguments=None, **kwargs):
+                 mask=None, arguments=None,
+                 supports_masking=True, **kwargs):
         super(Lambda, self).__init__(**kwargs)
         self.function = function
         self.arguments = arguments if arguments else {}
@@ -732,6 +733,8 @@ class Lambda(Layer):
                 raise TypeError('In Lambda, `output_shape` '
                                 'must be a list, a tuple, or a function.')
             self._output_shape = output_shape
+
+        super(Lambda, self).__init__(**kwargs)
 
     def compute_output_shape(self, input_shape):
         if self._output_shape is None:

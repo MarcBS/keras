@@ -2551,8 +2551,6 @@ class AttGRU(Recurrent):
         return dict(list(base_config.items()) + list(config.items()))
 
 
-
-
 class AttGRUCond(Recurrent):
     '''Gated Recurrent Unit - Cho et al. 2014. with Attention + the previously generated word fed to the current timestep.
     You should give two inputs to this layer:
@@ -3718,7 +3716,6 @@ class AttConditionalGRUCond(Recurrent):
                   }
         base_config = super(AttConditionalGRUCond, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
-
 
 
 class LSTMCell(Layer):
