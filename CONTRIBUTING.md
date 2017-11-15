@@ -74,11 +74,11 @@ Here's a quick guide to submitting your improvements:
     - with the CNTK backend, on Python 2.7 and Python 3.5. Make sure you have the development version of CNTK.
 
 7. We use PEP8 syntax conventions, but we aren't dogmatic when it comes to line length. Make sure your lines stay reasonably sized, though. To make your life easier, we recommend running a PEP8 linter:
-    - Install PEP8 packages: `pip install pep8 pytest-pep8 autopep8`
-    - Run a standalone PEP8 check: `py.test --pep8 -m pep8`
-    - You can automatically fix some PEP8 error by running: `autopep8 -i --select <errors> <FILENAME>` for example: `autopep8 -i --select E128 tests/keras/backend/test_backends.py`
+  - Install PEP8 packages: `pip install pep8 pytest-pep8 autopep8`
+  - Run a standalone PEP8 check: `py.test --pep8 -m pep8`
+  - You can automatically fix some PEP8 error by running: `autopep8 -i --select <errors> <FILENAME>` for example: `autopep8 -i --select E128 tests/keras/backend/test_backends.py`
 
-8. When committing, use appropriate, descriptive commit messages.
+8. When committing, use appropriate, descriptive commit messages. Make sure that your branch history is not a string of "bug fix", "fix", "oops", etc. When submitting your PR, squash your commits into a single commit with an appropriate commit message, to make sure the project history stays clean and readable. See ['rebase and squash'](http://rebaseandsqua.sh/) for technical help on how to squash your commits.
 
 9. Update the documentation. If introducing new functionality, make sure you include code snippets demonstrating the usage of your new feature.
 
