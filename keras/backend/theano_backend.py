@@ -8,6 +8,7 @@ from theano.tensor.nnet import conv3d2d
 from theano.tensor.fft import rfft, irfft
 from theano.printing import Print
 from theano.tensor.signal.conv import conv2d as vec_conv
+from theano.ifelse import ifelse
 try:
     import theano.sparse as th_sparse_module
 except ImportError:
@@ -1569,7 +1570,7 @@ def in_train_phase(x, alt, training=None):
         alt = alt()
 
     # else: assume learning phase is a placeholder tensor.
-    x = theano.ifelse.ifelse(training, x, alt)
+    x = ifelse(training, x, alt)
     if uses_learning_phase:
         x._uses_learning_phase = True
     return x
