@@ -87,6 +87,23 @@ def log_diff(args):
     return cost_difference
 
 
+def hybrid_log_diff(args):
+    """
+     Weighted Cross-entropy difference between a GT and a hypothesis
+    :param args: y_pred, y_true, h_pred, h_true
+    :return:
+    """
+    y_true, y_pred, h_true, h_pred, weight1, weight2, constant = args
+    p_y_x =  K.mean(K.categorical_crossentropy(y_true, y_pred))
+    p_h_x = K.mean(K.categorical_crossentropy(h_true, h_pred))
+    cost_difference1 = p_y_x - p_h_x
+    cost_difference1 = K.switch(cost_difference1 > -1., cost_difference1, 0.)
+
+    cost_difference2 = p_y_x - constant
+    cost_difference2 = K.switch(cost_difference2 > -1., cost_difference2, 0.)
+
+    return weight1 * cost_difference1 + weight2 * cost_difference2
+
 
 def weighted_log_diff(args):
     """
