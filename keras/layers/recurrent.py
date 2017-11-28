@@ -4353,7 +4353,7 @@ class LSTMCond(Recurrent):
         self.recurrent_dropout = min(1., max(0., recurrent_dropout))
         self.conditional_dropout = min(1., max(0., conditional_dropout))
         self.num_inputs = num_inputs
-        self.input_spec = [InputSpec(ndim=3), InputSpec(ndim=3)]
+        self.input_spec = [InputSpec(ndim=3), InputSpec(ndim=2)]
         for _ in range(len(self.input_spec), self.num_inputs):
             self.input_spec.append(InputSpec(ndim=2))
 
@@ -4444,40 +4444,31 @@ class LSTMCond(Recurrent):
                            K.zeros((input_shape[0], self.units))]
 
     def preprocess_input(self, inputs, training=None):
-
         if 0 < self.conditional_dropout < 1:
-            input_dim = self.input_dim
-            ones = K.ones_like(K.reshape(inputs[:, :, 0], (-1, inputs.shape[1], 1)))  # (bs, timesteps, 1)
-            ones = K.concatenate([ones] * input_dim, axis=2)
-
+            ones = K.ones_like(K.squeeze(inputs[:, 0:1, :], axis=1))
             def dropped_inputs():
-                return K.dropout(ones, self.recurrent_dropout)
-
+                return K.dropout(ones, self.conditional_dropout)
             cond_dp_mask = [K.in_train_phase(dropped_inputs,
                                              ones,
                                              training=training) for _ in range(4)]
+            preprocessed_input = K.dot(inputs * cond_dp_mask[0][:, None, :], self.conditional_kernel)
         else:
-            cond_dp_mask = [K.cast_to_floatx(1.) for _ in range(4)]
-
-        if 0 < self.dropout < 1:
-            input_dim = self.input_dim
-            ones = K.ones_like(K.reshape(self.context[:, :, 0], (-1, self.context.shape[1], 1)))  # (bs, timesteps, 1)
-            ones = K.concatenate([ones] * input_dim, axis=2)
-
-            def dropped_inputs():
-                return K.dropout(ones, self.recurrent_dropout)
-
-            dp_mask = [K.in_train_phase(dropped_inputs,
-                                        ones,
-                                        training=training) for _ in range(4)]
-        else:
-            dp_mask = [K.cast_to_floatx(1.) for _ in range(4)]
+            preprocessed_input = K.dot(inputs, self.conditional_kernel)
 
         if self.static_ctx:
-            K.dot(inputs * cond_dp_mask, self.conditional_kernel)
+            return preprocessed_input
+
+        # Not Static ctx
+        if 0 < self.dropout < 1:
+            ones = K.ones_like(K.squeeze(self.context[:, 0:1, :], axis=1))
+            def dropped_inputs():
+                return K.dropout(ones, self.dropout)
+            dp_mask = [K.in_train_phase(dropped_inputs, ones,
+                                             training=training) for _ in range(4)]
+            preprocessed_context = K.dot(self.context * dp_mask[0][:, None, :], self.kernel)
         else:
-            return K.dot(inputs * cond_dp_mask, self.conditional_kernel) + \
-                   K.dot(self.context * dp_mask[0], self.kernel)
+            preprocessed_context = K.dot(self.context, self.kernel)
+        return preprocessed_input + preprocessed_context
 
     def compute_output_shape(self, input_shape):
         if self.return_sequences:
@@ -4568,15 +4559,14 @@ class LSTMCond(Recurrent):
     def step(self, x, states):
         h_tm1 = states[0]  # State
         c_tm1 = states[1]  # Memory
-        rec_dp_mask = states[2]  # Dropout U (recurrent)
+        dp_mask = states[2]  # Dropout W (input)
+        rec_dp_mask = states[3]  # Dropout U (recurrent)
         z = x + K.dot(h_tm1 * rec_dp_mask[0], self.recurrent_kernel)
-
         if self.static_ctx:
-            dp_mask = states[3]  # Dropout W
             context = states[4]
-            mask_context = states[5]  # Context mask
-            if mask_context.ndim > 1:  # Mask the context (only if necessary)
-                context = mask_context[:, :, None] * context
+            #mask_context = states[5]  # Context mask
+            #if mask_context.ndim > 1:  # Mask the context (only if necessary)
+            #    context = mask_context[:, :, None] * context
             z += K.dot(context * dp_mask[0], self.kernel)
         if self.use_bias:
             z = K.bias_add(z, self.bias)
@@ -4595,7 +4585,20 @@ class LSTMCond(Recurrent):
 
     def get_constants(self, inputs, mask_context, training=None):
         constants = []
-        # States[2] - Dropout_U
+
+        # States[3] - Dropout_W
+        if 0 < self.dropout < 1:
+            ones = K.ones_like(K.squeeze(self.context[:, 0:1, :], axis=1))
+            def dropped_inputs():
+                return K.dropout(ones, self.dropout)
+            dp_mask = [K.in_train_phase(dropped_inputs,
+                                        ones,
+                                        training=training) for _ in range(4)]
+            constants.append(dp_mask)
+        else:
+            constants.append([K.cast_to_floatx(1.) for _ in range(4)])
+
+        # States[4] - Dropout_U
         if 0 < self.recurrent_dropout < 1:
             ones = K.ones_like(K.reshape(inputs[:, 0, 0], (-1, 1)))
             ones = K.tile(ones, (1, self.units))
@@ -4610,25 +4613,10 @@ class LSTMCond(Recurrent):
         else:
             constants.append([K.cast_to_floatx(1.) for _ in range(4)])
 
-        # States[3]
-        if 0 < self.dropout < 1:
-            input_shape = self.input_spec[1][0].shape
-            input_dim = input_shape[-1]
-            ones = K.ones_like(K.reshape(x[:, 0, 0], (-1, 1)))
-            ones = K.concatenate([ones] * input_dim, 1)
-            B_W = [K.in_train_phase(K.dropout(ones, self.dropout_W), ones) for _ in range(4)]
-        else:
-            B_W = [K.cast_to_floatx(1.) for _ in range(4)]
-        if self.static_ctx:
-            constants.append(B_W)
-
         # States[4] - context
-        constants.append(self.context)
+        if self.static_ctx:
+            constants.append(self.context)
 
-        # States[5] - mask_context
-        if mask_context is None:
-            mask_context = K.not_equal(K.sum(self.context, axis=2), self.mask_value)
-        constants.append(mask_context)
 
         return constants
 
