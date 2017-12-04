@@ -2412,8 +2412,8 @@ class AttGRU(Recurrent):
         p_state_ = K.dot(h_tm1 * att_dp_mask[0], self.attention_recurrent_kernel)
         pctx_ = K.tanh(pctx_ + p_state_[:, None, :])
         e = K.dot(pctx_, self.attention_context_wa) + self.bias_ca
-        if mask_context.ndim > 1:  # Mask the context (only if necessary)
-            e = mask_context * e
+        #if mask_context.ndim > 1:  # Mask the context (only if necessary)
+        #    e = mask_context * e
         alphas_shape = e.shape
         alphas = K.softmax(e.reshape([alphas_shape[0], alphas_shape[1]]))
         # sum over the in_timesteps dimension resulting in [batch_size, input_dim]
