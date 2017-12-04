@@ -2,6 +2,7 @@ from __future__ import absolute_import
 import six
 from . import backend as K
 from .utils.generic_utils import deserialize_keras_object
+from .utils.generic_utils import serialize_keras_object
 
 
 # noinspection SpellCheckingInspection
@@ -41,6 +42,15 @@ def categorical_hinge(y_true, y_pred):
 
 
 def logcosh(y_true, y_pred):
+    """Logarithm of the hyperbolic cosine of the prediction error.
+
+    `log(cosh(x))` is approximately equal to `(x ** 2) / 2` for small `x` and
+    to `abs(x) - log(2)` for large `x`. This means that 'logcosh' works mostly
+    like the mean squared error, but will not be so strongly affected by the
+    occasional wildly incorrect prediction. However, it may return NaNs if the
+    intermediate value `cosh(y_pred - y_true)` is too large to be represented
+    in the chosen precision.
+    """
     def cosh(x):
         return (K.exp(x) + K.exp(-x)) / 2
     return K.mean(K.log(cosh(y_pred - y_true)), axis=-1)
@@ -82,7 +92,53 @@ def log_diff(args):
     y_true, y_pred, h_true, h_pred = args
     p_y_x = K.mean(K.categorical_crossentropy(y_true, y_pred))
     p_h_x = K.mean(K.categorical_crossentropy(h_true, h_pred))
-    return p_y_x - p_h_x
+    cost_difference = p_y_x - p_h_x
+    cost_difference = K.switch(cost_difference > -1., cost_difference, 0.)
+    return cost_difference
+
+
+def hybrid_log_diff(args):
+    """
+     Weighted Cross-entropy difference between a GT and a hypothesis
+    :param args: y_pred, y_true, h_pred, h_true
+    :return:
+    """
+    y_true, y_pred, h_true, h_pred, weight1, weight2, constant = args
+    p_y_x =  K.mean(K.categorical_crossentropy(y_true, y_pred))
+    p_h_x = K.mean(K.categorical_crossentropy(h_true, h_pred))
+    cost_difference1 = p_y_x - p_h_x
+    cost_difference1 = K.switch(cost_difference1 > -1., cost_difference1, 0.)
+
+    cost_difference2 = p_y_x - constant
+    cost_difference2 = K.switch(cost_difference2 > -1., cost_difference2, 0.)
+
+    return weight1 * cost_difference1 + weight2 * cost_difference2
+
+
+def weighted_log_diff(args):
+    """
+     Weighted Cross-entropy difference between a GT and a hypothesis
+    :param args: y_pred, y_true, h_pred, h_true
+    :return:
+    """
+    y_true, y_pred, h_true, h_pred, weight = args
+    p_y_x =  K.mean(K.categorical_crossentropy(y_true, y_pred))
+    p_h_x = K.mean(K.categorical_crossentropy(h_true, h_pred))
+    return p_y_x - weight * p_h_x
+
+def log_diff_plus_categorical_crossentropy(args):
+    """
+     Weighted cross-entropy difference between a GT and a hypothesis and weigthed log-diff
+    :param args: y_pred, y_true, h_pred, h_true
+    :return:
+    """
+    y_true, y_pred, h1_true, h1_pred, h2_true, h2_pred, weight = args
+    p_y_x =  K.mean(K.categorical_crossentropy(y_true, y_pred))
+    p_h1_x = K.mean(K.categorical_crossentropy(h1_true, h1_pred))
+    p_h2_x = K.mean(K.categorical_crossentropy(h2_true, h2_pred))
+    cost_difference = p_h1_x - p_h2_x
+    #cost_difference = K.switch(cost_difference > -1., cost_difference, 0.)
+    return weight * p_y_x + (1 - weight) * cost_difference
 
 
 def linear_interpolation_categorical_crossentropy(args):
@@ -140,7 +196,7 @@ cosine = cosine_proximity
 
 
 def serialize(loss):
-    return loss.__name__
+    return serialize_keras_object(loss)
 
 
 def deserialize(name, custom_objects=None):
@@ -155,6 +211,8 @@ def get(identifier):
         return None
     if isinstance(identifier, six.string_types):
         identifier = str(identifier)
+        return deserialize(identifier)
+    if isinstance(identifier, dict):
         return deserialize(identifier)
     elif callable(identifier):
         return identifier

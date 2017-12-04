@@ -29,11 +29,11 @@ def test_highway():
 @keras_test
 def test_maxout_dense():
     layer_test(legacy_layers.MaxoutDense,
-               kwargs={'units': 3},
+               kwargs={'output_dim': 3},
                input_shape=(3, 2))
 
     layer_test(legacy_layers.MaxoutDense,
-               kwargs={'units': 3,
+               kwargs={'output_dim': 3,
                        'W_regularizer': regularizers.l2(0.01),
                        'b_regularizer': regularizers.l1(0.01),
                        'activity_regularizer': regularizers.l2(0.01),

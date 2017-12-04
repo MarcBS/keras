@@ -582,7 +582,8 @@ legacy_spatialdropoutNd_support = generate_legacy_interface(
                                         'default': None}})
 
 legacy_lambda_support = generate_legacy_interface(
-    allowed_positional_args=['function', 'output_shape'])
+    allowed_positional_args=['function', 'output_shape'],
+    value_conversions = [('mask_function', 'mask')])
 
 
 # Model methods

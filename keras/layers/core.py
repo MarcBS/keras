@@ -143,7 +143,7 @@ class GuidedDropout(Layer):
     def __init__(self, weights_shape, weights=None, **kwargs):
         self.weights_shape = weights_shape
         self.initial_weights = [weights]
-        self.init = initializations.get('uniform', dim_ordering='th')
+        self.init = initializers.get('uniform', dim_ordering='th')
         super(GuidedDropout, self).__init__(**kwargs)
 
     def build(self, input_shape):
@@ -715,13 +715,11 @@ class Lambda(Layer):
 
     @interfaces.legacy_lambda_support
     def __init__(self, function, output_shape=None,
-                 mask=None, arguments=None, mask_function=None,
+                 mask=None, arguments=None,
                  supports_masking=True, **kwargs):
         super(Lambda, self).__init__(**kwargs)
         self.function = function
         self.arguments = arguments if arguments else {}
-        self.supports_masking = supports_masking
-
         if mask is not None:
             self.supports_masking = True
         self.mask = mask
@@ -735,16 +733,6 @@ class Lambda(Layer):
                 raise TypeError('In Lambda, `output_shape` '
                                 'must be a list, a tuple, or a function.')
             self._output_shape = output_shape
-
-        if mask_function is None:
-            self._mask_function = None
-            self.supports_masking = False  # can flag masking here or not.  not sure which to do.
-        elif hasattr(mask_function, '__call__'):
-            self._mask_function = mask_function
-            self.supports_masking = True
-        else:
-            raise Exception("In Lambda, `mask_function` "
-                            "must be a function that computes the new mask")
 
         super(Lambda, self).__init__(**kwargs)
 
@@ -798,17 +786,6 @@ class Lambda(Layer):
             return self.mask(inputs, mask)
         return self.mask
 
-    """
-    def compute_mask(self, x, mask=None):
-        ''' can either throw exception or just accept the mask here... not sure which to do'''
-        if not self.supports_masking:
-            return
-        if self._mask_function is not None:
-            return self._mask_function(x, mask)
-        else:
-            return mask
-    """
-    
     def get_config(self):
         if isinstance(self.function, python_types.LambdaType):
             function = func_dump(self.function)
@@ -1080,7 +1057,7 @@ class MaskedMean(Layer):
     """
 
     def __init__(self, **kwargs):
-        self.support_mask = True
+        self.supports_masking = True
         super(MaskedMean, self).__init__(**kwargs)
 
     def call(self, x, mask=None):
@@ -1103,7 +1080,7 @@ class MaskLayer(Layer):
     """
 
     def __init__(self, **kwargs):
-        self.support_mask = True
+        self.supports_masking = True
         super(MaskLayer, self).__init__(**kwargs)
 
     def call(self, x, mask=None):

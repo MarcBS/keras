@@ -8,6 +8,7 @@ from theano.tensor.nnet import conv3d2d
 from theano.tensor.fft import rfft, irfft
 from theano.printing import Print
 from theano.tensor.signal.conv import conv2d as vec_conv
+from theano.ifelse import ifelse
 try:
     import theano.sparse as th_sparse_module
 except ImportError:
@@ -338,16 +339,17 @@ def zeros_like(x, dtype=None, name=None):
     return T.zeros_like(x, dtype=dtype)
 
 
-def identity(x):
+def identity(x, name=None):
     """Returns a tensor with the same content as the input tensor.
 
     # Arguments
         x: The input tensor.
+        name: String, name for the variable to create.
 
     # Returns
         A tensor of the same shape, type and content.
     """
-    return x.copy()
+    return x.copy(name=name)
 
 
 def random_uniform_variable(shape, low, high, dtype=None, name=None):
@@ -1568,7 +1570,7 @@ def in_train_phase(x, alt, training=None):
         alt = alt()
 
     # else: assume learning phase is a placeholder tensor.
-    x = theano.ifelse.ifelse(training, x, alt)
+    x = ifelse(training, x, alt)
     if uses_learning_phase:
         x._uses_learning_phase = True
     return x
