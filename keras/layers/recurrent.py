@@ -1991,7 +1991,7 @@ class GRUCond(Recurrent):
         if 0 < self.dropout < 1:
             input_shape = self.input_spec[1][0].shape
             input_dim = input_shape[-1]
-            ones = K.ones_like(K.reshape(x[:, 0, 0], (-1, 1)))
+            ones = K.ones_like(K.reshape(inputs[:, 0, 0], (-1, 1)))
             ones = K.concatenate([ones] * input_dim, 1)
             B_W = [K.in_train_phase(K.dropout(ones, self.dropout_W), ones) for _ in range(3)]
         else:
@@ -3684,12 +3684,14 @@ class AttConditionalGRUCond(Recurrent):
         return initial_states + extra_states
 
     def get_config(self):
-        config = {'units': self.units,
-                  "att_units": self.att_units,
+        config = {'return_extra_variables': self.return_extra_variables,
+                  'return_states': self.return_states,
+                  'units': self.units,
+                  'att_units': self.att_units,
+                  'mask_value': self.mask_value,
+                  'use_bias': self.use_bias,
                   'activation': activations.serialize(self.activation),
                   'recurrent_activation': activations.serialize(self.recurrent_activation),
-                  'return_extra_variables': self.return_extra_variables,
-                  'return_states': self.return_states,
                   'kernel_initializer': initializers.serialize(self.kernel_initializer),
                   'recurrent_initializer': initializers.serialize(self.recurrent_initializer),
                   'conditional_initializer': initializers.serialize(self.conditional_initializer),
@@ -3722,7 +3724,7 @@ class AttConditionalGRUCond(Recurrent):
                   'recurrent_dropout': self.recurrent_dropout,
                   'conditional_dropout': self.conditional_dropout,
                   'attention_dropout': self.attention_dropout,
-                  'mask_value': self.mask_value
+                  'num_inputs': self.num_inputs
                   }
         base_config = super(AttConditionalGRUCond, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
@@ -5978,6 +5980,8 @@ class AttConditionalLSTMCond(Recurrent):
         self.recurrent_dropout = min(1., max(0., recurrent_dropout))
         self.conditional_dropout = min(1., max(0., conditional_dropout))
         self.attention_dropout = min(1., max(0., attention_dropout))
+
+        # Inputs
         self.num_inputs = num_inputs
         self.input_spec = [InputSpec(ndim=3), InputSpec(ndim=3)]
         for _ in range(len(self.input_spec), self.num_inputs):
@@ -6381,12 +6385,14 @@ class AttConditionalLSTMCond(Recurrent):
         return initial_states + extra_states
 
     def get_config(self):
-        config = {'units': self.units,
-                  "att_units": self.att_units,
+        config = {'return_extra_variables': self.return_extra_variables,
+                  'return_states': self.return_states,
+                  'units': self.units,
+                  'att_units': self.att_units,
                   'activation': activations.serialize(self.activation),
                   'recurrent_activation': activations.serialize(self.recurrent_activation),
-                  'return_extra_variables': self.return_extra_variables,
-                  'return_states': self.return_states,
+                  'use_bias': self.use_bias,
+                  'mask_value': self.mask_value,
                   'kernel_initializer': initializers.serialize(self.kernel_initializer),
                   'recurrent_initializer': initializers.serialize(self.recurrent_initializer),
                   'conditional_initializer': initializers.serialize(self.conditional_initializer),
@@ -6420,7 +6426,7 @@ class AttConditionalLSTMCond(Recurrent):
                   'recurrent_dropout': self.recurrent_dropout,
                   'conditional_dropout': self.conditional_dropout,
                   'attention_dropout': self.attention_dropout,
-                  'mask_value': self.mask_value
+                  'num_inputs': self.num_inputs
                   }
         base_config = super(AttConditionalLSTMCond, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
