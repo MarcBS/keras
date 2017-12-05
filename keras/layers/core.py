@@ -834,13 +834,11 @@ class Lambda(Layer):
                   'output_shape_type': output_shape_type,
                   'arguments': self.arguments}
         base_config = super(Lambda, self).get_config()
-        print("GET_CONFIG:= ", dict(list(base_config.items()) + list(config.items())))
         return dict(list(base_config.items()) + list(config.items()))
 
     @classmethod
     def from_config(cls, config, custom_objects=None):
         config = config.copy()
-        print("FROM_CONFIG_LAMBDA= ", config['arguments'])
         globs = globals()
         if custom_objects:
             globs = dict(list(globs.items()) + list(custom_objects.items()))
