@@ -129,12 +129,9 @@ class Embedding(Layer):
             return (input_shape[0],) + tuple(in_lens) + (self.output_dim,)
 
     def call(self, inputs):
-        inputs = K.printing(inputs, self.name + 'inputs=')
-
         if K.dtype(inputs) != 'int32':
             inputs = K.cast(inputs, 'int32')
         out = K.gather(self.embeddings, inputs)
-        #out = K.printing(out, self.name + 'outs=')
         return out
 
     def get_config(self):

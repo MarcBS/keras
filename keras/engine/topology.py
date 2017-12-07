@@ -272,7 +272,8 @@ class Layer(object):
                           'name',
                           'trainable',
                           'weights',
-                          'input_dtype'  # legacy
+                          'input_dtype',  # legacy
+                          'kernel_regularizer'
                           }
         for kwarg in kwargs:
             if kwarg not in allowed_kwargs:

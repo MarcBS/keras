@@ -953,6 +953,7 @@ class Recurrent(Layer):
 
     def __call__(self, inputs, initial_state=None, **kwargs):
 
+
         # If there are multiple inputs, then
         # they should be the main input and `initial_state`
         # e.g. when loading model from file

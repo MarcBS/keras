@@ -734,19 +734,6 @@ class Lambda(Layer):
                 raise TypeError('In Lambda, `output_shape` '
                                 'must be a list, a tuple, or a function.')
             self._output_shape = output_shape
-        '''
-        print("MASK FUNCTION= ", mask_function)
-        print("HAS_ATTR= ", hasattr(mask_function, '__call__'))
-        if mask_function is None:
-            self._mask_function = None
-            self.supports_masking = False  # can flag masking here or not.  not sure which to do.
-        elif hasattr(mask_function, '__call__'):
-            self._mask_function = mask_function
-            self.supports_masking = True
-        else:
-            raise Exception("In Lambda, `mask_function` "
-                            "must be a function that computes the new mask")
-        '''
         super(Lambda, self).__init__(**kwargs)
 
     def compute_output_shape(self, input_shape):
@@ -834,13 +821,11 @@ class Lambda(Layer):
                   'output_shape_type': output_shape_type,
                   'arguments': self.arguments}
         base_config = super(Lambda, self).get_config()
-        print("GET_CONFIG:= ", dict(list(base_config.items()) + list(config.items())))
         return dict(list(base_config.items()) + list(config.items()))
 
     @classmethod
     def from_config(cls, config, custom_objects=None):
         config = config.copy()
-        print("FROM_CONFIG_LAMBDA= ", config['arguments'])
         globs = globals()
         if custom_objects:
             globs = dict(list(globs.items()) + list(custom_objects.items()))
