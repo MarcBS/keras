@@ -1867,19 +1867,19 @@ class GRUCond(Recurrent):
             main_out = [main_out, states_dim]
         return main_out
 
-    def call(self, x, mask=None, training=None, initial_state=None):
+    def call(self, inputs, mask=None, training=None, initial_state=None):
         # input shape: (nb_samples, time (padded with zeros), input_dim)
         # note that the .build() method of subclasses MUST define
         # self.input_spec with a complete input shape.
-        input_shape = self.input_spec[0].shape
-        state_below = x[0]
-        self.context = x[1]
+        input_shape = K.int_shape(inputs[0])
+        state_below = inputs[0]
+        self.context = inputs[1]
         if self.num_inputs == 2:  # input: [state_below, context]
             self.init_state = None
         elif self.num_inputs == 3:  # input: [state_below, context, init_generic]
-            self.init_state = x[2]
+            self.init_state = inputs[2]
         elif self.num_inputs == 4:  # input: [state_below, context, init_state, init_memory]
-            self.init_state = x[2]
+            self.init_state = inputs[2]
         if K._BACKEND == 'tensorflow':
             if not input_shape[1]:
                 raise Exception('When using TensorFlow, you should define '
@@ -2321,16 +2321,16 @@ class AttGRU(Recurrent):
 
         return main_out
 
-    def call(self, x, mask=None, training=None, initial_state=None):
+    def call(self, inputs, mask=None, training=None, initial_state=None):
         # input shape: (nb_samples, time (padded with zeros), input_dim)
         # note that the .build() method of subclasses MUST define
         # self.input_spec with a complete input shape.
-        input_shape = self.input_spec[0].shape
-        state_below = x[0]
+        input_shape = K.int_shape(inputs[0])
+        state_below = inputs[0]
         if self.num_inputs == 1:  # input: [context]
             self.init_state = None
         elif self.num_inputs == 2:  # input: [context, init_generic]
-            self.init_state = x[1]
+            self.init_state = inputs[1]
         if K._BACKEND == 'tensorflow':
             if not input_shape[1]:
                 raise Exception('When using TensorFlow, you should define '
@@ -2407,6 +2407,7 @@ class AttGRU(Recurrent):
         # Att model dropouts
         att_dp_mask = states[5]  # Dropout Wa
         pctx_ = states[6]  # Projected context (i.e. context * Ua + ba)
+        context = states[7]  # Original context
 
         # Attention model (see Formulation in class header)
         p_state_ = K.dot(h_tm1 * att_dp_mask[0], self.attention_recurrent_kernel)
@@ -2866,19 +2867,19 @@ class AttGRUCond(Recurrent):
 
         return main_out
 
-    def call(self, x, mask=None, training=None, initial_state=None):
+    def call(self, inputs, mask=None, training=None, initial_state=None):
         # input shape: (nb_samples, time (padded with zeros), input_dim)
         # note that the .build() method of subclasses MUST define
         # self.input_spec with a complete input shape.
-        input_shape = self.input_spec[0].shape
-        state_below = x[0]
-        self.context = x[1]
+        input_shape = K.int_shape(inputs[0])
+        state_below = inputs[0]
+        self.context = inputs[1]
         if self.num_inputs == 2:  # input: [state_below, context]
             self.init_state = None
         elif self.num_inputs == 3:  # input: [state_below, context, init_generic]
-            self.init_state = x[2]
+            self.init_state = inputs[2]
         elif self.num_inputs == 4:  # input: [state_below, context, init_state, init_memory]
-            self.init_state = x[2]
+            self.init_state = inputs[2]
         if K._BACKEND == 'tensorflow':
             if not input_shape[1]:
                 raise Exception('When using TensorFlow, you should define '
@@ -3449,19 +3450,19 @@ class AttConditionalGRUCond(Recurrent):
 
         return main_out
 
-    def call(self, x, mask=None, training=None, initial_state=None):
+    def call(self, inputs, mask=None, training=None, initial_state=None):
         # input shape: (nb_samples, time (padded with zeros), input_dim)
         # note that the .build() method of subclasses MUST define
         # self.input_spec with a complete input shape.
-        input_shape = self.input_spec[0].shape
-        state_below = x[0]
-        self.context = x[1]
+        input_shape = K.int_shape(inputs[0])
+        state_below = inputs[0]
+        self.context = inputs[1]
         if self.num_inputs == 2:  # input: [state_below, context]
             self.init_state = None
         elif self.num_inputs == 3:  # input: [state_below, context, init_generic]
-            self.init_state = x[2]
+            self.init_state = inputs[2]
         elif self.num_inputs == 4:  # input: [state_below, context, init_state, init_memory]
-            self.init_state = x[2]
+            self.init_state = inputs[2]
         if K._BACKEND == 'tensorflow':
             if not input_shape[1]:
                 raise Exception('When using TensorFlow, you should define '
@@ -4483,22 +4484,22 @@ class LSTMCond(Recurrent):
             main_out = [main_out, states_dim, states_dim]
         return main_out
 
-    def call(self, x, mask=None, training=None, initial_state=None):
+    def call(self, inputs, mask=None, training=None, initial_state=None):
         # input shape: (nb_samples, time (padded with zeros), input_dim)
         # note that the .build() method of subclasses MUST define
         # self.input_spec with a complete input shape.
-        input_shape = self.input_spec[0].shape
-        state_below = x[0]
-        self.context = x[1]
+        input_shape = K.int_shape(inputs[0])
+        state_below = inputs[0]
+        self.context = inputs[1]
         if self.num_inputs == 2:  # input: [state_below, context]
             self.init_state = None
             self.init_memory = None
         elif self.num_inputs == 3:  # input: [state_below, context, init_generic]
-            self.init_state = x[2]
-            self.init_memory = x[2]
+            self.init_state = inputs[2]
+            self.init_memory = inputs[2]
         elif self.num_inputs == 4:  # input: [state_below, context, init_state, init_memory]
-            self.init_state = x[2]
-            self.init_memory = x[3]
+            self.init_state = inputs[2]
+            self.init_memory = inputs[3]
         if K._BACKEND == 'tensorflow':
             if not input_shape[1]:
                 raise Exception('When using TensorFlow, you should define '
@@ -4969,21 +4970,21 @@ class AttLSTM(Recurrent):
 
         return main_out
 
-    def call(self, x, mask=None, training=None, initial_state=None):
+    def call(self, inputs, mask=None, training=None, initial_state=None):
         # input shape: (nb_samples, time (padded with zeros), input_dim)
         # note that the .build() method of subclasses MUST define
         # self.input_spec with a complete input shape.
-        input_shape = self.input_spec[0].shape
-        state_below = x[0]
+        input_shape = K.int_shape(inputs[0])
+        state_below = inputs[0]
         if self.num_inputs == 1:  # input: [context]
             self.init_state = None
             self.init_memory = None
         elif self.num_inputs == 2:  # input: [context, init_generic]
-            self.init_state = x[1]
-            self.init_memory = x[1]
+            self.init_state = inputs[1]
+            self.init_memory = inputs[1]
         elif self.num_inputs == 3:  # input: [context, init_state, init_memory]
-            self.init_state = x[1]
-            self.init_memory = x[2]
+            self.init_state = inputs[1]
+            self.init_memory = inputs[2]
         if K._BACKEND == 'tensorflow':
             if not input_shape[1]:
                 raise Exception('When using TensorFlow, you should define '
@@ -5526,22 +5527,22 @@ class AttLSTMCond(Recurrent):
 
         return main_out
 
-    def call(self, x, mask=None, training=None, initial_state=None):
+    def call(self, inputs, mask=None, training=None, initial_state=None):
         # input shape: (nb_samples, time (padded with zeros), input_dim)
         # note that the .build() method of subclasses MUST define
         # self.input_spec with a complete input shape.
-        input_shape = self.input_spec[0].shape
-        state_below = x[0]
-        self.context = x[1]
+        input_shape = K.int_shape(inputs[0])
+        state_below = inputs[0]
+        self.context = inputs[1]
         if self.num_inputs == 2:  # input: [state_below, context]
             self.init_state = None
             self.init_memory = None
         elif self.num_inputs == 3:  # input: [state_below, context, init_generic]
-            self.init_state = x[2]
-            self.init_memory = x[2]
+            self.init_state = inputs[2]
+            self.init_memory = inputs[2]
         elif self.num_inputs == 4:  # input: [state_below, context, init_state, init_memory]
-            self.init_state = x[2]
-            self.init_memory = x[3]
+            self.init_state = inputs[2]
+            self.init_memory = inputs[3]
         if K._BACKEND == 'tensorflow':
             if not input_shape[1]:
                 raise Exception('When using TensorFlow, you should define '
@@ -6147,23 +6148,24 @@ class AttConditionalLSTMCond(Recurrent):
 
         return main_out
 
-    def call(self, x, mask=None, training=None, initial_state=None):
+    def call(self, inputs, mask=None, training=None, initial_state=None):
         # input shape: (nb_samples, time (padded with zeros), input_dim)
         # note that the .build() method of subclasses MUST define
         # self.input_spec with a complete input shape.
-        input_shape = self.input_spec[0].shape
-        state_below = x[0]
-        self.context = x[1]
+        input_shape = K.int_shape(inputs[0])
+        state_below = inputs[0]
+        self.context = inputs[1]
         if self.num_inputs == 2:  # input: [state_below, context]
             self.init_state = None
             self.init_memory = None
         elif self.num_inputs == 3:  # input: [state_below, context, init_generic]
-            self.init_state = x[2]
-            self.init_memory = x[2]
+            self.init_state = inputs[2]
+            self.init_memory = inputs[2]
         elif self.num_inputs == 4:  # input: [state_below, context, init_state, init_memory]
-            self.init_state = x[2]
-            self.init_memory = x[3]
+            self.init_state = inputs[2]
+            self.init_memory = inputs[3]
         if K._BACKEND == 'tensorflow':
+            print "Input shape", input_shape
             if not input_shape[1]:
                 raise Exception('When using TensorFlow, you should define '
                                 'explicitly the number of timesteps of '
@@ -6708,24 +6710,24 @@ class AttLSTMCond2Inputs(Recurrent):
 
         return main_out
 
-    def call(self, x, mask=None):
+    def call(self, inputs, mask=None):
         # input shape: (nb_samples, time (padded with zeros), input_dim)
         # note that the .build() method of subclasses MUST define
         # self.input_spec with a complete input shape.
 
-        input_shape = self.input_spec[0].shape
-        state_below = x[0]
-        self.context1 = x[1]
-        self.context2 = x[2]
+        input_shape = K.int_shape(inputs[0])
+        state_below = inputs[0]
+        self.context1 = inputs[1]
+        self.context2 = inputs[2]
         if self.num_inputs == 3:  # input: [state_below, context]
             self.init_state = None
             self.init_memory = None
         elif self.num_inputs == 4:  # input: [state_below, context, init_generic]
-            self.init_state = x[3]
-            self.init_memory = x[3]
+            self.init_state = inputs[3]
+            self.init_memory = inputs[3]
         elif self.num_inputs == 5:  # input: [state_below, context, init_state, init_memory]
-            self.init_state = x[3]
-            self.init_memory = x[4]
+            self.init_state = inputs[3]
+            self.init_memory = inputs[4]
         if K._BACKEND == 'tensorflow':
             if not input_shape[1]:
                 raise Exception('When using TensorFlow, you should define '
@@ -7419,26 +7421,26 @@ class AttLSTMCond3Inputs(Recurrent):
 
         return main_out
 
-    def call(self, x, mask=None):
+    def call(self, inputs, mask=None):
         # input shape: (nb_samples, time (padded with zeros), input_dim)
         # note that the .build() method of subclasses MUST define
         # self.input_spec with a complete input shape.
 
-        input_shape = self.input_spec[0].shape
-        state_below = x[0]
-        self.context1 = x[1]
-        self.context2 = x[2]
-        self.context3 = x[3]
+        input_shape = K.int_shape(inputs[0])
+        state_below = inputs[0]
+        self.context1 = inputs[1]
+        self.context2 = inputs[2]
+        self.context3 = inputs[3]
 
         if self.num_inputs == 4:  # input: [state_below, context, context3]
             self.init_state = None
             self.init_memory = None
         elif self.num_inputs == 5:  # input: [state_below, context, context2, init_generic]
-            self.init_state = x[4]
-            self.init_memory = x[4]
+            self.init_state = inputs[4]
+            self.init_memory = inputs[4]
         elif self.num_inputs == 6:  # input: [state_below, context, context2,  init_state, init_memory]
-            self.init_state = x[4]
-            self.init_memory = x[5]
+            self.init_state = inputs[4]
+            self.init_memory = inputs[5]
         if K._BACKEND == 'tensorflow':
             if not input_shape[1]:
                 raise Exception('When using TensorFlow, you should define '
