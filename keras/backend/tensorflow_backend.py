@@ -2874,10 +2874,7 @@ def rnn(step_function, inputs, initial_states,
         if pos_extra_outputs_states is not None:
             non_extra_states = [final_outputs[i + 3] for i in range(len(final_outputs[3:]))
                                 if i not in pos_extra_outputs_states]
-            #states = list(final_outputs[3:])
             states = non_extra_states + final_outputs[2]
-            print "final_outputs[2]", final_outputs[2]
-            print "states", states
         else:
             new_states = final_outputs[2:]
         if pos_extra_outputs_states is not None:
