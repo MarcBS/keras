@@ -987,7 +987,7 @@ class SimpleRNN(RNN):
             warnings.warn('The `implementation` argument '
                           'in `SimpleRNN` has been deprecated. '
                           'Please remove it from your layer call.')
-        if K.backend() == 'theano':
+        if K.backend() == 'theano' and dropout + recurrent_dropout > 0.:
             warnings.warn(
                 'RNN dropout is no longer supported with the Theano backend '
                 'due to technical limitations. '
@@ -1432,7 +1432,7 @@ class GRU(RNN):
             warnings.warn('`implementation=0` has been deprecated, '
                           'and now defaults to `implementation=2`.'
                           'Please update your layer call.')
-        if K.backend() == 'theano':
+        if K.backend() == 'theano' and dropout + recurrent_dropout > 0.:
             warnings.warn(
                 'RNN dropout is no longer supported with the Theano backend '
                 'due to technical limitations. '
@@ -4042,7 +4042,7 @@ class LSTM(RNN):
             warnings.warn('`implementation=0` has been deprecated, '
                           'and now defaults to `implementation=2`.'
                           'Please update your layer call.')
-        if K.backend() == 'theano':
+        if K.backend() == 'theano' and dropout + recurrent_dropout > 0.:
             warnings.warn(
                 'RNN dropout is no longer supported with the Theano backend '
                 'due to technical limitations. '

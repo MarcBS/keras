@@ -1391,11 +1391,6 @@ def rnn(step_function, inputs, initial_states,
     uses_learning_phase = False
 
     if mask is not None:
-        # if mask.ndim == ndim-1:
-        #    mask = expand_dims(mask)
-        # assert mask.ndim == ndim
-        # mask = mask.dimshuffle(axes)
-
         if mask.ndim < ndim:
             mask = expand_dims(mask)
         mask = mask.dimshuffle([1,0]+list(range(2,mask.ndim)))
