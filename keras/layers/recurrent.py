@@ -1712,7 +1712,7 @@ class GRUCond(Recurrent):
                                                                'It currently has %d inputs' % len(input_shape)
 
         self.input_dim = input_shape[0][2]
-        if self.input_spec[1].ndim == 3:
+        if K.ndim(self.input_spec[1]) == 3:
             self.context_dim = input_shape[1][2]
             self.static_ctx = False
             assert input_shape[1][1] == input_shape[0][1], 'When using a 3D ctx in GRUCond, it has to have the same ' \
@@ -1908,7 +1908,7 @@ class GRUCond(Recurrent):
             dp_mask = states[3]  # Dropout W
             context = states[4]
             mask_context = states[5]  # Context mask
-            if mask_context.ndim > 1:  # Mask the context (only if necessary)
+            if K.ndim(mask_context) > 1:  # Mask the context (only if necessary)
                 context = mask_context[:, :, None] * context
             matrix_x += K.dot(context * dp_mask[0], self.kernel)
 
@@ -2370,13 +2370,10 @@ class AttGRU(Recurrent):
         # Attention model (see Formulation in class header)
         p_state_ = K.dot(h_tm1 * att_dp_mask[0], self.attention_recurrent_kernel)
         pctx_ = K.tanh(pctx_ + p_state_[:, None, :])
-        e = K.dot(pctx_, self.attention_context_wa) + self.bias_ca
-        #if mask_context.ndim > 1:  # Mask the context (only if necessary)
-        #    e = mask_context * e
-        alphas_shape = e.shape
-        alphas = K.softmax(e.reshape([alphas_shape[0], alphas_shape[1]]))
+        e = K.dot_product(pctx_, self.attention_context_wa) + self.bias_ca
+        alphas = K.softmax(K.reshape(e, [K.shape(e)[0], K.shape(e)[1]]))
         # sum over the in_timesteps dimension resulting in [batch_size, input_dim]
-        ctx_ = (context * alphas[:, :, None]).sum(axis=1)
+        ctx_ = K.sum(context * alphas[:, :, None], axis=1)
 
         matrix_x = x + K.dot(ctx_ * dp_mask[0], self.kernel)
         if self.use_bias:
@@ -2916,20 +2913,19 @@ class AttGRUCond(Recurrent):
         pctx_ = states[6]  # Projected context (i.e. context * Ua + ba)
         context = states[7]  # Original context
         mask_context = states[8]  # Context mask
-        if mask_context.ndim > 1:  # Mask the context (only if necessary)
+        if K.ndim(mask_context) > 1:  # Mask the context (only if necessary)
             pctx_ = mask_context[:, :, None] * pctx_
             context = mask_context[:, :, None] * context
 
         # Attention model (see Formulation in class header)
         p_state_ = K.dot(h_tm1 * att_dp_mask[0], self.attention_recurrent_kernel)
         pctx_ = K.tanh(pctx_ + p_state_[:, None, :])
-        e = K.dot(pctx_, self.attention_context_wa) + self.bias_ca
-        if mask_context.ndim > 1:  # Mask the context (only if necessary)
+        e = K.dot_product(pctx_, self.attention_context_wa) + self.bias_ca
+        if K.ndim(mask_context) > 1:  # Mask the context (only if necessary)
             e = mask_context * e
-        alphas_shape = e.shape
-        alphas = K.softmax(e.reshape([alphas_shape[0], alphas_shape[1]]))
+        alphas = K.softmax(K.reshape(e, [K.shape(e)[0], K.shape(e)[1]]))
         # sum over the in_timesteps dimension resulting in [batch_size, input_dim]
-        ctx_ = (context * alphas[:, :, None]).sum(axis=1)
+        ctx_ = K.sum(context * alphas[:, :, None], axis=1)
 
         matrix_x = x + K.dot(ctx_ * dp_mask[0], self.kernel)
         if self.use_bias:
@@ -3499,7 +3495,7 @@ class AttConditionalGRUCond(Recurrent):
         pctx_ = states[6]  # Projected context (i.e. context * Ua + ba)
         context = states[7]  # Original context
         mask_context = states[8]  # Context mask
-        if mask_context.ndim > 1:  # Mask the context (only if necessary)
+        if K.ndim(mask_context) > 1:  # Mask the context (only if necessary)
             pctx_ = mask_context[:, :, None] * pctx_
             context = mask_context[:, :, None] * context
 
@@ -3522,13 +3518,12 @@ class AttConditionalGRUCond(Recurrent):
         # Attention model (see Formulation in class header)
         p_state_ = K.dot(h_ * att_dp_mask[0], self.attention_recurrent_kernel)
         pctx_ = K.tanh(pctx_ + p_state_[:, None, :])
-        e = K.dot(pctx_, self.attention_context_wa) + self.bias_ca
-        if mask_context.ndim > 1:  # Mask the context (only if necessary)
+        e = K.dot_product(pctx_, self.attention_context_wa) + self.bias_ca
+        if K.ndim(mask_context) > 1:  # Mask the context (only if necessary)
             e = mask_context * e
-        alphas_shape = e.shape
-        alphas = K.softmax(e.reshape([alphas_shape[0], alphas_shape[1]]))
+        alphas = K.softmax(K.reshape(e, [K.shape(e)[0], K.shape(e)[1]]))
         # sum over the in_timesteps dimension resulting in [batch_size, input_dim]
-        ctx_ = (context * alphas[:, :, None]).sum(axis=1)
+        ctx_ = K.sum(context * alphas[:, :, None], axis=1)
 
         matrix_x = K.dot(ctx_ * dp_mask[0], self.kernel)
         if self.use_bias:
@@ -4328,7 +4323,7 @@ class LSTMCond(Recurrent):
                                                                'It currently has %d inputs' % len(input_shape)
 
         self.input_dim = input_shape[0][2]
-        if self.input_spec[1].ndim == 3:
+        if K.ndim(self.input_spec[1]) == 3:
             self.context_dim = input_shape[1][2]
             self.static_ctx = False
             assert input_shape[1][1] == input_shape[0][1], 'When using a 3D ctx in LSTMCond, it has to have the same ' \
@@ -5026,11 +5021,10 @@ class AttLSTM(Recurrent):
         # Attention model (see Formulation in class header)
         p_state_ = K.dot(h_tm1 * att_dp_mask[0], self.attention_recurrent_kernel)
         pctx_ = K.tanh(pctx_ + p_state_[:, None, :])
-        e = K.dot(pctx_, self.attention_context_wa) + self.bias_ca
-        alphas_shape = e.shape
-        alphas = K.softmax(e.reshape([alphas_shape[0], alphas_shape[1]]))
+        e = K.dot_product(pctx_, self.attention_context_wa) + self.bias_ca
+        alphas = K.softmax(K.reshape(e, [K.shape(e)[0], K.shape(e)[1]]))
         # sum over the in_timesteps dimension resulting in [batch_size, input_dim]
-        ctx_ = (x * alphas[:, :, None]).sum(axis=1)
+        ctx_ = K.sum(context * alphas[:, :, None], axis=1)
 
         # LSTM
         z = x + \
@@ -5582,20 +5576,19 @@ class AttLSTMCond(Recurrent):
         pctx_ = states[7]  # Projected context (i.e. context * Ua + ba)
         context = states[8]  # Original context
         mask_context = states[9]  # Context mask
-        if mask_context.ndim > 1:  # Mask the context (only if necessary)
+        if K.ndim(mask_context) > 1:  # Mask the context (only if necessary)
             pctx_ = mask_context[:, :, None] * pctx_
             context = mask_context[:, :, None] * context
 
         # Attention model (see Formulation in class header)
         p_state_ = K.dot(h_tm1 * att_dp_mask[0], self.attention_recurrent_kernel)
         pctx_ = K.tanh(pctx_ + p_state_[:, None, :])
-        e = K.dot(pctx_, self.attention_context_wa) + self.bias_ca
-        if mask_context.ndim > 1:  # Mask the context (only if necessary)
+        e = K.dot_product(pctx_, self.attention_context_wa) + self.bias_ca
+        if K.ndim(mask_context) > 1:  # Mask the context (only if necessary)
             e = mask_context * e
-        alphas_shape = e.shape
-        alphas = K.softmax(e.reshape([alphas_shape[0], alphas_shape[1]]))
+        alphas = K.softmax(K.reshape(e, [K.shape(e)[0], K.shape(e)[1]]))
         # sum over the in_timesteps dimension resulting in [batch_size, input_dim]
-        ctx_ = (context * alphas[:, :, None]).sum(axis=1)
+        ctx_ = K.sum(context * alphas[:, :, None], axis=1)
 
         # LSTM
         z = x + \
@@ -6124,7 +6117,6 @@ class AttConditionalLSTMCond(Recurrent):
             self.init_state = inputs[2]
             self.init_memory = inputs[3]
         if K._BACKEND == 'tensorflow':
-            print "Input shape", input_shape
             if not input_shape[1]:
                 raise Exception('When using TensorFlow, you should define '
                                 'explicitly the number of timesteps of '
@@ -6203,7 +6195,7 @@ class AttConditionalLSTMCond(Recurrent):
         pctx_ = states[7]  # Projected context (i.e. context * Ua + ba)
         context = states[8]  # Original context
         mask_context = states[9]  # Context mask
-        if mask_context.ndim > 1:  # Mask the context (only if necessary)
+        if K.ndim(mask_context) > 1:  # Mask the context (only if necessary)
             pctx_ = mask_context[:, :, None] * pctx_
             context = mask_context[:, :, None] * context
 
@@ -6222,15 +6214,14 @@ class AttConditionalLSTMCond(Recurrent):
         h_ = o_ * self.activation(c_)
 
         # Attention model (see Formulation in class header)
-        p_state_ = K.dot(h_ * att_dp_mask[0], self.attention_recurrent_kernel)
+        p_state_ = K.dot_product(h_ * att_dp_mask[0], self.attention_recurrent_kernel)
         pctx_ = K.tanh(pctx_ + p_state_[:, None, :])
-        e = K.dot(pctx_, self.attention_context_wa) + self.bias_ca
-        if mask_context.ndim > 1:  # Mask the context (only if necessary)
+        e = K.dot_product(pctx_, self.attention_context_wa) + self.bias_ca
+        if K.ndim(mask_context) > 1:  # Mask the context (only if necessary)
             e = mask_context * e
-        alphas_shape = e.shape
-        alphas = K.softmax(e.reshape([alphas_shape[0], alphas_shape[1]]))
+        alphas = K.softmax(K.reshape(e, [K.shape(e)[0], K.shape(e)[1]]))
         # sum over the in_timesteps dimension resulting in [batch_size, input_dim]
-        ctx_ = (context * alphas[:, :, None]).sum(axis=1)
+        ctx_ = K.sum(context * alphas[:, :, None], axis=1)
 
         # LSTM
         z = K.dot(h_ * rec_dp_mask[0], self.recurrent_kernel) + \
@@ -6506,18 +6497,18 @@ class AttLSTMCond2Inputs(Recurrent):
         self.input_dim = input_shape[0][2]
 
         if self.attend_on_both:
-            assert self.input_spec[1].ndim == 3 and self.input_spec[2].ndim, 'When using two attention models,' \
+            assert K.ndim(self.input_spec[1]) == 3 and K.ndim(self.input_spec[2]), 'When using two attention models,' \
                                                                              'you should pass two 3D tensors' \
                                                                              'to AttLSTMCond2Inputs'
         else:
-            assert self.input_spec[1].ndim == 3, 'When using an attention model, you should pass one 3D tensors' \
+            assert K.ndim(self.input_spec[1]) == 3, 'When using an attention model, you should pass one 3D tensors' \
                                                  'to AttLSTMCond2Inputs'
 
-        if self.input_spec[1].ndim == 3:
+        if K.ndim(self.input_spec[1]) == 3:
             self.context1_steps = input_shape[1][1]
             self.context1_dim = input_shape[1][2]
 
-        if self.input_spec[2].ndim == 3:
+        if K.ndim(self.input_spec[2]) == 3:
             self.context2_steps = input_shape[2][1]
             self.context2_dim = input_shape[2][2]
 
@@ -6789,7 +6780,7 @@ class AttLSTMCond2Inputs(Recurrent):
             context2 = states[pos_states + 3]  # Context 2
             mask_context2 = states[pos_states + 4]  # Context 2 mask
 
-        if mask_context1.ndim > 1:  # Mask the context (only if necessary)
+        if K.ndim(mask_context1) > 1:  # Mask the context (only if necessary)
             pctx_1 = mask_context1[:, :, None] * pctx_1
             context1 = mask_context1[:, :, None] * context1
 
@@ -6797,14 +6788,13 @@ class AttLSTMCond2Inputs(Recurrent):
         p_state_1 = K.dot(h_tm1 * B_Wa[0], self.Wa)
         pctx_1 = K.tanh(pctx_1 + p_state_1[:, None, :])
         e1 = K.dot(pctx_1 * B_wa[0], self.wa) + self.ca
-        if mask_context1.ndim > 1:  # Mask the context (only if necessary)
+        if K.ndim(mask_context1) > 1:  # Mask the context (only if necessary)
             e1 = mask_context1 * e1
-        alphas_shape1 = e1.shape
-        alphas1 = K.softmax(e1.reshape([alphas_shape1[0], alphas_shape1[1]]))
+        alphas1 = K.softmax(e1.reshape([K.shape(e1)[0], K.shape(e1)[1]]))
         # sum over the in_timesteps dimension resulting in [batch_size, input_dim]
-        ctx_1 = (context1 * alphas1[:, :, None]).sum(axis=1)
+        ctx_1 = K.sum(context1 * alphas1[:, :, None], axis=1)
 
-        if self.attend_on_both and mask_context2.ndim > 1:  # Mask the context2 (only if necessary)
+        if self.attend_on_both and K.ndim(mask_context2) > 1:  # Mask the context2 (only if necessary)
             pctx_2 = mask_context2[:, :, None] * pctx_2
             context2 = mask_context2[:, :, None] * context2
 
@@ -6813,12 +6803,12 @@ class AttLSTMCond2Inputs(Recurrent):
             p_state_2 = K.dot(h_tm1 * B_Wa2[0], self.Wa2)
             pctx_2 = K.tanh(pctx_2 + p_state_2[:, None, :])
             e2 = K.dot(pctx_2 * B_wa2[0], self.wa2) + self.ca2
-            if mask_context2.ndim > 1:  # Mask the context (only if necessary)
+            if K.ndim(mask_context2) > 1:  # Mask the context (only if necessary)
                 e2 = mask_context2 * e2
-            alphas_shape2 = e2.shape
-            alphas2 = K.softmax(e2.reshape([alphas_shape2[0], alphas_shape2[1]]))
+            alphas2 = K.softmax(e2.reshape([K.shape(e2)[0], K.shape(e2)[1]]))
             # sum over the in_timesteps dimension resulting in [batch_size, input_dim]
-            ctx_2 = (context2 * alphas2[:, :, None]).sum(axis=1)
+            ctx_2 = K.sum(context2 * alphas2[:, :, None], axis=1)
+
         else:
             ctx_2 = context2
             alphas2 = mask_context2
@@ -7177,27 +7167,27 @@ class AttLSTMCond3Inputs(Recurrent):
         self.input_dim = input_shape[0][2]
 
         if self.attend_on_both:
-            assert self.input_spec[1].ndim == 3 and \
-                   self.input_spec[2].ndim == 3 and \
-                   self.input_spec[3].ndim == 3, 'When using two attention models,' \
+            assert K.ndim(self.input_spec[1]) == 3 and \
+                   K.ndim(self.input_spec[2]) == 3 and \
+                   K.ndim(self.input_spec[3]) == 3, 'When using two attention models,' \
                                                  'you should pass two 3D tensors' \
                                                  'to AttLSTMCond3Inputs'
         else:
-            assert self.input_spec[1].ndim == 3, 'When using an attention model, you should pass one 3D tensors' \
+            assert K.ndim(self.input_spec[1]) == 3, 'When using an attention model, you should pass one 3D tensors' \
                                                  'to AttLSTMCond3Inputs'
 
-        if self.input_spec[1].ndim == 3:
+        if K.ndim(self.input_spec[1]) == 3:
             self.context1_steps = input_shape[1][1]
             self.context1_dim = input_shape[1][2]
 
-        if self.input_spec[2].ndim == 3:
+        if K.ndim(self.input_spec[2]) == 3:
             self.context2_steps = input_shape[2][1]
             self.context2_dim = input_shape[2][2]
 
         else:
             self.context2_dim = input_shape[2][1]
 
-        if self.input_spec[3].ndim == 3:
+        if K.ndim(self.input_spec[3]) == 3:
             self.context3_steps = input_shape[3][1]
             self.context3_dim = input_shape[3][2]
         else:
@@ -7513,7 +7503,7 @@ class AttLSTMCond3Inputs(Recurrent):
             context3 = states[pos_states + 5]  # Context 2
             mask_context3 = states[pos_states + 6]  # Context 2 mask
 
-        if mask_context1.ndim > 1:  # Mask the context (only if necessary)
+        if K.ndim(mask_context1) > 1:  # Mask the context (only if necessary)
             pctx_1 = mask_context1[:, :, None] * pctx_1
             context1 = mask_context1[:, :, None] * context1
 
@@ -7521,18 +7511,17 @@ class AttLSTMCond3Inputs(Recurrent):
         p_state_1 = K.dot(h_tm1 * B_Wa[0], self.Wa)
         pctx_1 = K.tanh(pctx_1 + p_state_1[:, None, :])
         e1 = K.dot(pctx_1 * B_wa[0], self.wa) + self.ca
-        if mask_context1.ndim > 1:  # Mask the context (only if necessary)
+        if K.ndim(mask_context1) > 1:  # Mask the context (only if necessary)
             e1 = mask_context1 * e1
-        alphas_shape1 = e1.shape
-        alphas1 = K.softmax(e1.reshape([alphas_shape1[0], alphas_shape1[1]]))
+        alphas1 = K.softmax(e1.reshape([K.shape(e1)[0], K.shape(e1)[1]]))
         # sum over the in_timesteps dimension resulting in [batch_size, input_dim]
-        ctx_1 = (context1 * alphas1[:, :, None]).sum(axis=1)
+        ctx_1 = K.sum(context1 * alphas1[:, :, None], axis=1)
 
         if self.attend_on_both:
-            if mask_context2.ndim > 1:  # Mask the context2 (only if necessary)
+            if K.ndim(mask_context2) > 1:  # Mask the context2 (only if necessary)
                 pctx_2 = mask_context2[:, :, None] * pctx_2
                 context2 = mask_context2[:, :, None] * context2
-            if mask_context3.ndim > 1:  # Mask the context2 (only if necessary)
+            if K.ndim(mask_context3) > 1:  # Mask the context2 (only if necessary)
                 pctx_3 = mask_context3[:, :, None] * pctx_3
                 context3 = mask_context3[:, :, None] * context3
 
@@ -7541,23 +7530,22 @@ class AttLSTMCond3Inputs(Recurrent):
             p_state_2 = K.dot(h_tm1 * B_Wa2[0], self.Wa2)
             pctx_2 = K.tanh(pctx_2 + p_state_2[:, None, :])
             e2 = K.dot(pctx_2 * B_wa2[0], self.wa2) + self.ca2
-            if mask_context2.ndim > 1:  # Mask the context (only if necessary)
+            if K.ndim(mask_context2) > 1:  # Mask the context (only if necessary)
                 e2 = mask_context2 * e2
-            alphas_shape2 = e2.shape
-            alphas2 = K.softmax(e2.reshape([alphas_shape2[0], alphas_shape2[1]]))
+            alphas2 = K.softmax(e2.reshape([K.shape(e2)[0], K.shape(e2)[1]]))
             # sum over the in_timesteps dimension resulting in [batch_size, input_dim]
-            ctx_2 = (context2 * alphas2[:, :, None]).sum(axis=1)
+            ctx_2 = K.sum(context2 * alphas2[:, :, None], axis=1)
 
             # Attention model 3 (see Formulation in class header)
             p_state_3 = K.dot(h_tm1 * B_Wa3[0], self.Wa3)
             pctx_3 = K.tanh(pctx_3 + p_state_3[:, None, :])
             e3 = K.dot(pctx_3 * B_wa3[0], self.wa3) + self.ca3
-            if mask_context3.ndim > 1:  # Mask the context (only if necessary)
+            if K.ndim(mask_context3) > 1:  # Mask the context (only if necessary)
                 e3 = mask_context3 * e3
-            alphas_shape3 = e3.shape
-            alphas3 = K.softmax(e3.reshape([alphas_shape3[0], alphas_shape3[1]]))
+            alphas3 = K.softmax(e3.reshape([K.shape(e3)[0], K.shape(e3)[1]]))
             # sum over the in_timesteps dimension resulting in [batch_size, input_dim]
-            ctx_3 = (context3 * alphas3[:, :, None]).sum(axis=1)
+            ctx_3 = K.sum(context3 * alphas3[:, :, None], axis=1)
+
         else:
             ctx_2 = context2
             alphas2 = mask_context2
