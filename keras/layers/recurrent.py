@@ -2270,13 +2270,13 @@ class AttGRU(Recurrent):
         else:
             self.bias = None
 
-        self.bias_ba = self.add_weight(shape=self.att_units,
+        self.bias_ba = self.add_weight(shape=(self.att_units,),
                                        name='bias_ba',
                                        initializer=self.bias_ba_initializer,
                                        regularizer=self.bias_ba_regularizer,
                                        constraint=self.bias_ba_constraint)
 
-        self.bias_ca = self.add_weight(shape=self.context_steps,
+        self.bias_ca = self.add_weight(shape=(self.context_steps,),
                                        name='bias_ca',
                                        initializer=self.bias_ca_initializer,
                                        regularizer=self.bias_ca_regularizer,
@@ -2804,13 +2804,13 @@ class AttGRUCond(Recurrent):
         else:
             self.bias = None
 
-        self.bias_ba = self.add_weight(shape=self.att_units,
+        self.bias_ba = self.add_weight(shape=(self.att_units,),
                                        name='bias_ba',
                                        initializer=self.bias_ba_initializer,
                                        regularizer=self.bias_ba_regularizer,
                                        constraint=self.bias_ba_constraint)
 
-        self.bias_ca = self.add_weight(shape=self.context_steps,
+        self.bias_ca = self.add_weight(shape=(self.context_steps,),
                                        name='bias_ca',
                                        initializer=self.bias_ca_initializer,
                                        regularizer=self.bias_ca_regularizer,
@@ -3386,13 +3386,13 @@ class AttConditionalGRUCond(Recurrent):
             self.bias = None
             self.bias1 = None
 
-        self.bias_ba = self.add_weight(shape=self.att_units,
+        self.bias_ba = self.add_weight(shape=(self.att_units,),
                                        name='bias_ba',
                                        initializer=self.bias_ba_initializer,
                                        regularizer=self.bias_ba_regularizer,
                                        constraint=self.bias_ba_constraint)
 
-        self.bias_ca = self.add_weight(shape=self.context_steps,
+        self.bias_ca = self.add_weight(shape=(self.context_steps,),
                                        name='bias_ca',
                                        initializer=self.bias_ca_initializer,
                                        regularizer=self.bias_ca_regularizer,
@@ -4915,13 +4915,13 @@ class AttLSTM(Recurrent):
         else:
             self.bias = None
 
-        self.bias_ba = self.add_weight(shape=self.att_units,
+        self.bias_ba = self.add_weight(shape=(self.att_units,),
                                        name='bias_ba',
                                        initializer=self.bias_ba_initializer,
                                        regularizer=self.bias_ba_regularizer,
                                        constraint=self.bias_ba_constraint)
 
-        self.bias_ca = self.add_weight(shape=self.context_steps,
+        self.bias_ca = self.add_weight(shape=(self.context_steps,),
                                        name='bias_ca',
                                        initializer=self.bias_ca_initializer,
                                        regularizer=self.bias_ca_regularizer,
@@ -5463,13 +5463,13 @@ class AttLSTMCond(Recurrent):
         else:
             self.bias = None
 
-        self.bias_ba = self.add_weight(shape=self.att_units,
+        self.bias_ba = self.add_weight(shape=(self.att_units,),
                                        name='bias_ba',
                                        initializer=self.bias_ba_initializer,
                                        regularizer=self.bias_ba_regularizer,
                                        constraint=self.bias_ba_constraint)
 
-        self.bias_ca = self.add_weight(shape=self.context_steps,
+        self.bias_ca = self.add_weight(shape=(self.context_steps,),
                                        name='bias_ca',
                                        initializer=self.bias_ca_initializer,
                                        regularizer=self.bias_ca_regularizer,
@@ -6077,13 +6077,13 @@ class AttConditionalLSTMCond(Recurrent):
                                          regularizer=self.bias1_regularizer,
                                          constraint=self.bias1_constraint)
 
-            self.bias_ba = self.add_weight(shape=self.att_units,
+            self.bias_ba = self.add_weight(shape=(self.att_units,),
                                            name='bias_ba',
                                            initializer=self.bias_ba_initializer,
                                            regularizer=self.bias_ba_regularizer,
                                            constraint=self.bias_ba_constraint)
 
-            self.bias_ca = self.add_weight(shape=self.context_steps,
+            self.bias_ca = self.add_weight(shape=(self.context_steps,),
                                            name='bias_ca',
                                            initializer=self.bias_ca_initializer,
                                            regularizer=self.bias_ca_regularizer,
