@@ -389,6 +389,7 @@ class Sequential(Model):
         self.inputs = []  # List of input tensors
         self.outputs = []  # List of length 1: the output tensor (unique).
         self._trainable = True
+        self._updatable = True
         self._initial_weights = None
 
         # Model attributes.
@@ -553,6 +554,7 @@ class Sequential(Model):
         self.model = Model(self.inputs, self.outputs[0],
                            name=self.name + '_model')
         self.model.trainable = self.trainable
+        self.model.updatable = self.updatable
 
         # mirror model attributes
         self.supports_masking = self.model.supports_masking
@@ -622,9 +624,19 @@ class Sequential(Model):
 
     @trainable.setter
     def trainable(self, value):
-        if self.model:
+        if self.built:
             self.model.trainable = value
         self._trainable = value
+
+    @property
+    def updatable(self):
+        return self._updatable
+
+    @updatable.setter
+    def updatable(self, value):
+        if self.built:
+            self.model.updatable = value
+        self._updatable = value
 
     @property
     def trainable_weights(self):
@@ -959,17 +971,28 @@ class Sequential(Model):
                               steps_per_epoch=steps_per_epoch,
                               validation_steps=validation_steps)
 
-    def evaluate(self, x, y, batch_size=32, verbose=1,
-                 sample_weight=None):
+    def evaluate(self, x=None, y=None,
+                 batch_size=None,
+                 verbose=1,
+                 sample_weight=None,
+                 steps=None):
         """Computes the loss on some input data, batch by batch.
 
         # Arguments
             x: input data, as a Numpy array or list of Numpy arrays
                 (if the model has multiple inputs).
+                `x` can be `None` (default) if feeding from
+                framework-native tensors (e.g. TensorFlow data tensors).
             y: labels, as a Numpy array.
-            batch_size: integer. Number of samples per gradient update.
+                `y` can be `None` (default) if feeding from
+                framework-native tensors (e.g. TensorFlow data tensors).
+            batch_size: Integer. If unspecified, it will default to 32.
             verbose: verbosity mode, 0 or 1.
             sample_weight: sample weights, as a Numpy array.
+            steps: Integer or `None`.
+                Total number of steps (batches of samples)
+                before declaring the evaluation round finished.
+                Ignored with the default value of `None`.
 
         # Returns
             Scalar test loss (if the model has no metrics)
@@ -986,16 +1009,17 @@ class Sequential(Model):
         return self.model.evaluate(x, y,
                                    batch_size=batch_size,
                                    verbose=verbose,
-                                   sample_weight=sample_weight)
+                                   sample_weight=sample_weight,
+                                   steps=steps)
 
-    def predict(self, x, batch_size=32, verbose=0):
+    def predict(self, x, batch_size=None, verbose=0):
         """Generates output predictions for the input samples.
 
         The input samples are processed batch by batch.
 
         # Arguments
             x: the input data, as a Numpy array.
-            batch_size: integer.
+            batch_size: Integer. If unspecified, it will default to 32.
             verbose: verbosity mode, 0 or 1.
 
         # Returns
@@ -1072,7 +1096,7 @@ class Sequential(Model):
         return self.model.test_on_batch(x, y,
                                         sample_weight=sample_weight)
 
-    def predict_proba(self, x, batch_size=32, verbose=0):
+    def predict_proba(self, x, batch_size=None, verbose=0):
         """Generates class probability predictions for the input samples.
 
         The input samples are processed batch by batch.
@@ -1080,7 +1104,7 @@ class Sequential(Model):
         # Arguments
             x: input data, as a Numpy array or list of Numpy arrays
                 (if the model has multiple inputs).
-            batch_size: integer.
+            batch_size: Integer. If unspecified, it will default to 32.
             verbose: verbosity mode, 0 or 1.
 
         # Returns
@@ -1094,7 +1118,7 @@ class Sequential(Model):
                           '(like softmax or sigmoid would).')
         return preds
 
-    def predict_classes(self, x, batch_size=32, verbose=0):
+    def predict_classes(self, x, batch_size=None, verbose=0):
         """Generate class predictions for the input samples.
 
         The input samples are processed batch by batch.
@@ -1102,7 +1126,7 @@ class Sequential(Model):
         # Arguments
             x: input data, as a Numpy array or list of Numpy arrays
                 (if the model has multiple inputs).
-            batch_size: integer.
+            batch_size: Integer. If unspecified, it will default to 32.
             verbose: verbosity mode, 0 or 1.
 
         # Returns

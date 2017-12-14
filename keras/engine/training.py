@@ -195,7 +195,7 @@ def _standardize_sample_or_class_weights(x_weight, output_names, weight_type):
     else:
         raise TypeError('The model has multiple outputs, so `' +
                         weight_type + '` '
-                        'should be either a list of a dict. '
+                        'should be either a list or a dict. '
                         'Provided `' + weight_type +
                         '` type not understood: ' +
                         str(x_weight))
@@ -701,7 +701,7 @@ class Model(Container):
         elif isinstance(loss_weights, list):
             if len(loss_weights) != len(self.outputs):
                 raise ValueError('When passing a list as loss_weights, '
-                                 'it should have one entry per model outputs. '
+                                 'it should have one entry per model output. '
                                  'The model has ' + str(len(self.outputs)) +
                                  ' outputs, but you passed loss_weights=' +
                                  str(loss_weights))
@@ -719,7 +719,7 @@ class Model(Container):
                 if len(target_tensors) != len(self.outputs):
                     raise ValueError(
                         'When passing a list as `target_tensors`, '
-                        'it should have one entry per model outputs. '
+                        'it should have one entry per model output. '
                         'The model has ' + str(len(self.outputs)) +
                         ' outputs, but you passed target_tensors=' +
                         str(target_tensors))
@@ -794,7 +794,7 @@ class Model(Container):
         elif isinstance(sample_weight_mode, list):
             if len(sample_weight_mode) != len(self.outputs):
                 raise ValueError('When passing a list as sample_weight_mode, '
-                                 'it should have one entry per model outputs. '
+                                 'it should have one entry per model output. '
                                  'The model has ' + str(len(self.outputs)) +
                                  ' outputs, but you passed '
                                  'sample_weight_mode=' +
@@ -1763,8 +1763,7 @@ class Model(Container):
             steps: Integer or `None`.
                 Total number of steps (batches of samples)
                 before declaring the evaluation round finished.
-                The default `None` is equal to the number of samples in
-                your dataset divided by the batch size.
+                Ignored with the default value of `None`.
 
 
         # Returns
@@ -2075,7 +2074,8 @@ class Model(Container):
                 If unspecified, `max_queue_size` will default to 10.
             workers: Integer. Maximum number of processes to spin up
                 when using process based threading.
-                If unspecified, `workers` will default to 1.
+                If unspecified, `workers` will default to 1. If 0, will
+                execute the generator on the main thread.
             use_multiprocessing: Boolean. If True, use process based threading.
                 If unspecified, `workers` will default to False.
                 Note that because
@@ -2197,16 +2197,19 @@ class Model(Container):
         enqueuer = None
 
         try:
-            if is_sequence:
-                enqueuer = OrderedEnqueuer(generator,
-                                           use_multiprocessing=use_multiprocessing,
-                                           shuffle=shuffle)
+            if workers > 0:
+                if is_sequence:
+                    enqueuer = OrderedEnqueuer(generator,
+                                               use_multiprocessing=use_multiprocessing,
+                                               shuffle=shuffle)
+                else:
+                    enqueuer = GeneratorEnqueuer(generator,
+                                                 use_multiprocessing=use_multiprocessing,
+                                                 wait_time=wait_time)
+                enqueuer.start(workers=workers, max_queue_size=max_queue_size)
+                output_generator = enqueuer.get()
             else:
-                enqueuer = GeneratorEnqueuer(generator,
-                                             use_multiprocessing=use_multiprocessing,
-                                             wait_time=wait_time)
-            enqueuer.start(workers=workers, max_queue_size=max_queue_size)
-            output_generator = enqueuer.get()
+                output_generator = generator
 
             callback_model.stop_training = False
             while epoch < epochs:
@@ -2319,8 +2322,10 @@ class Model(Container):
                 Optional for `Sequence`: if unspecified, will use
                 the `len(generator)` as a number of steps.
             max_queue_size: maximum size for the generator queue
-            workers: maximum number of processes to spin up
-                when using process based threading
+            workers: Integer. Maximum number of processes to spin up
+                when using process based threading.
+                If unspecified, `workers` will default to 1. If 0, will
+                execute the generator on the main thread.
             use_multiprocessing: if True, use process based threading.
                 Note that because
                 this implementation relies on multiprocessing,
@@ -2363,15 +2368,18 @@ class Model(Container):
         enqueuer = None
 
         try:
-            if is_sequence:
-                enqueuer = OrderedEnqueuer(generator,
-                                           use_multiprocessing=use_multiprocessing)
+            if workers > 0:
+                if is_sequence:
+                    enqueuer = OrderedEnqueuer(generator,
+                                               use_multiprocessing=use_multiprocessing)
+                else:
+                    enqueuer = GeneratorEnqueuer(generator,
+                                                 use_multiprocessing=use_multiprocessing,
+                                                 wait_time=wait_time)
+                enqueuer.start(workers=workers, max_queue_size=max_queue_size)
+                output_generator = enqueuer.get()
             else:
-                enqueuer = GeneratorEnqueuer(generator,
-                                             use_multiprocessing=use_multiprocessing,
-                                             wait_time=wait_time)
-            enqueuer.start(workers=workers, max_queue_size=max_queue_size)
-            output_generator = enqueuer.get()
+                output_generator = generator
 
             while steps_done < steps:
                 generator_output = next(output_generator)
@@ -2393,11 +2401,11 @@ class Model(Container):
                 outs = self.test_on_batch(x, y, sample_weight=sample_weight)
 
                 if isinstance(x, list):
-                    batch_size = len(x[0])
+                    batch_size = x[0].shape[0]
                 elif isinstance(x, dict):
-                    batch_size = len(list(x.values())[0])
+                    batch_size = list(x.values())[0].shape[0]
                 else:
-                    batch_size = len(x)
+                    batch_size = x.shape[0]
                 if batch_size == 0:
                     raise ValueError('Received an empty batch. '
                                      'Batches should at least contain one item.')
@@ -2441,8 +2449,10 @@ class Model(Container):
                 Optional for `Sequence`: if unspecified, will use
                 the `len(generator)` as a number of steps.
             max_queue_size: Maximum size for the generator queue.
-            workers: Maximum number of processes to spin up
-                when using process based threading
+            workers: Integer. Maximum number of processes to spin up
+                when using process based threading.
+                If unspecified, `workers` will default to 1. If 0, will
+                execute the generator on the main thread.
             use_multiprocessing: If `True`, use process based threading.
                 Note that because
                 this implementation relies on multiprocessing,
@@ -2482,15 +2492,18 @@ class Model(Container):
         enqueuer = None
 
         try:
-            if is_sequence:
-                enqueuer = OrderedEnqueuer(generator,
-                                           use_multiprocessing=use_multiprocessing)
+            if workers > 0:
+                if is_sequence:
+                    enqueuer = OrderedEnqueuer(generator,
+                                               use_multiprocessing=use_multiprocessing)
+                else:
+                    enqueuer = GeneratorEnqueuer(generator,
+                                                 use_multiprocessing=use_multiprocessing,
+                                                 wait_time=wait_time)
+                enqueuer.start(workers=workers, max_queue_size=max_queue_size)
+                output_generator = enqueuer.get()
             else:
-                enqueuer = GeneratorEnqueuer(generator,
-                                             use_multiprocessing=use_multiprocessing,
-                                             wait_time=wait_time)
-            enqueuer.start(workers=workers, max_queue_size=max_queue_size)
-            output_generator = enqueuer.get()
+                output_generator = generator
 
             if verbose == 1:
                 progbar = Progbar(target=steps)
