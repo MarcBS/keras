@@ -2357,8 +2357,6 @@ def bias_add(x, bias, data_format=None):
 
 
 # RANDOMNESS
-
-
 def random_normal(shape, mean=0.0, stddev=1.0, dtype=None, seed=None):
     if dtype is None:
         dtype = floatx()

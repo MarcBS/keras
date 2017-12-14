@@ -194,6 +194,8 @@ class VarianceScaling(Initializer):
         self.seed = seed
 
     def __call__(self, shape, dtype=None):
+        if dtype is None:
+            dtype = K.floatx()
         fan_in, fan_out = _compute_fans(shape)
         scale = self.scale
         if self.mode == 'fan_in':
