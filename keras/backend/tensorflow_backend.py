@@ -1175,6 +1175,18 @@ def batch_dot(x, y, axes=None):
     return out
 
 
+def dot_product(x, kernel):
+    """
+    Wrapper for dot product operation, in order to be compatible with both
+    Theano and Tensorflow
+    Args:
+        x (): input
+        kernel (): weights
+    Returns:
+    """
+    return squeeze(dot(x, expand_dims(kernel)), axis=-1)
+
+
 def transpose(x):
     """Transposes a tensor and returns it.
 
@@ -2584,7 +2596,7 @@ def stop_gradient(variables):
 
 def rnn(step_function, inputs, initial_states,
         go_backwards=False, mask=None, constants=None,
-        unroll=False, input_length=None):
+        unroll=False, input_length=None, pos_extra_outputs_states=None):
     """Iterates over the time dimension of a tensor.
 
     # Arguments

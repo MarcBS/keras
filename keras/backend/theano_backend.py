@@ -487,6 +487,18 @@ def batch_dot(x, y, axes=None):
     return out
 
 
+def dot_product(x, kernel):
+    """
+    Wrapper for dot product operation, in order to be compatible with both
+    Theano and Tensorflow
+    Args:
+        x (): input
+        kernel (): weights
+    Returns:
+    """
+    return dot(x, kernel)
+
+
 def transpose(x):
     y = T.transpose(x)
     if hasattr(x, '_keras_shape'):
@@ -1405,6 +1417,8 @@ def rnn(step_function, inputs, initial_states,
             states = initial_states
             for i in indices:
                 output, new_states = step_function(inputs[i], states + constants)
+                if getattr(output, '_uses_learning_phase', False):
+                    uses_learning_phase = True
 
                 if len(successive_outputs) == 0:
                     prev_output = zeros_like(output)
@@ -1425,20 +1439,23 @@ def rnn(step_function, inputs, initial_states,
             for i in range(len(successive_states[-1])):
                 states.append(T.stack(*[states_at_step[i] for states_at_step in successive_states]))
         else:
-            # build an all-zero tensor of shape (samples, units)
+            # build an all-zero tensor of shape (samples, output_dim)
             initial_output = step_function(inputs[0], initial_states + constants)[0] * 0
             # Theano gets confused by broadcasting patterns in the scan op
             initial_output = T.unbroadcast(initial_output, 0, 1)
 
-            def _step(input, mask, output_tm1, *states):
-                output, new_states = step_function(input, states)
+            def _step(inputs, mask, output_tm1, *states):
+                outputs, new_states = step_function(inputs, states)
+                if getattr(outputs, '_uses_learning_phase', False):
+                    global uses_learning_phase
+                    uses_learning_phase = True
                 # output previous output if masked.
-                output = T.switch(mask, output, output_tm1)
+                outputs = T.switch(mask, outputs, output_tm1)
                 return_states = []
                 for state, new_state in zip(states, new_states):
                     #TODO: Theano cannot optimize this and therefore, it shows the InconsistencyError (new backend)
                     return_states.append(T.switch(mask, new_state, state))
-                return [output] + return_states
+                return [outputs] + return_states
 
             results, _ = theano.scan(
                 _step,
@@ -1448,7 +1465,7 @@ def rnn(step_function, inputs, initial_states,
                 go_backwards=go_backwards)
 
             # deal with Theano API inconsistency
-            if type(results) is list:
+            if isinstance(results, list):
                 outputs = results[0]
                 states = results[1:]
             else:
@@ -1464,8 +1481,10 @@ def rnn(step_function, inputs, initial_states,
             successive_states = []
             states = initial_states
             for i in indices:
-                output, states = step_function(inputs[i], states + constants)
-                successive_outputs.append(output)
+                outputs, states = step_function(inputs[i], states + constants)
+                if getattr(outputs, '_uses_learning_phase', False):
+                    uses_learning_phase = True
+                successive_outputs.append(outputs)
                 successive_states.append(states)
             outputs = T.stack(*successive_outputs)
             states = []
@@ -1473,9 +1492,12 @@ def rnn(step_function, inputs, initial_states,
                 states.append(T.stack(*[states_at_step[i] for states_at_step in successive_states]))
 
         else:
-            def _step(input, *states):
-                output, new_states = step_function(input, states)
-                return [output] + new_states
+            def _step(inputs, *states):
+                outputs, new_states = step_function(inputs, states)
+                if getattr(outputs, '_uses_learning_phase', False):
+                    global uses_learning_phase
+                    uses_learning_phase = True
+                return [outputs] + new_states
 
             results, _ = theano.scan(
                 _step,
@@ -1483,8 +1505,9 @@ def rnn(step_function, inputs, initial_states,
                 outputs_info=[None] + initial_states,
                 non_sequences=constants,
                 go_backwards=go_backwards)
+
             # deal with Theano API inconsistency
-            if type(results) is list:
+            if isinstance(results, list):
                 outputs = results[0]
                 states = results[1:]
             else:
@@ -1502,6 +1525,7 @@ def rnn(step_function, inputs, initial_states,
     else:
         states = [state if i_s in pos_extra_outputs_states
                         else T.squeeze(state[-1]) for i_s, state in enumerate(states)]
+    last_output._uses_learning_phase = uses_learning_phase
     return last_output, outputs, states
 
 
