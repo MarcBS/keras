@@ -1963,6 +1963,7 @@ class GRUCond(Recurrent):
         # States[5] - mask_context
         if mask_context is None:
             mask_context = K.not_equal(K.sum(self.context, axis=2), self.mask_value)
+            mask_context = K.cast(mask_context, K.floatx())
         constants.append(mask_context)
 
         return constants
@@ -3014,6 +3015,7 @@ class AttGRUCond(Recurrent):
         # States[9] - mask_context
         if mask_context is None:
             mask_context = K.not_equal(K.sum(self.context, axis=2), self.mask_value)
+            mask_context = K.cast(mask_context, K.floatx())
         constants.append(mask_context)
 
         return constants
@@ -3615,6 +3617,7 @@ class AttConditionalGRUCond(Recurrent):
         # States[9] - mask_context
         if mask_context is None:
             mask_context = K.not_equal(K.sum(self.context, axis=2), self.mask_value)
+            mask_context = K.cast(mask_context, K.floatx())
         constants.append(mask_context)
 
         return constants
@@ -5673,6 +5676,7 @@ class AttLSTMCond(Recurrent):
         # States[9] - mask_context
         if mask_context is None:
             mask_context = K.not_equal(K.sum(self.context, axis=2), self.mask_value)
+            mask_context = K.cast(mask_context, K.floatx())
         constants.append(mask_context)
 
         return constants
@@ -6145,27 +6149,28 @@ class AttConditionalLSTMCond(Recurrent):
                                              input_length=state_below.shape[1],
                                              pos_extra_outputs_states=[2, 3])
         if self.stateful:
-            self.updates = []
+            updates = []
             for i in range(len(states)):
-                self.updates.append((self.states[i], states[i]))
-
-        # Properly set learning phase
-        if 0 < self.dropout + self.recurrent_dropout:
-            last_output._uses_learning_phase = True
-            outputs._uses_learning_phase = True
-
+                updates.append((self.states[i], states[i]))
+            self.add_update(updates, inputs)
         if self.return_sequences:
             ret = outputs
         else:
             ret = last_output
+
+        # Properly set learning phase
+        if getattr(last_output, '_uses_learning_phase', False):
+            ret._uses_learning_phase = True
 
         if self.return_extra_variables:
             ret = [ret, states[2], states[3]]
 
         # intermediate states as additional outputs
         if self.return_states:
-            if not isinstance(ret, list):
+            if not isinstance(ret, (list, tuple)):
                 ret = [ret]
+            else:
+                states = list(states)
             ret += [states[0], states[1]]
 
         return ret
@@ -6305,6 +6310,7 @@ class AttConditionalLSTMCond(Recurrent):
         # States[9] - mask_context
         if mask_context is None:
             mask_context = K.not_equal(K.sum(self.context, axis=2), self.mask_value)
+            mask_context = K.cast(mask_context, K.floatx())
         constants.append(mask_context)
 
         return constants

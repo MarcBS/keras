@@ -2729,7 +2729,12 @@ def rnn(step_function, inputs, initial_states,
                 successive_outputs.append(output)
                 successive_states.append(states)
             last_output = successive_outputs[-1]
-            new_states = successive_states[-1]
+            if pos_extra_outputs_states is None:
+                new_states = successive_states[-1]
+            else:
+                new_states = [tf.stack(successive_states[i_s]) if i_s in pos_extra_outputs_states
+                              else successive_states[i_s][-1] for i_s, state in enumerate(successive_states)]
+
             outputs = tf.stack(successive_outputs)
 
     else:
@@ -2750,6 +2755,11 @@ def rnn(step_function, inputs, initial_states,
             tensor_array_name='input_ta')
         input_ta = input_ta.unstack(inputs)
         time = tf.constant(0, dtype='int32', name='time')
+        if pos_extra_outputs_states is not None:
+            states_ta = [tensor_array_ops.TensorArray(
+                dtype=outputs.dtype,
+                size=time_steps,
+                tensor_array_name='states_ta_' + str(i)) for i in pos_extra_outputs_states]
 
         if mask is not None:
             if not states:
@@ -2767,34 +2777,66 @@ def rnn(step_function, inputs, initial_states,
                 size=time_steps,
                 tensor_array_name='mask_ta')
             mask_ta = mask_ta.unstack(mask)
+            if pos_extra_outputs_states is not None:
+                def _step(time, output_ta_t, states_ta_t, *states):
+                    """RNN step function.
 
-            def _step(time, output_ta_t, *states):
-                """RNN step function.
+                    # Arguments
+                        time: Current timestep value.
+                        output_ta_t: TensorArray.
+                        *states: List of states.
 
-                # Arguments
-                    time: Current timestep value.
-                    output_ta_t: TensorArray.
-                    *states: List of states.
+                    # Returns
+                        Tuple: `(time + 1,output_ta_t) + tuple(new_states)`
+                    """
+                    current_input = input_ta.read(time)
+                    mask_t = mask_ta.read(time)
+                    output, new_states = step_function(current_input,
+                                                       tuple(states) +
+                                                       tuple(constants))
+                    if getattr(output, '_uses_learning_phase', False):
+                        global uses_learning_phase
+                        uses_learning_phase = True
 
-                # Returns
-                    Tuple: `(time + 1,output_ta_t) + tuple(new_states)`
-                """
-                current_input = input_ta.read(time)
-                mask_t = mask_ta.read(time)
-                output, new_states = step_function(current_input,
-                                                   tuple(states) +
-                                                   tuple(constants))
-                if getattr(output, '_uses_learning_phase', False):
-                    global uses_learning_phase
-                    uses_learning_phase = True
-                for state, new_state in zip(states, new_states):
-                    new_state.set_shape(state.get_shape())
-                tiled_mask_t = tf.tile(mask_t,
-                                       tf.stack([1, tf.shape(output)[1]]))
-                output = tf.where(tiled_mask_t, output, states[0])
-                new_states = [tf.where(tiled_mask_t, new_states[i], states[i]) for i in range(len(states))]
-                output_ta_t = output_ta_t.write(time, output)
-                return (time + 1, output_ta_t) + tuple(new_states)
+                    for state, new_state in zip(states, new_states):
+                        new_state.set_shape(state.get_shape())
+                    tiled_mask_t = tf.tile(mask_t,
+                                           tf.stack([1, tf.shape(output)[1]]))
+                    output = tf.where(tiled_mask_t, output, states[0])
+                    tiled_masks_t = [tf.tile(mask_t, tf.stack([1, tf.shape(states[i])[1]])) for i in range(len(states))]
+                    new_states = [tf.where(tiled_masks_t[i], new_states[i], states[i]) for i in range(len(states))]
+                    for i in pos_extra_outputs_states:
+                        states_ta_t[i - len(pos_extra_outputs_states)] = states_ta_t[i - len(pos_extra_outputs_states)].write(time, new_states[i])
+                    output_ta_t = output_ta_t.write(time, output)
+                    return (time + 1, output_ta_t, states_ta_t) + tuple(new_states)
+            else:
+                def _step(time, output_ta_t, *states):
+                    """RNN step function.
+
+                    # Arguments
+                        time: Current timestep value.
+                        output_ta_t: TensorArray.
+                        *states: List of states.
+
+                    # Returns
+                        Tuple: `(time + 1,output_ta_t) + tuple(new_states)`
+                    """
+                    current_input = input_ta.read(time)
+                    mask_t = mask_ta.read(time)
+                    output, new_states = step_function(current_input,
+                                                       tuple(states) +
+                                                       tuple(constants))
+                    if getattr(output, '_uses_learning_phase', False):
+                        global uses_learning_phase
+                        uses_learning_phase = True
+                    for state, new_state in zip(states, new_states):
+                        new_state.set_shape(state.get_shape())
+                    tiled_mask_t = tf.tile(mask_t,
+                                           tf.stack([1, tf.shape(output)[1]]))
+                    output = tf.where(tiled_mask_t, output, states[0])
+                    new_states = [tf.where(tiled_mask_t, new_states[i], states[i]) for i in range(len(states))]
+                    output_ta_t = output_ta_t.write(time, output)
+                    return (time + 1, output_ta_t) + tuple(new_states)
         else:
             def _step(time, output_ta_t, *states):
                 """RNN step function.
@@ -2818,22 +2860,45 @@ def rnn(step_function, inputs, initial_states,
                     new_state.set_shape(state.get_shape())
                 output_ta_t = output_ta_t.write(time, output)
                 return (time + 1, output_ta_t) + tuple(new_states)
-
+        loop_vars = (time, output_ta, states_ta) + states if pos_extra_outputs_states is not None\
+            else (time, output_ta) + states
         final_outputs = control_flow_ops.while_loop(
             cond=lambda time, *_: time < time_steps,
             body=_step,
-            loop_vars=(time, output_ta) + states,
+            loop_vars=loop_vars,
             parallel_iterations=32,
             swap_memory=True)
         last_time = final_outputs[0]
         output_ta = final_outputs[1]
-        new_states = final_outputs[2:]
+
+        if pos_extra_outputs_states is not None:
+            non_extra_states = [final_outputs[i + 3] for i in range(len(final_outputs[3:]))
+                                if i not in pos_extra_outputs_states]
+            #states = list(final_outputs[3:])
+            states = non_extra_states + final_outputs[2]
+            print "final_outputs[2]", final_outputs[2]
+            print "states", states
+        else:
+            new_states = final_outputs[2:]
+        if pos_extra_outputs_states is not None:
+            new_states = []
+            for i_s, state in enumerate(states):
+                if i_s in pos_extra_outputs_states: # This +1 accounts for the last_output
+                    new_states.append(state.stack())
+                else:
+                    new_states.append(state)
 
         outputs = output_ta.stack()
         last_output = output_ta.read(last_time - 1)
-
     axes = [1, 0] + list(range(2, len(outputs.get_shape())))
     outputs = tf.transpose(outputs, axes)
+
+
+    # if pos_extra_outputs_states is not None:
+    #     for state_n in pos_extra_outputs_states:
+    #         axes = [1, 0] + list(range(2, len(new_states[state_n].get_shape())))
+    #         new_states[state_n] = tf.transpose(new_states[state_n], axes)
+
     last_output._uses_learning_phase = uses_learning_phase
     return last_output, outputs, new_states
 
