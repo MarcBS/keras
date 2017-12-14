@@ -2233,8 +2233,8 @@ class AttGRU(Recurrent):
                                        initializer=self.bias_ba_initializer,
                                        regularizer=self.bias_ba_regularizer,
                                        constraint=self.bias_ba_constraint)
-
-        self.bias_ca = self.add_weight(shape=(self.context_steps,),
+        bias_ca_shape = self.context_steps if self.context_steps is None else (self.context_steps,)
+        self.bias_ca = self.add_weight(shape=bias_ca_shape,
                                        name='bias_ca',
                                        initializer=self.bias_ca_initializer,
                                        regularizer=self.bias_ca_regularizer,
@@ -2768,8 +2768,8 @@ class AttGRUCond(Recurrent):
                                        initializer=self.bias_ba_initializer,
                                        regularizer=self.bias_ba_regularizer,
                                        constraint=self.bias_ba_constraint)
-
-        self.bias_ca = self.add_weight(shape=(self.context_steps,),
+        bias_ca_shape = self.context_steps if self.context_steps is None else (self.context_steps,)
+        self.bias_ca = self.add_weight(shape=bias_ca_shape,
                                        name='bias_ca',
                                        initializer=self.bias_ca_initializer,
                                        regularizer=self.bias_ca_regularizer,
@@ -3350,8 +3350,8 @@ class AttConditionalGRUCond(Recurrent):
                                        initializer=self.bias_ba_initializer,
                                        regularizer=self.bias_ba_regularizer,
                                        constraint=self.bias_ba_constraint)
-
-        self.bias_ca = self.add_weight(shape=(self.context_steps,),
+        bias_ca_shape = self.context_steps if self.context_steps is None else (self.context_steps,)
+        self.bias_ca = self.add_weight(shape=bias_ca_shape,
                                        name='bias_ca',
                                        initializer=self.bias_ca_initializer,
                                        regularizer=self.bias_ca_regularizer,
@@ -4881,8 +4881,8 @@ class AttLSTM(Recurrent):
                                        initializer=self.bias_ba_initializer,
                                        regularizer=self.bias_ba_regularizer,
                                        constraint=self.bias_ba_constraint)
-
-        self.bias_ca = self.add_weight(shape=(self.context_steps,),
+        bias_ca_shape = self.context_steps if self.context_steps is None else (self.context_steps,)
+        self.bias_ca = self.add_weight(shape=bias_ca_shape,
                                        name='bias_ca',
                                        initializer=self.bias_ca_initializer,
                                        regularizer=self.bias_ca_regularizer,
@@ -5429,8 +5429,8 @@ class AttLSTMCond(Recurrent):
                                        initializer=self.bias_ba_initializer,
                                        regularizer=self.bias_ba_regularizer,
                                        constraint=self.bias_ba_constraint)
-
-        self.bias_ca = self.add_weight(shape=(self.context_steps,),
+        bias_ca_shape = self.context_steps if self.context_steps is None else (self.context_steps,)
+        self.bias_ca = self.add_weight(shape=bias_ca_shape,
                                        name='bias_ca',
                                        initializer=self.bias_ca_initializer,
                                        regularizer=self.bias_ca_regularizer,
@@ -5949,7 +5949,6 @@ class AttConditionalLSTMCond(Recurrent):
             self.input_spec.append(InputSpec(ndim=2))
 
     def build(self, input_shape):
-
         assert len(input_shape) >= 2, 'You should pass two inputs to AttConditionalLSTMCond ' \
                                       '(previous_embedded_words and context) ' \
                                       'and two optional inputs (init_state and init_memory)'
@@ -6043,8 +6042,8 @@ class AttConditionalLSTMCond(Recurrent):
                                            initializer=self.bias_ba_initializer,
                                            regularizer=self.bias_ba_regularizer,
                                            constraint=self.bias_ba_constraint)
-
-            self.bias_ca = self.add_weight(shape=(self.context_steps,),
+            bias_ca_shape = self.context_steps if self.context_steps is None else (self.context_steps,)
+            self.bias_ca = self.add_weight(shape=bias_ca_shape,
                                            name='bias_ca',
                                            initializer=self.bias_ca_initializer,
                                            regularizer=self.bias_ca_regularizer,
