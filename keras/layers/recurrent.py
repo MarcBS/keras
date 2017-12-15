@@ -1838,19 +1838,6 @@ class GRUCond(Recurrent):
             self.init_state = inputs[2]
         elif self.num_inputs == 4:  # input: [state_below, context, init_state, init_memory]
             self.init_state = inputs[2]
-        if K._BACKEND == 'tensorflow':
-            if not input_shape[1]:
-                raise Exception('When using TensorFlow, you should define '
-                                'explicitly the number of timesteps of '
-                                'your sequences.\n'
-                                'If your first layer is an Embedding, '
-                                'make sure to pass it an "input_length" '
-                                'argument. Otherwise, make sure '
-                                'the first layer has '
-                                'an "input_shape" or "batch_input_shape" '
-                                'argument, including the time axis. '
-                                'Found input shape at layer ' + self.name +
-                                ': ' + str(input_shape))
         if self.stateful:
             initial_states = self.states
         else:
@@ -2290,19 +2277,7 @@ class AttGRU(Recurrent):
             self.init_state = None
         elif self.num_inputs == 2:  # input: [context, init_generic]
             self.init_state = inputs[1]
-        if K._BACKEND == 'tensorflow':
-            if not input_shape[1]:
-                raise Exception('When using TensorFlow, you should define '
-                                'explicitly the number of timesteps of '
-                                'your sequences.\n'
-                                'If your first layer is an Embedding, '
-                                'make sure to pass it an "input_length" '
-                                'argument. Otherwise, make sure '
-                                'the first layer has '
-                                'an "input_shape" or "batch_input_shape" '
-                                'argument, including the time axis. '
-                                'Found input shape at layer ' + self.name +
-                                ': ' + str(input_shape))
+
         if self.stateful:
             initial_states = self.states
         else:
@@ -2836,19 +2811,7 @@ class AttGRUCond(Recurrent):
             self.init_state = inputs[2]
         elif self.num_inputs == 4:  # input: [state_below, context, init_state, init_memory]
             self.init_state = inputs[2]
-        if K._BACKEND == 'tensorflow':
-            if not input_shape[1]:
-                raise Exception('When using TensorFlow, you should define '
-                                'explicitly the number of timesteps of '
-                                'your sequences.\n'
-                                'If your first layer is an Embedding, '
-                                'make sure to pass it an "input_length" '
-                                'argument. Otherwise, make sure '
-                                'the first layer has '
-                                'an "input_shape" or "batch_input_shape" '
-                                'argument, including the time axis. '
-                                'Found input shape at layer ' + self.name +
-                                ': ' + str(input_shape))
+
         if self.stateful:
             initial_states = self.states
         else:
@@ -3419,19 +3382,7 @@ class AttConditionalGRUCond(Recurrent):
             self.init_state = inputs[2]
         elif self.num_inputs == 4:  # input: [state_below, context, init_state, init_memory]
             self.init_state = inputs[2]
-        if K._BACKEND == 'tensorflow':
-            if not input_shape[1]:
-                raise Exception('When using TensorFlow, you should define '
-                                'explicitly the number of timesteps of '
-                                'your sequences.\n'
-                                'If your first layer is an Embedding, '
-                                'make sure to pass it an "input_length" '
-                                'argument. Otherwise, make sure '
-                                'the first layer has '
-                                'an "input_shape" or "batch_input_shape" '
-                                'argument, including the time axis. '
-                                'Found input shape at layer ' + self.name +
-                                ': ' + str(input_shape))
+
         if self.stateful:
             initial_states = self.states
         else:
@@ -4458,19 +4409,7 @@ class LSTMCond(Recurrent):
         elif self.num_inputs == 4:  # input: [state_below, context, init_state, init_memory]
             self.init_state = inputs[2]
             self.init_memory = inputs[3]
-        if K._BACKEND == 'tensorflow':
-            if not input_shape[1]:
-                raise Exception('When using TensorFlow, you should define '
-                                'explicitly the number of timesteps of '
-                                'your sequences.\n'
-                                'If your first layer is an Embedding, '
-                                'make sure to pass it an "input_length" '
-                                'argument. Otherwise, make sure '
-                                'the first layer has '
-                                'an "input_shape" or "batch_input_shape" '
-                                'argument, including the time axis. '
-                                'Found input shape at layer ' + self.name +
-                                ': ' + str(input_shape))
+
         if self.stateful:
             initial_states = self.states
         else:
@@ -4943,19 +4882,7 @@ class AttLSTM(Recurrent):
         elif self.num_inputs == 3:  # input: [context, init_state, init_memory]
             self.init_state = inputs[1]
             self.init_memory = inputs[2]
-        if K._BACKEND == 'tensorflow':
-            if not input_shape[1]:
-                raise Exception('When using TensorFlow, you should define '
-                                'explicitly the number of timesteps of '
-                                'your sequences.\n'
-                                'If your first layer is an Embedding, '
-                                'make sure to pass it an "input_length" '
-                                'argument. Otherwise, make sure '
-                                'the first layer has '
-                                'an "input_shape" or "batch_input_shape" '
-                                'argument, including the time axis. '
-                                'Found input shape at layer ' + self.name +
-                                ': ' + str(input_shape))
+
         if self.stateful:
             initial_states = self.states
         else:
@@ -5500,19 +5427,7 @@ class AttLSTMCond(Recurrent):
         elif self.num_inputs == 4:  # input: [state_below, context, init_state, init_memory]
             self.init_state = inputs[2]
             self.init_memory = inputs[3]
-        if K._BACKEND == 'tensorflow':
-            if not input_shape[1]:
-                raise Exception('When using TensorFlow, you should define '
-                                'explicitly the number of timesteps of '
-                                'your sequences.\n'
-                                'If your first layer is an Embedding, '
-                                'make sure to pass it an "input_length" '
-                                'argument. Otherwise, make sure '
-                                'the first layer has '
-                                'an "input_shape" or "batch_input_shape" '
-                                'argument, including the time axis. '
-                                'Found input shape at layer ' + self.name +
-                                ': ' + str(input_shape))
+
         if self.stateful:
             initial_states = self.states
         else:
@@ -6120,19 +6035,7 @@ class AttConditionalLSTMCond(Recurrent):
         elif self.num_inputs == 4:  # input: [state_below, context, init_state, init_memory]
             self.init_state = inputs[2]
             self.init_memory = inputs[3]
-        if K._BACKEND == 'tensorflow':
-            if not input_shape[1]:
-                raise Exception('When using TensorFlow, you should define '
-                                'explicitly the number of timesteps of '
-                                'your sequences.\n'
-                                'If your first layer is an Embedding, '
-                                'make sure to pass it an "input_length" '
-                                'argument. Otherwise, make sure '
-                                'the first layer has '
-                                'an "input_shape" or "batch_input_shape" '
-                                'argument, including the time axis. '
-                                'Found input shape at layer ' + self.name +
-                                ': ' + str(input_shape))
+
         if self.stateful:
             initial_states = self.states
         else:
@@ -6684,19 +6587,7 @@ class AttLSTMCond2Inputs(Recurrent):
         elif self.num_inputs == 5:  # input: [state_below, context, init_state, init_memory]
             self.init_state = inputs[3]
             self.init_memory = inputs[4]
-        if K._BACKEND == 'tensorflow':
-            if not input_shape[1]:
-                raise Exception('When using TensorFlow, you should define '
-                                'explicitly the number of timesteps of '
-                                'your sequences.\n'
-                                'If your first layer is an Embedding, '
-                                'make sure to pass it an "input_length" '
-                                'argument. Otherwise, make sure '
-                                'the first layer has '
-                                'an "input_shape" or "batch_input_shape" '
-                                'argument, including the time axis. '
-                                'Found input shape at layer ' + self.name +
-                                ': ' + str(input_shape))
+
         if self.stateful:
             initial_states = self.states
         else:
@@ -7396,19 +7287,7 @@ class AttLSTMCond3Inputs(Recurrent):
         elif self.num_inputs == 6:  # input: [state_below, context, context2,  init_state, init_memory]
             self.init_state = inputs[4]
             self.init_memory = inputs[5]
-        if K._BACKEND == 'tensorflow':
-            if not input_shape[1]:
-                raise Exception('When using TensorFlow, you should define '
-                                'explicitly the number of timesteps of '
-                                'your sequences.\n'
-                                'If your first layer is an Embedding, '
-                                'make sure to pass it an "input_length" '
-                                'argument. Otherwise, make sure '
-                                'the first layer has '
-                                'an "input_shape" or "batch_input_shape" '
-                                'argument, including the time axis. '
-                                'Found input shape at layer ' + self.name +
-                                ': ' + str(input_shape))
+
         if self.stateful:
             initial_states = self.states
         else:
