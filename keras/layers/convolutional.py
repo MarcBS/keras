@@ -193,7 +193,6 @@ class _Conv(Layer):
             kwargs['input_shape'] = (self.input_length, self.input_dim)
         super(Convolution1D, self).__init__(**kwargs)
         """
-
     def build(self, input_shape):
         if self.data_format == 'channels_first':
             channel_axis = 1
@@ -224,7 +223,6 @@ class _Conv(Layer):
         self.built = True
 
     def call(self, inputs):
-        #inputs = K.printing(inputs, self.name +'inputs')
         if self.rank == 1:
             outputs = K.conv1d(
                 inputs,
@@ -255,7 +253,7 @@ class _Conv(Layer):
                 outputs,
                 self.bias,
                 data_format=self.data_format)
-        #outputs = K.printing(outputs, self.name +'=')
+
         if self.activation is not None:
             return self.activation(outputs)
         return outputs

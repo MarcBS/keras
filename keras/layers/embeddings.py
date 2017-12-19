@@ -105,7 +105,7 @@ class Embedding(Layer):
         if not self.mask_zero:
             return None
         else:
-            return K.not_equal(inputs, 0)
+            return K.cast(K.not_equal(inputs, 0), K.floatx())
 
     def compute_output_shape(self, input_shape):
         if self.input_length is None:

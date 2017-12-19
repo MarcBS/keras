@@ -8,9 +8,7 @@ Index
 - Getting started
     Getting started with the sequential model
     Getting started with the functional api
-    Examples
     FAQ
-    Installation guide
 
 - Models
     About Keras models
@@ -26,31 +24,39 @@ Index
         explain common layer functions: get_weights, set_weights, get_config
         explain input_shape
         explain usage on non-Keras tensors
-    Core layers
-    Convolutional
-    Recurrent
-    Embeddings
-    Normalization
-    Advanced activations
-    Noise
+    Core Layers
+    Convolutional Layers
+    Pooling Layers
+    Locally-connected Layers
+    Recurrent Layers
+    Embedding Layers
+    Merge Layers
+    Advanced Activations Layers
+    Normalization Layers
+    Noise Layers
+    Layer Wrappers
+    Writing your own Keras layers
 
 - Preprocessing
-    Image preprocessing
-    Text preprocessing
-    Sequence preprocessing
+    Sequence Preprocessing
+    Text Preprocessing
+    Image Preprocessing
 
-Objectives
+Losses
 Metrics
 Optimizers
 Activations
 Callbacks
 Datasets
+Applications
 Backend
-Initializations
+Initializers
 Regularizers
 Constraints
 Visualization
 Scikit-learn API
+Utils
+Contributing
 
 '''
 from __future__ import print_function
@@ -60,35 +66,25 @@ import re
 import inspect
 import os
 import shutil
+
+from keras import utils
+from keras import layers
+from keras.layers import advanced_activations
+from keras.layers import noise
+from keras.layers import wrappers
+from keras import initializers
+from keras import optimizers
+from keras import callbacks
+from keras import models
+from keras import losses
+from keras import metrics
+from keras import backend
+from keras import activations
+
 import sys
 if sys.version[0] == '2':
     reload(sys)
     sys.setdefaultencoding('utf8')
-
-from keras.layers import convolutional
-from keras.layers import pooling
-from keras.layers import local
-from keras.layers import recurrent
-from keras.layers import core
-from keras.layers import noise
-from keras.layers import normalization
-from keras.layers import advanced_activations
-from keras.layers import embeddings
-from keras.layers import wrappers
-from keras import optimizers
-from keras import callbacks
-from keras import models
-from keras.engine import topology
-from keras import objectives
-from keras import metrics
-from keras import backend
-from keras import constraints
-from keras import activations
-from keras import regularizers
-from keras.utils import data_utils
-from keras.utils import io_utils
-from keras.utils import layer_utils
-from keras.utils import np_utils
 
 
 EXCLUDE = {
@@ -97,6 +93,12 @@ EXCLUDE = {
     'get_session',
     'set_session',
     'CallbackList',
+    'serialize',
+    'deserialize',
+    'get',
+    'set_image_dim_ordering',
+    'image_dim_ordering',
+    'get_variable_shape',
 }
 
 PAGES = [
@@ -107,14 +109,13 @@ PAGES = [
             models.Sequential.fit,
             models.Sequential.evaluate,
             models.Sequential.predict,
-            models.Sequential.predict_classes,
-            models.Sequential.predict_proba,
             models.Sequential.train_on_batch,
             models.Sequential.test_on_batch,
             models.Sequential.predict_on_batch,
             models.Sequential.fit_generator,
             models.Sequential.evaluate_generator,
             models.Sequential.predict_generator,
+            models.Sequential.get_layer,
         ],
     },
     {
@@ -136,83 +137,85 @@ PAGES = [
     {
         'page': 'layers/core.md',
         'classes': [
-            core.Dense,
-            core.Activation,
-            core.Dropout,
-            core.Flatten,
-            core.Reshape,
-            core.Permute,
-            core.RepeatVector,
-            topology.Merge,
-            core.Lambda,
-            core.ActivityRegularization,
-            core.Masking,
-            core.Highway,
-            core.MaxoutDense,
+            layers.Dense,
+            layers.Activation,
+            layers.Dropout,
+            layers.Flatten,
+            layers.Reshape,
+            layers.Permute,
+            layers.RepeatVector,
+            layers.Lambda,
+            layers.ActivityRegularization,
+            layers.Masking,
         ],
     },
     {
         'page': 'layers/convolutional.md',
         'classes': [
-            convolutional.Convolution1D,
-            convolutional.AtrousConvolution1D,
-            convolutional.Convolution2D,
-            convolutional.AtrousConvolution2D,
-            convolutional.SeparableConvolution2D,
-            convolutional.Deconvolution2D,
-            convolutional.Convolution3D,
-            convolutional.Cropping1D,
-            convolutional.Cropping2D,
-            convolutional.Cropping3D,
-            convolutional.UpSampling1D,
-            convolutional.UpSampling2D,
-            convolutional.UpSampling3D,
-            convolutional.ZeroPadding1D,
-            convolutional.ZeroPadding2D,
-            convolutional.ZeroPadding3D,
+            layers.Conv1D,
+            layers.Conv2D,
+            layers.SeparableConv2D,
+            layers.Conv2DTranspose,
+            layers.Conv3D,
+            layers.Cropping1D,
+            layers.Cropping2D,
+            layers.Cropping3D,
+            layers.UpSampling1D,
+            layers.UpSampling2D,
+            layers.UpSampling3D,
+            layers.ZeroPadding1D,
+            layers.ZeroPadding2D,
+            layers.ZeroPadding3D,
         ],
     },
     {
         'page': 'layers/pooling.md',
         'classes': [
-            pooling.MaxPooling1D,
-            pooling.MaxPooling2D,
-            pooling.MaxPooling3D,
-            pooling.AveragePooling1D,
-            pooling.AveragePooling2D,
-            pooling.AveragePooling3D,
-            pooling.GlobalMaxPooling1D,
-            pooling.GlobalAveragePooling1D,
-            pooling.GlobalMaxPooling2D,
-            pooling.GlobalAveragePooling2D,
+            layers.MaxPooling1D,
+            layers.MaxPooling2D,
+            layers.MaxPooling3D,
+            layers.AveragePooling1D,
+            layers.AveragePooling2D,
+            layers.AveragePooling3D,
+            layers.GlobalMaxPooling1D,
+            layers.GlobalAveragePooling1D,
+            layers.GlobalMaxPooling2D,
+            layers.GlobalAveragePooling2D,
         ],
     },
     {
         'page': 'layers/local.md',
         'classes': [
-            local.LocallyConnected1D,
-            local.LocallyConnected2D,
+            layers.LocallyConnected1D,
+            layers.LocallyConnected2D,
         ],
     },
     {
         'page': 'layers/recurrent.md',
         'classes': [
-            recurrent.Recurrent,
-            recurrent.SimpleRNN,
-            recurrent.GRU,
-            recurrent.LSTM,
+            layers.RNN,
+            layers.SimpleRNN,
+            layers.GRU,
+            layers.LSTM,
+            layers.ConvLSTM2D,
+            layers.SimpleRNNCell,
+            layers.GRUCell,
+            layers.LSTMCell,
+            layers.StackedRNNCells,
+            layers.CuDNNGRU,
+            layers.CuDNNLSTM,
         ],
     },
     {
         'page': 'layers/embeddings.md',
         'classes': [
-            embeddings.Embedding,
+            layers.Embedding,
         ],
     },
     {
         'page': 'layers/normalization.md',
         'classes': [
-            normalization.BatchNormalization,
+            layers.BatchNormalization,
         ],
     },
     {
@@ -224,12 +227,42 @@ PAGES = [
         'all_module_classes': [noise],
     },
     {
+        'page': 'layers/merge.md',
+        'classes': [
+            layers.Add,
+            layers.Subtract,
+            layers.Multiply,
+            layers.Average,
+            layers.Maximum,
+            layers.Concatenate,
+            layers.Dot,
+        ],
+        'functions': [
+            layers.add,
+            layers.subtract,
+            layers.multiply,
+            layers.average,
+            layers.maximum,
+            layers.concatenate,
+            layers.dot,
+        ]
+    },
+    {
         'page': 'layers/wrappers.md',
         'all_module_classes': [wrappers],
     },
     {
         'page': 'metrics.md',
         'all_module_functions': [metrics],
+    },
+    {
+        'page': 'losses.md',
+        'all_module_functions': [losses],
+    },
+    {
+        'page': 'initializers.md',
+        'all_module_functions': [initializers],
+        'all_module_classes': [initializers],
     },
     {
         'page': 'optimizers.md',
@@ -240,30 +273,24 @@ PAGES = [
         'all_module_classes': [callbacks],
     },
     {
+        'page': 'activations.md',
+        'all_module_functions': [activations],
+    },
+    {
         'page': 'backend.md',
         'all_module_functions': [backend],
     },
     {
-        'page': 'utils/data_utils.md',
-        'functions': [
-            data_utils.get_file,
-        ]
-    },
-    {
-        'page': 'utils/io_utils.md',
-        'classes': [
-            io_utils.HDF5Matrix
-        ],
-    },
-    {
-        'page': 'utils/layer_utils.md',
-        'functions': [
-            layer_utils.layer_from_config,
-        ]
-    },
-    {
-        'page': 'utils/np_utils.md',
-        'all_module_functions': [np_utils]
+        'page': 'utils.md',
+        'functions': [utils.to_categorical,
+                      utils.normalize,
+                      utils.get_file,
+                      utils.print_summary,
+                      utils.plot_model,
+                      utils.multi_gpu_model],
+        'classes': [utils.CustomObjectScope,
+                    utils.HDF5Matrix,
+                    utils.Sequence],
     },
 ]
 
@@ -297,7 +324,11 @@ def get_classes_ancestors(classes):
 
 
 def get_function_signature(function, method=True):
-    signature = inspect.getargspec(function)
+    wrapped = getattr(function, '_original_function', None)
+    if wrapped is None:
+        signature = inspect.getargspec(function)
+    else:
+        signature = inspect.getargspec(wrapped)
     defaults = signature.defaults
     if method:
         args = signature.args[1:]
@@ -309,27 +340,45 @@ def get_function_signature(function, method=True):
     else:
         kwargs = []
     st = '%s.%s(' % (function.__module__, function.__name__)
+
     for a in args:
         st += str(a) + ', '
     for a, v in kwargs:
-        if type(v) == str:
+        if isinstance(v, str):
             v = '\'' + v + '\''
         st += str(a) + '=' + str(v) + ', '
     if kwargs or args:
-        return st[:-2] + ')'
+        signature = st[:-2] + ')'
     else:
-        return st + ')'
+        signature = st + ')'
+
+    if not method:
+        # Prepend the module name.
+        signature = function.__module__ + '.' + signature
+    return post_process_signature(signature)
 
 
 def get_class_signature(cls):
     try:
         class_signature = get_function_signature(cls.__init__)
         class_signature = class_signature.replace('__init__', cls.__name__)
-    except:
+    except (TypeError, AttributeError):
         # in case the class inherits from object and does not
         # define __init__
         class_signature = cls.__module__ + '.' + cls.__name__ + '()'
-    return class_signature
+    return post_process_signature(class_signature)
+
+
+def post_process_signature(signature):
+    parts = re.split('\.(?!\d)', signature)
+    if len(parts) >= 4:
+        if parts[1] == 'layers':
+            signature = 'keras.layers.' + '.'.join(parts[3:])
+        if parts[1] == 'utils':
+            signature = 'keras.utils.' + '.'.join(parts[3:])
+        if parts[1] == 'backend':
+            signature = 'keras.backend.' + '.'.join(parts[3:])
+    return signature
 
 
 def class_to_docs_link(cls):
@@ -346,7 +395,8 @@ def class_to_source_link(cls):
     path = module_name.replace('.', '/')
     path += '.py'
     line = inspect.getsourcelines(cls)[-1]
-    link = 'https://github.com/fchollet/keras/blob/master/' + path + '#L' + str(line)
+    link = ('https://github.com/fchollet/'
+            'keras/blob/master/' + path + '#L' + str(line))
     return '[[source]](' + link + ')'
 
 
@@ -357,36 +407,70 @@ def code_snippet(snippet):
     return result
 
 
-def process_class_docstring(docstring):
-    docstring = re.sub(r'\n    # (.*)\n',
-                       r'\n    __\1__\n\n',
-                       docstring)
+def count_leading_spaces(s):
+    ws = re.search('\S', s)
+    if ws:
+        return ws.start()
+    else:
+        return 0
 
-    docstring = re.sub(r'    ([^\s\\]+):(.*)\n',
+
+def process_docstring(docstring):
+    # First, extract code blocks and process them.
+    code_blocks = []
+    if '```' in docstring:
+        tmp = docstring[:]
+        while '```' in tmp:
+            tmp = tmp[tmp.find('```'):]
+            index = tmp[3:].find('```') + 6
+            snippet = tmp[:index]
+            # Place marker in docstring for later reinjection.
+            docstring = docstring.replace(
+                snippet, '$CODE_BLOCK_%d' % len(code_blocks))
+            snippet_lines = snippet.split('\n')
+            # Remove leading spaces.
+            num_leading_spaces = snippet_lines[-1].find('`')
+            snippet_lines = ([snippet_lines[0]] +
+                             [line[num_leading_spaces:]
+                             for line in snippet_lines[1:]])
+            # Most code snippets have 3 or 4 more leading spaces
+            # on inner lines, but not all. Remove them.
+            inner_lines = snippet_lines[1:-1]
+            leading_spaces = None
+            for line in inner_lines:
+                if not line or line[0] == '\n':
+                    continue
+                spaces = count_leading_spaces(line)
+                if leading_spaces is None:
+                    leading_spaces = spaces
+                if spaces < leading_spaces:
+                    leading_spaces = spaces
+            if leading_spaces:
+                snippet_lines = ([snippet_lines[0]] +
+                                 [line[leading_spaces:]
+                                  for line in snippet_lines[1:-1]] +
+                                 [snippet_lines[-1]])
+            snippet = '\n'.join(snippet_lines)
+            code_blocks.append(snippet)
+            tmp = tmp[index:]
+
+    # Format docstring section titles.
+    docstring = re.sub(r'\n(\s+)# (.*)\n',
+                       r'\n\1__\2__\n\n',
+                       docstring)
+    # Format docstring lists.
+    docstring = re.sub(r'    ([^\s\\\(]+):(.*)\n',
                        r'    - __\1__:\2\n',
                        docstring)
 
-    docstring = docstring.replace('    ' * 5, '\t\t')
-    docstring = docstring.replace('    ' * 3, '\t')
-    docstring = docstring.replace('    ', '')
-    return docstring
+    # Strip all leading spaces.
+    lines = docstring.split('\n')
+    docstring = '\n'.join([line.lstrip(' ') for line in lines])
 
-
-def process_function_docstring(docstring):
-    docstring = re.sub(r'\n    # (.*)\n',
-                       r'\n    __\1__\n\n',
-                       docstring)
-    docstring = re.sub(r'\n        # (.*)\n',
-                       r'\n        __\1__\n\n',
-                       docstring)
-
-    docstring = re.sub(r'    ([^\s\\]+):(.*)\n',
-                       r'    - __\1__:\2\n',
-                       docstring)
-
-    docstring = docstring.replace('    ' * 6, '\t\t')
-    docstring = docstring.replace('    ' * 4, '\t')
-    docstring = docstring.replace('    ', '')
+    # Reinject code blocks.
+    for i, code_block in enumerate(code_blocks):
+        docstring = docstring.replace(
+            '$CODE_BLOCK_%d' % i, code_block)
     return docstring
 
 print('Cleaning up existing sources directory.')
@@ -403,6 +487,14 @@ for subdir, dirs, fnames in os.walk('templates'):
             fpath = os.path.join(subdir, fname)
             new_fpath = fpath.replace('templates', 'sources')
             shutil.copy(fpath, new_fpath)
+
+# Take care of index page.
+readme = open('../README.md').read()
+index = open('templates/index.md').read()
+index = index.replace('{{autogenerated}}', readme[readme.find('##'):])
+f = open('sources/index.md', 'w')
+f.write(index)
+f.close()
 
 print('Starting autogeneration.')
 for page_data in PAGES:
@@ -425,12 +517,13 @@ for page_data in PAGES:
     for cls in classes:
         subblocks = []
         signature = get_class_signature(cls)
-        subblocks.append('<span style="float:right;">' + class_to_source_link(cls) + '</span>')
+        subblocks.append('<span style="float:right;">' +
+                         class_to_source_link(cls) + '</span>')
         subblocks.append('### ' + cls.__name__ + '\n')
         subblocks.append(code_snippet(signature))
         docstring = cls.__doc__
         if docstring:
-            subblocks.append(process_class_docstring(docstring))
+            subblocks.append(process_docstring(docstring))
         blocks.append('\n'.join(subblocks))
 
     functions = page_data.get('functions', [])
@@ -456,8 +549,12 @@ for page_data in PAGES:
         subblocks.append(code_snippet(signature))
         docstring = function.__doc__
         if docstring:
-            subblocks.append(process_function_docstring(docstring))
-            blocks.append('\n\n'.join(subblocks))
+            subblocks.append(process_docstring(docstring))
+        blocks.append('\n\n'.join(subblocks))
+
+    if not blocks:
+        raise RuntimeError('Found no content for page ' +
+                           page_data['page'])
 
     mkdown = '\n----\n\n'.join(blocks)
     # save module page.
@@ -477,3 +574,5 @@ for page_data in PAGES:
     if not os.path.exists(subdir):
         os.makedirs(subdir)
     open(path, 'w').write(mkdown)
+
+shutil.copyfile('../CONTRIBUTING.md', 'sources/contributing.md')

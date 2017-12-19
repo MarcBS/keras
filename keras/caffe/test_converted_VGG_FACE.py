@@ -1,4 +1,4 @@
-from keras.models import Sequential, Graph, Model, model_from_json
+from keras.models import Sequential, Model, model_from_json
 from keras.optimizers import SGD
 
 from scipy import misc

@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import
 import numpy as np
-import functools
 import warnings
 
 from .. import backend as K
@@ -200,7 +199,9 @@ class RNN(Layer):
     # Arguments
         cell: A RNN cell instance. A RNN cell is a class that has:
             - a `call(input_at_t, states_at_t)` method, returning
-                `(output_at_t, states_at_t_plus_1)`.
+                `(output_at_t, states_at_t_plus_1)`. The call method of the
+                cell can also take the optional argument `constants`, see
+                section "Note on passing external constants" below.
             - a `state_size` attribute. This can be a single integer
                 (single state) in which case it is
                 the size of the recurrent state
@@ -242,9 +243,8 @@ class RNN(Layer):
             at the level of the first layer
             (e.g. via the `input_shape` argument)
 
-    # Input shapes
-        3D tensor with shape `(batch_size, timesteps, input_dim)`,
-        (Optional) 2D tensors with shape `(batch_size, output_dim)`.
+    # Input shape
+        3D tensor with shape `(batch_size, timesteps, input_dim)`.
 
     # Output shape
         - if `return_state`: a list of tensors. The first tensor is
@@ -291,6 +291,14 @@ class RNN(Layer):
         calling `reset_states` with the keyword argument `states`. The value of
         `states` should be a numpy array or list of numpy arrays representing
         the initial state of the RNN layer.
+
+    # Note on passing external constants to RNNs
+        You can pass "external" constants to the cell using the `constants`
+        keyword argument of `RNN.__call__` (as well as `RNN.call`) method. This
+        requires that the `cell.call` method accepts the same keyword argument
+        `constants`. Such constants can be used to condition the cell
+        transformation on additional static inputs (not changing over time),
+        a.k.a. an attention mechanism.
 
     # Examples
 
@@ -363,12 +371,10 @@ class RNN(Layer):
 
         self.supports_masking = True
         self.input_spec = [InputSpec(ndim=3)]
-        if hasattr(self.cell.state_size, '__len__'):
-            self.state_spec = [InputSpec(shape=(None, dim))
-                               for dim in self.cell.state_size]
-        else:
-            self.state_spec = InputSpec(shape=(None, self.cell.state_size))
+        self.state_spec = None
         self._states = None
+        self.constants_spec = None
+        self._num_constants = None
 
     @property
     def states(self):
@@ -415,6 +421,13 @@ class RNN(Layer):
             return output_mask
 
     def build(self, input_shape):
+        # Note input_shape will be list of shapes of initial states and
+        # constants if these are passed in __call__.
+        if self._num_constants is not None:
+            constants_shape = input_shape[-self._num_constants:]
+        else:
+            constants_shape = None
+
         if isinstance(input_shape, list):
             input_shape = input_shape[0]
 
@@ -422,12 +435,33 @@ class RNN(Layer):
         input_dim = input_shape[-1]
         self.input_spec[0] = InputSpec(shape=(batch_size, None, input_dim))
 
-        if self.stateful:
-            self.reset_states()
-
+        # allow cell (if layer) to build before we set or validate state_spec
         if isinstance(self.cell, Layer):
             step_input_shape = (input_shape[0],) + input_shape[2:]
-            self.cell.build(step_input_shape)
+            if constants_shape is not None:
+                self.cell.build([step_input_shape] + constants_shape)
+            else:
+                self.cell.build(step_input_shape)
+
+        # set or validate state_spec
+        if hasattr(self.cell.state_size, '__len__'):
+            state_size = list(self.cell.state_size)
+        else:
+            state_size = [self.cell.state_size]
+
+        if self.state_spec is not None:
+            # initial_state was passed in call, check compatibility
+            if not [spec.shape[-1] for spec in self.state_spec] == state_size:
+                raise ValueError(
+                    'An initial_state was passed that is not compatible with '
+                    '`cell.state_size`. Received `state_spec`={}; '
+                    'However `cell.state_size` is '
+                    '{}'.format(self.state_spec, self.cell.state_size))
+        else:
+            self.state_spec = [InputSpec(shape=(None, dim))
+                               for dim in state_size]
+        if self.stateful:
+            self.reset_states()
 
     def get_initial_state(self, inputs):
         # build an all-zero tensor of shape (samples, output_dim)
@@ -440,62 +474,65 @@ class RNN(Layer):
         else:
             return [K.tile(initial_state, [1, self.cell.state_size])]
 
-    def __call__(self, inputs, initial_state=None, **kwargs):
-        # If there are multiple inputs, then
-        # they should be the main input and `initial_state`
-        # e.g. when loading model from file
-        if isinstance(inputs, (list, tuple)) and len(inputs) > 1 and initial_state is None:
-            initial_state = inputs[1:]
-            inputs = inputs[0]
+    def __call__(self, inputs, initial_state=None, constants=None, **kwargs):
+        inputs, initial_state, constants = self._standardize_args(
+            inputs, initial_state, constants)
 
-        # If `initial_state` is specified,
-        # and if it a Keras tensor,
-        # then add it to the inputs and temporarily
-        # modify the input spec to include the state.
-        if initial_state is None:
+        if initial_state is None and constants is None:
             return super(RNN, self).__call__(inputs, **kwargs)
 
-        if not isinstance(initial_state, (list, tuple)):
-            initial_state = [initial_state]
+        # If any of `initial_state` or `constants` are specified and are Keras
+        # tensors, then add them to the inputs and temporarily modify the
+        # input_spec to include them.
 
-        is_keras_tensor = hasattr(initial_state[0], '_keras_history')
-        for tensor in initial_state:
+        additional_inputs = []
+        additional_specs = []
+        if initial_state is not None:
+            kwargs['initial_state'] = initial_state
+            additional_inputs += initial_state
+            self.state_spec = [InputSpec(shape=K.int_shape(state))
+                               for state in initial_state]
+            additional_specs += self.state_spec
+        if constants is not None:
+            kwargs['constants'] = constants
+            additional_inputs += constants
+            self.constants_spec = [InputSpec(shape=K.int_shape(constant))
+                                   for constant in constants]
+            self._num_constants = len(constants)
+            additional_specs += self.constants_spec
+        # at this point additional_inputs cannot be empty
+        is_keras_tensor = hasattr(additional_inputs[0], '_keras_history')
+        for tensor in additional_inputs:
             if hasattr(tensor, '_keras_history') != is_keras_tensor:
-                raise ValueError('The initial state of an RNN layer cannot be'
-                                 ' specified with a mix of Keras tensors and'
-                                 ' non-Keras tensors')
+                raise ValueError('The initial state or constants of an RNN'
+                                 ' layer cannot be specified with a mix of'
+                                 ' Keras tensors and non-Keras tensors')
 
         if is_keras_tensor:
-            # Compute the full input spec, including state
-            input_spec = self.input_spec
-            state_spec = self.state_spec
-            if not isinstance(input_spec, list):
-                input_spec = [input_spec]
-            if not isinstance(state_spec, list):
-                state_spec = [state_spec]
-            self.input_spec = input_spec + state_spec
-
-            # Compute the full inputs, including state
-            inputs = [inputs] + list(initial_state)
-
-            # Perform the call
-            output = super(RNN, self).__call__(inputs, **kwargs)
-
-            # Restore original input spec
-            self.input_spec = input_spec
+            # Compute the full input spec, including state and constants
+            full_input = [inputs] + additional_inputs
+            full_input_spec = self.input_spec + additional_specs
+            # Perform the call with temporarily replaced input_spec
+            original_input_spec = self.input_spec
+            self.input_spec = full_input_spec
+            output = super(RNN, self).__call__(full_input, **kwargs)
+            self.input_spec = original_input_spec
             return output
         else:
-            kwargs['initial_state'] = initial_state
             return super(RNN, self).__call__(inputs, **kwargs)
 
-    def call(self, inputs, mask=None, training=None, initial_state=None):
+    def call(self,
+             inputs,
+             mask=None,
+             training=None,
+             initial_state=None,
+             constants=None):
         # input shape: `(samples, time (padded with zeros), input_dim)`
         # note that the .build() method of subclasses MUST define
         # self.input_spec and self.state_spec with complete input shapes.
         if isinstance(inputs, list):
-            initial_state = inputs[1:]
             inputs = inputs[0]
-        elif initial_state is not None:
+        if initial_state is not None:
             pass
         elif self.stateful:
             initial_state = self.states
@@ -525,13 +562,27 @@ class RNN(Layer):
                              'the time dimension by passing a `shape` '
                              'or `batch_shape` argument to your Input layer.')
 
+        kwargs = {}
         if has_arg(self.cell.call, 'training'):
-            step = functools.partial(self.cell.call, training=training)
+            kwargs['training'] = training
+
+        if constants:
+            if not has_arg(self.cell.call, 'constants'):
+                raise ValueError('RNN cell does not support constants')
+
+            def step(inputs, states):
+                constants = states[-self._num_constants:]
+                states = states[:-self._num_constants]
+                return self.cell.call(inputs, states, constants=constants,
+                                      **kwargs)
         else:
-            step = self.cell.call
+            def step(inputs, states):
+                return self.cell.call(inputs, states, **kwargs)
+
         last_output, outputs, states = K.rnn(step,
                                              inputs,
                                              initial_state,
+                                             constants=constants,
                                              go_backwards=self.go_backwards,
                                              mask=mask,
                                              unroll=self.unroll,
@@ -559,6 +610,47 @@ class RNN(Layer):
             return [output] + states
         else:
             return output
+
+    def _standardize_args(self, inputs, initial_state, constants):
+        """Brings the arguments of `__call__` that can contain input tensors to
+        standard format.
+
+        When running a model loaded from file, the input tensors
+        `initial_state` and `constants` can be passed to `RNN.__call__` as part
+        of `inputs` instead of by the dedicated keyword arguments. This method
+        makes sure the arguments are separated and that `initial_state` and
+        `constants` are lists of tensors (or None).
+
+        # Arguments
+            inputs: tensor or list/tuple of tensors
+            initial_state: tensor or list of tensors or None
+            constants: tensor or list of tensors or None
+
+        # Returns
+            inputs: tensor
+            initial_state: list of tensors or None
+            constants: list of tensors or None
+        """
+        if isinstance(inputs, list):
+            assert initial_state is None and constants is None
+            if self._num_constants is not None:
+                constants = inputs[-self._num_constants:]
+                inputs = inputs[:-self._num_constants]
+            if len(inputs) > 1:
+                initial_state = inputs[1:]
+            inputs = inputs[0]
+
+        def to_list_or_none(x):
+            if x is None or isinstance(x, list):
+                return x
+            if isinstance(x, tuple):
+                return list(x)
+            return [x]
+
+        initial_state = to_list_or_none(initial_state)
+        constants = to_list_or_none(constants)
+
+        return inputs, initial_state, constants
 
     def reset_states(self, states=None):
         if not self.stateful:
@@ -618,6 +710,9 @@ class RNN(Layer):
                   'go_backwards': self.go_backwards,
                   'stateful': self.stateful,
                   'unroll': self.unroll}
+        if self._num_constants is not None:
+            config['num_constants'] = self._num_constants
+
         cell_config = self.cell.get_config()
         config['cell'] = {'class_name': self.cell.__class__.__name__,
                           'config': cell_config}
@@ -629,10 +724,15 @@ class RNN(Layer):
         from . import deserialize as deserialize_layer
         cell = deserialize_layer(config.pop('cell'),
                                  custom_objects=custom_objects)
-        return cls(cell, **config)
+        num_constants = config.pop('num_constants', None)
+        layer = cls(cell, **config)
+        layer._num_constants = num_constants
+        return layer
 
     @property
     def trainable_weights(self):
+        if not self.trainable:
+            return []
         if isinstance(self.cell, Layer):
             return self.cell.trainable_weights
         return []
@@ -640,6 +740,8 @@ class RNN(Layer):
     @property
     def non_trainable_weights(self):
         if isinstance(self.cell, Layer):
+            if not self.trainable:
+                return self.cell.weights
             return self.cell.non_trainable_weights
         return []
 
@@ -682,9 +784,6 @@ class SimpleRNNCell(Layer):
             the `recurrent_kernel` weights matrix
             (see [regularizer](../regularizers.md)).
         bias_regularizer: Regularizer function applied to the bias vector
-            (see [regularizer](../regularizers.md)).
-        activity_regularizer: Regularizer function applied to
-            the output of the layer (its "activation").
             (see [regularizer](../regularizers.md)).
         kernel_constraint: Constraint function applied to
             the `kernel` weights matrix
@@ -762,37 +861,20 @@ class SimpleRNNCell(Layer):
             self.bias = None
         self.built = True
 
-    def _generate_dropout_mask(self, inputs, training=None):
-        if 0 < self.dropout < 1:
-            ones = K.ones_like(K.squeeze(inputs[:, 0:1, :], axis=1))
-
-            def dropped_inputs():
-                return K.dropout(ones, self.dropout)
-
-            self._dropout_mask = K.in_train_phase(
-                dropped_inputs,
-                ones,
-                training=training)
-        else:
-            self._dropout_mask = None
-
-    def _generate_recurrent_dropout_mask(self, inputs, training=None):
-        if 0 < self.recurrent_dropout < 1:
-            ones = K.ones_like(K.reshape(inputs[:, 0, 0], (-1, 1)))
-            ones = K.tile(ones, (1, self.units))
-
-            def dropped_inputs():
-                return K.dropout(ones, self.dropout)
-
-            self._recurrent_dropout_mask = K.in_train_phase(
-                dropped_inputs,
-                ones,
-                training=training)
-        else:
-            self._recurrent_dropout_mask = None
-
     def call(self, inputs, states, training=None):
         prev_output = states[0]
+        if 0 < self.dropout < 1 and self._dropout_mask is None:
+            self._dropout_mask = _generate_dropout_mask(
+                _generate_dropout_ones(inputs, K.shape(inputs)[-1]),
+                self.dropout,
+                training=training)
+        if (0 < self.recurrent_dropout < 1 and
+                self._recurrent_dropout_mask is None):
+            self._recurrent_dropout_mask = _generate_dropout_mask(
+                _generate_dropout_ones(inputs, self.units),
+                self.recurrent_dropout,
+                training=training)
+
         dp_mask = self._dropout_mask
         rec_dp_mask = self._recurrent_dropout_mask
 
@@ -905,16 +987,14 @@ class SimpleRNN(RNN):
             warnings.warn('The `implementation` argument '
                           'in `SimpleRNN` has been deprecated. '
                           'Please remove it from your layer call.')
-        if K.backend() == 'cntk':
-            if not kwargs.get('unroll') and (dropout > 0 or recurrent_dropout > 0):
-                warnings.warn(
-                    'RNN dropout is not supported with the CNTK backend '
-                    'when using dynamic RNNs (i.e. non-unrolled). '
-                    'You can either set `unroll=True`, '
-                    'set `dropout` and `recurrent_dropout` to 0, '
-                    'or use a different backend.')
-                dropout = 0.
-                recurrent_dropout = 0.
+        if K.backend() == 'theano' and dropout + recurrent_dropout > 0.:
+            warnings.warn(
+                'RNN dropout is no longer supported with the Theano backend '
+                'due to technical limitations. '
+                'You can either set `dropout` and `recurrent_dropout` to 0, '
+                'or use the TensorFlow backend.')
+            dropout = 0.
+            recurrent_dropout = 0.
 
         cell = SimpleRNNCell(units,
                              activation=activation,
@@ -940,8 +1020,6 @@ class SimpleRNN(RNN):
         self.activity_regularizer = regularizers.get(activity_regularizer)
 
     def call(self, inputs, mask=None, training=None, initial_state=None):
-        self.cell._generate_dropout_mask(inputs, training=training)
-        self.cell._generate_recurrent_dropout_mask(inputs, training=training)
         return super(SimpleRNN, self).call(inputs,
                                            mask=mask,
                                            training=training,
@@ -1060,9 +1138,6 @@ class GRUCell(Layer):
             (see [regularizer](../regularizers.md)).
         bias_regularizer: Regularizer function applied to the bias vector
             (see [regularizer](../regularizers.md)).
-        activity_regularizer: Regularizer function applied to
-            the output of the layer (its "activation").
-            (see [regularizer](../regularizers.md)).
         kernel_constraint: Constraint function applied to
             the `kernel` weights matrix
             (see [constraints](../constraints.md)).
@@ -1078,6 +1153,11 @@ class GRUCell(Layer):
             Fraction of the units to drop for
             the linear transformation of the recurrent state.
         implementation: Implementation mode, either 1 or 2.
+            Mode 1 will structure its operations as a larger number of
+            smaller dot products and additions, whereas mode 2 will
+            batch them into fewer, larger operations. These modes will
+            have different performance profiles on different hardware and
+            for different applications.
     """
 
     def __init__(self, units,
@@ -1164,39 +1244,22 @@ class GRUCell(Layer):
             self.bias_h = None
         self.built = True
 
-    def _generate_dropout_mask(self, inputs, training=None):
-        if 0 < self.dropout < 1:
-            ones = K.ones_like(K.squeeze(inputs[:, 0:1, :], axis=1))
-
-            def dropped_inputs():
-                return K.dropout(ones, self.dropout)
-
-            self._dropout_mask = [K.in_train_phase(
-                dropped_inputs,
-                ones,
-                training=training)
-                for _ in range(3)]
-        else:
-            self._dropout_mask = None
-
-    def _generate_recurrent_dropout_mask(self, inputs, training=None):
-        if 0 < self.recurrent_dropout < 1:
-            ones = K.ones_like(K.reshape(inputs[:, 0, 0], (-1, 1)))
-            ones = K.tile(ones, (1, self.units))
-
-            def dropped_inputs():
-                return K.dropout(ones, self.dropout)
-
-            self._recurrent_dropout_mask = [K.in_train_phase(
-                dropped_inputs,
-                ones,
-                training=training)
-                for _ in range(3)]
-        else:
-            self._recurrent_dropout_mask = None
-
     def call(self, inputs, states, training=None):
         h_tm1 = states[0]  # previous memory
+
+        if 0 < self.dropout < 1 and self._dropout_mask is None:
+            self._dropout_mask = _generate_dropout_mask(
+                _generate_dropout_ones(inputs, K.shape(inputs)[-1]),
+                self.dropout,
+                training=training,
+                count=3)
+        if (0 < self.recurrent_dropout < 1 and
+                self._recurrent_dropout_mask is None):
+            self._recurrent_dropout_mask = _generate_dropout_mask(
+                _generate_dropout_ones(inputs, self.units),
+                self.recurrent_dropout,
+                training=training,
+                count=3)
 
         # dropout matrices for input units
         dp_mask = self._dropout_mask
@@ -1313,6 +1376,11 @@ class GRU(RNN):
             Fraction of the units to drop for
             the linear transformation of the recurrent state.
         implementation: Implementation mode, either 1 or 2.
+            Mode 1 will structure its operations as a larger number of
+            smaller dot products and additions, whereas mode 2 will
+            batch them into fewer, larger operations. These modes will
+            have different performance profiles on different hardware and
+            for different applications.
         return_sequences: Boolean. Whether to return the last output.
             in the output sequence, or the full sequence.
         return_state: Boolean. Whether to return the last state
@@ -1364,16 +1432,14 @@ class GRU(RNN):
             warnings.warn('`implementation=0` has been deprecated, '
                           'and now defaults to `implementation=2`.'
                           'Please update your layer call.')
-        if K.backend() == 'cntk':
-            if not kwargs.get('unroll') and (dropout > 0 or recurrent_dropout > 0):
-                warnings.warn(
-                    'RNN dropout is not supported with the CNTK backend '
-                    'when using dynamic RNNs (i.e. non-unrolled). '
-                    'You can either set `unroll=True`, '
-                    'set `dropout` and `recurrent_dropout` to 0, '
-                    'or use a different backend.')
-                dropout = 0.
-                recurrent_dropout = 0.
+        if K.backend() == 'theano' and dropout + recurrent_dropout > 0.:
+            warnings.warn(
+                'RNN dropout is no longer supported with the Theano backend '
+                'due to technical limitations. '
+                'You can either set `dropout` and `recurrent_dropout` to 0, '
+                'or use the TensorFlow backend.')
+            dropout = 0.
+            recurrent_dropout = 0.
 
         cell = GRUCell(units,
                        activation=activation,
@@ -1401,8 +1467,6 @@ class GRU(RNN):
         self.activity_regularizer = regularizers.get(activity_regularizer)
 
     def call(self, inputs, mask=None, training=None, initial_state=None):
-        self.cell._generate_dropout_mask(inputs, training=training)
-        self.cell._generate_recurrent_dropout_mask(inputs, training=training)
         return super(GRU, self).call(inputs,
                                      mask=mask,
                                      training=training,
@@ -1648,7 +1712,7 @@ class GRUCond(Recurrent):
                                                                'It currently has %d inputs' % len(input_shape)
 
         self.input_dim = input_shape[0][2]
-        if self.input_spec[1].ndim == 3:
+        if K.ndim(self.input_spec[1]) == 3:
             self.context_dim = input_shape[1][2]
             self.static_ctx = False
             assert input_shape[1][1] == input_shape[0][1], 'When using a 3D ctx in GRUCond, it has to have the same ' \
@@ -1761,32 +1825,19 @@ class GRUCond(Recurrent):
             main_out = [main_out, states_dim]
         return main_out
 
-    def call(self, x, mask=None, training=None, initial_state=None):
+    def call(self, inputs, mask=None, training=None, initial_state=None):
         # input shape: (nb_samples, time (padded with zeros), input_dim)
         # note that the .build() method of subclasses MUST define
         # self.input_spec with a complete input shape.
-        input_shape = self.input_spec[0].shape
-        state_below = x[0]
-        self.context = x[1]
+        input_shape = K.int_shape(inputs[0])
+        state_below = inputs[0]
+        self.context = inputs[1]
         if self.num_inputs == 2:  # input: [state_below, context]
             self.init_state = None
         elif self.num_inputs == 3:  # input: [state_below, context, init_generic]
-            self.init_state = x[2]
+            self.init_state = inputs[2]
         elif self.num_inputs == 4:  # input: [state_below, context, init_state, init_memory]
-            self.init_state = x[2]
-        if K._BACKEND == 'tensorflow':
-            if not input_shape[1]:
-                raise Exception('When using TensorFlow, you should define '
-                                'explicitly the number of timesteps of '
-                                'your sequences.\n'
-                                'If your first layer is an Embedding, '
-                                'make sure to pass it an "input_length" '
-                                'argument. Otherwise, make sure '
-                                'the first layer has '
-                                'an "input_shape" or "batch_input_shape" '
-                                'argument, including the time axis. '
-                                'Found input shape at layer ' + self.name +
-                                ': ' + str(input_shape))
+            self.init_state = inputs[2]
         if self.stateful:
             initial_states = self.states
         else:
@@ -1844,7 +1895,7 @@ class GRUCond(Recurrent):
             dp_mask = states[3]  # Dropout W
             context = states[4]
             mask_context = states[5]  # Context mask
-            if mask_context.ndim > 1:  # Mask the context (only if necessary)
+            if K.ndim(mask_context) > 1:  # Mask the context (only if necessary)
                 context = mask_context[:, :, None] * context
             matrix_x += K.dot(context * dp_mask[0], self.kernel)
 
@@ -1885,7 +1936,7 @@ class GRUCond(Recurrent):
         if 0 < self.dropout < 1:
             input_shape = self.input_spec[1][0].shape
             input_dim = input_shape[-1]
-            ones = K.ones_like(K.reshape(x[:, 0, 0], (-1, 1)))
+            ones = K.ones_like(K.reshape(inputs[:, 0, 0], (-1, 1)))
             ones = K.concatenate([ones] * input_dim, 1)
             B_W = [K.in_train_phase(K.dropout(ones, self.dropout_W), ones) for _ in range(3)]
         else:
@@ -1899,6 +1950,7 @@ class GRUCond(Recurrent):
         # States[5] - mask_context
         if mask_context is None:
             mask_context = K.not_equal(K.sum(self.context, axis=2), self.mask_value)
+            mask_context = K.cast(mask_context, K.floatx())
         constants.append(mask_context)
 
         return constants
@@ -2164,13 +2216,13 @@ class AttGRU(Recurrent):
         else:
             self.bias = None
 
-        self.bias_ba = self.add_weight(shape=self.att_units,
+        self.bias_ba = self.add_weight(shape=(self.att_units,),
                                        name='bias_ba',
                                        initializer=self.bias_ba_initializer,
                                        regularizer=self.bias_ba_regularizer,
                                        constraint=self.bias_ba_constraint)
-
-        self.bias_ca = self.add_weight(shape=self.context_steps,
+        bias_ca_shape = self.context_steps if self.context_steps is None else (self.context_steps,)
+        self.bias_ca = self.add_weight(shape=bias_ca_shape,
                                        name='bias_ca',
                                        initializer=self.bias_ca_initializer,
                                        regularizer=self.bias_ca_regularizer,
@@ -2215,29 +2267,17 @@ class AttGRU(Recurrent):
 
         return main_out
 
-    def call(self, x, mask=None, training=None, initial_state=None):
+    def call(self, inputs, mask=None, training=None, initial_state=None):
         # input shape: (nb_samples, time (padded with zeros), input_dim)
         # note that the .build() method of subclasses MUST define
         # self.input_spec with a complete input shape.
-        input_shape = self.input_spec[0].shape
-        state_below = x[0]
+        input_shape = K.int_shape(inputs[0])
+        state_below = inputs[0]
         if self.num_inputs == 1:  # input: [context]
             self.init_state = None
         elif self.num_inputs == 2:  # input: [context, init_generic]
-            self.init_state = x[1]
-        if K._BACKEND == 'tensorflow':
-            if not input_shape[1]:
-                raise Exception('When using TensorFlow, you should define '
-                                'explicitly the number of timesteps of '
-                                'your sequences.\n'
-                                'If your first layer is an Embedding, '
-                                'make sure to pass it an "input_length" '
-                                'argument. Otherwise, make sure '
-                                'the first layer has '
-                                'an "input_shape" or "batch_input_shape" '
-                                'argument, including the time axis. '
-                                'Found input shape at layer ' + self.name +
-                                ': ' + str(input_shape))
+            self.init_state = inputs[1]
+
         if self.stateful:
             initial_states = self.states
         else:
@@ -2301,17 +2341,15 @@ class AttGRU(Recurrent):
         # Att model dropouts
         att_dp_mask = states[5]  # Dropout Wa
         pctx_ = states[6]  # Projected context (i.e. context * Ua + ba)
+        context = states[7]  # Original context
 
         # Attention model (see Formulation in class header)
         p_state_ = K.dot(h_tm1 * att_dp_mask[0], self.attention_recurrent_kernel)
         pctx_ = K.tanh(pctx_ + p_state_[:, None, :])
-        e = K.dot(pctx_, self.attention_context_wa) + self.bias_ca
-        if mask_context.ndim > 1:  # Mask the context (only if necessary)
-            e = mask_context * e
-        alphas_shape = e.shape
-        alphas = K.softmax(e.reshape([alphas_shape[0], alphas_shape[1]]))
+        e = K.dot_product(pctx_, self.attention_context_wa) + self.bias_ca
+        alphas = K.softmax(K.reshape(e, [K.shape(e)[0], K.shape(e)[1]]))
         # sum over the in_timesteps dimension resulting in [batch_size, input_dim]
-        ctx_ = (context * alphas[:, :, None]).sum(axis=1)
+        ctx_ = K.sum(context * alphas[:, :, None], axis=1)
 
         matrix_x = x + K.dot(ctx_ * dp_mask[0], self.kernel)
         if self.use_bias:
@@ -2453,8 +2491,6 @@ class AttGRU(Recurrent):
                   }
         base_config = super(AttGRU, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
-
-
 
 
 class AttGRUCond(Recurrent):
@@ -2700,13 +2736,13 @@ class AttGRUCond(Recurrent):
         else:
             self.bias = None
 
-        self.bias_ba = self.add_weight(shape=self.att_units,
+        self.bias_ba = self.add_weight(shape=(self.att_units,),
                                        name='bias_ba',
                                        initializer=self.bias_ba_initializer,
                                        regularizer=self.bias_ba_regularizer,
                                        constraint=self.bias_ba_constraint)
-
-        self.bias_ca = self.add_weight(shape=self.context_steps,
+        bias_ca_shape = self.context_steps if self.context_steps is None else (self.context_steps,)
+        self.bias_ca = self.add_weight(shape=bias_ca_shape,
                                        name='bias_ca',
                                        initializer=self.bias_ca_initializer,
                                        regularizer=self.bias_ca_regularizer,
@@ -2762,32 +2798,20 @@ class AttGRUCond(Recurrent):
 
         return main_out
 
-    def call(self, x, mask=None, training=None, initial_state=None):
+    def call(self, inputs, mask=None, training=None, initial_state=None):
         # input shape: (nb_samples, time (padded with zeros), input_dim)
         # note that the .build() method of subclasses MUST define
         # self.input_spec with a complete input shape.
-        input_shape = self.input_spec[0].shape
-        state_below = x[0]
-        self.context = x[1]
+        input_shape = K.int_shape(inputs[0])
+        state_below = inputs[0]
+        self.context = inputs[1]
         if self.num_inputs == 2:  # input: [state_below, context]
             self.init_state = None
         elif self.num_inputs == 3:  # input: [state_below, context, init_generic]
-            self.init_state = x[2]
+            self.init_state = inputs[2]
         elif self.num_inputs == 4:  # input: [state_below, context, init_state, init_memory]
-            self.init_state = x[2]
-        if K._BACKEND == 'tensorflow':
-            if not input_shape[1]:
-                raise Exception('When using TensorFlow, you should define '
-                                'explicitly the number of timesteps of '
-                                'your sequences.\n'
-                                'If your first layer is an Embedding, '
-                                'make sure to pass it an "input_length" '
-                                'argument. Otherwise, make sure '
-                                'the first layer has '
-                                'an "input_shape" or "batch_input_shape" '
-                                'argument, including the time axis. '
-                                'Found input shape at layer ' + self.name +
-                                ': ' + str(input_shape))
+            self.init_state = inputs[2]
+
         if self.stateful:
             initial_states = self.states
         else:
@@ -2853,20 +2877,19 @@ class AttGRUCond(Recurrent):
         pctx_ = states[6]  # Projected context (i.e. context * Ua + ba)
         context = states[7]  # Original context
         mask_context = states[8]  # Context mask
-        if mask_context.ndim > 1:  # Mask the context (only if necessary)
+        if K.ndim(mask_context) > 1:  # Mask the context (only if necessary)
             pctx_ = mask_context[:, :, None] * pctx_
             context = mask_context[:, :, None] * context
 
         # Attention model (see Formulation in class header)
         p_state_ = K.dot(h_tm1 * att_dp_mask[0], self.attention_recurrent_kernel)
         pctx_ = K.tanh(pctx_ + p_state_[:, None, :])
-        e = K.dot(pctx_, self.attention_context_wa) + self.bias_ca
-        if mask_context.ndim > 1:  # Mask the context (only if necessary)
+        e = K.dot_product(pctx_, self.attention_context_wa) + self.bias_ca
+        if K.ndim(mask_context) > 1:  # Mask the context (only if necessary)
             e = mask_context * e
-        alphas_shape = e.shape
-        alphas = K.softmax(e.reshape([alphas_shape[0], alphas_shape[1]]))
+        alphas = K.softmax(K.reshape(e, [K.shape(e)[0], K.shape(e)[1]]))
         # sum over the in_timesteps dimension resulting in [batch_size, input_dim]
-        ctx_ = (context * alphas[:, :, None]).sum(axis=1)
+        ctx_ = K.sum(context * alphas[:, :, None], axis=1)
 
         matrix_x = x + K.dot(ctx_ * dp_mask[0], self.kernel)
         if self.use_bias:
@@ -2955,6 +2978,7 @@ class AttGRUCond(Recurrent):
         # States[9] - mask_context
         if mask_context is None:
             mask_context = K.not_equal(K.sum(self.context, axis=2), self.mask_value)
+            mask_context = K.cast(mask_context, K.floatx())
         constants.append(mask_context)
 
         return constants
@@ -3282,13 +3306,13 @@ class AttConditionalGRUCond(Recurrent):
             self.bias = None
             self.bias1 = None
 
-        self.bias_ba = self.add_weight(shape=self.att_units,
+        self.bias_ba = self.add_weight(shape=(self.att_units,),
                                        name='bias_ba',
                                        initializer=self.bias_ba_initializer,
                                        regularizer=self.bias_ba_regularizer,
                                        constraint=self.bias_ba_constraint)
-
-        self.bias_ca = self.add_weight(shape=self.context_steps,
+        bias_ca_shape = self.context_steps if self.context_steps is None else (self.context_steps,)
+        self.bias_ca = self.add_weight(shape=bias_ca_shape,
                                        name='bias_ca',
                                        initializer=self.bias_ca_initializer,
                                        regularizer=self.bias_ca_regularizer,
@@ -3345,32 +3369,20 @@ class AttConditionalGRUCond(Recurrent):
 
         return main_out
 
-    def call(self, x, mask=None, training=None, initial_state=None):
+    def call(self, inputs, mask=None, training=None, initial_state=None):
         # input shape: (nb_samples, time (padded with zeros), input_dim)
         # note that the .build() method of subclasses MUST define
         # self.input_spec with a complete input shape.
-        input_shape = self.input_spec[0].shape
-        state_below = x[0]
-        self.context = x[1]
+        input_shape = K.int_shape(inputs[0])
+        state_below = inputs[0]
+        self.context = inputs[1]
         if self.num_inputs == 2:  # input: [state_below, context]
             self.init_state = None
         elif self.num_inputs == 3:  # input: [state_below, context, init_generic]
-            self.init_state = x[2]
+            self.init_state = inputs[2]
         elif self.num_inputs == 4:  # input: [state_below, context, init_state, init_memory]
-            self.init_state = x[2]
-        if K._BACKEND == 'tensorflow':
-            if not input_shape[1]:
-                raise Exception('When using TensorFlow, you should define '
-                                'explicitly the number of timesteps of '
-                                'your sequences.\n'
-                                'If your first layer is an Embedding, '
-                                'make sure to pass it an "input_length" '
-                                'argument. Otherwise, make sure '
-                                'the first layer has '
-                                'an "input_shape" or "batch_input_shape" '
-                                'argument, including the time axis. '
-                                'Found input shape at layer ' + self.name +
-                                ': ' + str(input_shape))
+            self.init_state = inputs[2]
+
         if self.stateful:
             initial_states = self.states
         else:
@@ -3436,7 +3448,7 @@ class AttConditionalGRUCond(Recurrent):
         pctx_ = states[6]  # Projected context (i.e. context * Ua + ba)
         context = states[7]  # Original context
         mask_context = states[8]  # Context mask
-        if mask_context.ndim > 1:  # Mask the context (only if necessary)
+        if K.ndim(mask_context) > 1:  # Mask the context (only if necessary)
             pctx_ = mask_context[:, :, None] * pctx_
             context = mask_context[:, :, None] * context
 
@@ -3459,13 +3471,12 @@ class AttConditionalGRUCond(Recurrent):
         # Attention model (see Formulation in class header)
         p_state_ = K.dot(h_ * att_dp_mask[0], self.attention_recurrent_kernel)
         pctx_ = K.tanh(pctx_ + p_state_[:, None, :])
-        e = K.dot(pctx_, self.attention_context_wa) + self.bias_ca
-        if mask_context.ndim > 1:  # Mask the context (only if necessary)
+        e = K.dot_product(pctx_, self.attention_context_wa) + self.bias_ca
+        if K.ndim(mask_context) > 1:  # Mask the context (only if necessary)
             e = mask_context * e
-        alphas_shape = e.shape
-        alphas = K.softmax(e.reshape([alphas_shape[0], alphas_shape[1]]))
+        alphas = K.softmax(K.reshape(e, [K.shape(e)[0], K.shape(e)[1]]))
         # sum over the in_timesteps dimension resulting in [batch_size, input_dim]
-        ctx_ = (context * alphas[:, :, None]).sum(axis=1)
+        ctx_ = K.sum(context * alphas[:, :, None], axis=1)
 
         matrix_x = K.dot(ctx_ * dp_mask[0], self.kernel)
         if self.use_bias:
@@ -3557,6 +3568,7 @@ class AttConditionalGRUCond(Recurrent):
         # States[9] - mask_context
         if mask_context is None:
             mask_context = K.not_equal(K.sum(self.context, axis=2), self.mask_value)
+            mask_context = K.cast(mask_context, K.floatx())
         constants.append(mask_context)
 
         return constants
@@ -3580,12 +3592,14 @@ class AttConditionalGRUCond(Recurrent):
         return initial_states + extra_states
 
     def get_config(self):
-        config = {'units': self.units,
-                  "att_units": self.att_units,
+        config = {'return_extra_variables': self.return_extra_variables,
+                  'return_states': self.return_states,
+                  'units': self.units,
+                  'att_units': self.att_units,
+                  'mask_value': self.mask_value,
+                  'use_bias': self.use_bias,
                   'activation': activations.serialize(self.activation),
                   'recurrent_activation': activations.serialize(self.recurrent_activation),
-                  'return_extra_variables': self.return_extra_variables,
-                  'return_states': self.return_states,
                   'kernel_initializer': initializers.serialize(self.kernel_initializer),
                   'recurrent_initializer': initializers.serialize(self.recurrent_initializer),
                   'conditional_initializer': initializers.serialize(self.conditional_initializer),
@@ -3618,11 +3632,10 @@ class AttConditionalGRUCond(Recurrent):
                   'recurrent_dropout': self.recurrent_dropout,
                   'conditional_dropout': self.conditional_dropout,
                   'attention_dropout': self.attention_dropout,
-                  'mask_value': self.mask_value
+                  'num_inputs': self.num_inputs
                   }
         base_config = super(AttConditionalGRUCond, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
-
 
 
 class LSTMCell(Layer):
@@ -3659,9 +3672,6 @@ class LSTMCell(Layer):
             (see [regularizer](../regularizers.md)).
         bias_regularizer: Regularizer function applied to the bias vector
             (see [regularizer](../regularizers.md)).
-        activity_regularizer: Regularizer function applied to
-            the output of the layer (its "activation").
-            (see [regularizer](../regularizers.md)).
         kernel_constraint: Constraint function applied to
             the `kernel` weights matrix
             (see [constraints](../constraints.md)).
@@ -3677,6 +3687,11 @@ class LSTMCell(Layer):
             Fraction of the units to drop for
             the linear transformation of the recurrent state.
         implementation: Implementation mode, either 1 or 2.
+            Mode 1 will structure its operations as a larger number of
+            smaller dot products and additions, whereas mode 2 will
+            batch them into fewer, larger operations. These modes will
+            have different performance profiles on different hardware and
+            for different applications.
     """
 
     def __init__(self, units,
@@ -3777,38 +3792,21 @@ class LSTMCell(Layer):
             self.bias_o = None
         self.built = True
 
-    def _generate_dropout_mask(self, inputs, training=None):
-        if 0 < self.dropout < 1:
-            ones = K.ones_like(K.squeeze(inputs[:, 0:1, :], axis=1))
-
-            def dropped_inputs():
-                return K.dropout(ones, self.dropout)
-
-            self._dropout_mask = [K.in_train_phase(
-                dropped_inputs,
-                ones,
-                training=training)
-                for _ in range(4)]
-        else:
-            self._dropout_mask = None
-
-    def _generate_recurrent_dropout_mask(self, inputs, training=None):
-        if 0 < self.recurrent_dropout < 1:
-            ones = K.ones_like(K.reshape(inputs[:, 0, 0], (-1, 1)))
-            ones = K.tile(ones, (1, self.units))
-
-            def dropped_inputs():
-                return K.dropout(ones, self.dropout)
-
-            self._recurrent_dropout_mask = [K.in_train_phase(
-                dropped_inputs,
-                ones,
-                training=training)
-                for _ in range(4)]
-        else:
-            self._recurrent_dropout_mask = None
-
     def call(self, inputs, states, training=None):
+        if 0 < self.dropout < 1 and self._dropout_mask is None:
+            self._dropout_mask = _generate_dropout_mask(
+                _generate_dropout_ones(inputs, K.shape(inputs)[-1]),
+                self.dropout,
+                training=training,
+                count=4)
+        if (0 < self.recurrent_dropout < 1 and
+                self._recurrent_dropout_mask is None):
+            self._recurrent_dropout_mask = _generate_dropout_mask(
+                _generate_dropout_ones(inputs, self.units),
+                self.recurrent_dropout,
+                training=training,
+                count=4)
+
         # dropout matrices for input units
         dp_mask = self._dropout_mask
         # dropout matrices for recurrent units
@@ -3828,10 +3826,15 @@ class LSTMCell(Layer):
                 inputs_f = inputs
                 inputs_c = inputs
                 inputs_o = inputs
-            x_i = K.dot(inputs_i, self.kernel_i) + self.bias_i
-            x_f = K.dot(inputs_f, self.kernel_f) + self.bias_f
-            x_c = K.dot(inputs_c, self.kernel_c) + self.bias_c
-            x_o = K.dot(inputs_o, self.kernel_o) + self.bias_o
+            x_i = K.dot(inputs_i, self.kernel_i)
+            x_f = K.dot(inputs_f, self.kernel_f)
+            x_c = K.dot(inputs_c, self.kernel_c)
+            x_o = K.dot(inputs_o, self.kernel_o)
+            if self.use_bias:
+                x_i = K.bias_add(x_i, self.bias_i)
+                x_f = K.bias_add(x_f, self.bias_f)
+                x_c = K.bias_add(x_c, self.bias_c)
+                x_o = K.bias_add(x_o, self.bias_o)
 
             if 0 < self.recurrent_dropout < 1.:
                 h_tm1_i = h_tm1 * rec_dp_mask[0]
@@ -3930,6 +3933,11 @@ class LSTM(RNN):
             Fraction of the units to drop for
             the linear transformation of the recurrent state.
         implementation: Implementation mode, either 1 or 2.
+            Mode 1 will structure its operations as a larger number of
+            smaller dot products and additions, whereas mode 2 will
+            batch them into fewer, larger operations. These modes will
+            have different performance profiles on different hardware and
+            for different applications.
         return_sequences: Boolean. Whether to return the last output.
             in the output sequence, or the full sequence.
         return_state: Boolean. Whether to return the last state
@@ -3983,16 +3991,14 @@ class LSTM(RNN):
             warnings.warn('`implementation=0` has been deprecated, '
                           'and now defaults to `implementation=2`.'
                           'Please update your layer call.')
-        if K.backend() == 'cntk':
-            if not kwargs.get('unroll') and (dropout > 0 or recurrent_dropout > 0):
-                warnings.warn(
-                    'RNN dropout is not supported with the CNTK backend '
-                    'when using dynamic RNNs (i.e. non-unrolled). '
-                    'You can either set `unroll=True`, '
-                    'set `dropout` and `recurrent_dropout` to 0, '
-                    'or use a different backend.')
-                dropout = 0.
-                recurrent_dropout = 0.
+        if K.backend() == 'theano' and dropout + recurrent_dropout > 0.:
+            warnings.warn(
+                'RNN dropout is no longer supported with the Theano backend '
+                'due to technical limitations. '
+                'You can either set `dropout` and `recurrent_dropout` to 0, '
+                'or use the TensorFlow backend.')
+            dropout = 0.
+            recurrent_dropout = 0.
 
         cell = LSTMCell(units,
                         activation=activation,
@@ -4021,8 +4027,6 @@ class LSTM(RNN):
         self.activity_regularizer = regularizers.get(activity_regularizer)
 
     def call(self, inputs, mask=None, training=None, initial_state=None):
-        self.cell._generate_dropout_mask(inputs, training=training)
-        self.cell._generate_recurrent_dropout_mask(inputs, training=training)
         return super(LSTM, self).call(inputs,
                                       mask=mask,
                                       training=training,
@@ -4124,6 +4128,29 @@ class LSTM(RNN):
         if 'implementation' in config and config['implementation'] == 0:
             config['implementation'] = 1
         return cls(**config)
+
+def _generate_dropout_ones(inputs, dims):
+    # Currently, CTNK can't instantiate `ones` with symbolic shapes.
+    # Will update workaround once CTNK supports it.
+    if K.backend() == 'cntk':
+        ones = K.ones_like(K.reshape(inputs[:, 0], (-1, 1)))
+        return K.tile(ones, (1, dims))
+    else:
+        return K.ones((K.shape(inputs)[0], dims))
+
+def _generate_dropout_mask(ones, rate, training=None, count=1):
+    def dropped_inputs():
+        return K.dropout(ones, rate)
+
+    if count > 1:
+        return [K.in_train_phase(
+            dropped_inputs,
+            ones,
+            training=training) for _ in range(count)]
+    return K.in_train_phase(
+        dropped_inputs,
+        ones,
+        training=training)
 
 
 # TODO: Adapt ALL LSTM* to the new interface
@@ -4238,7 +4265,7 @@ class LSTMCond(Recurrent):
         self.recurrent_dropout = min(1., max(0., recurrent_dropout))
         self.conditional_dropout = min(1., max(0., conditional_dropout))
         self.num_inputs = num_inputs
-        self.input_spec = [InputSpec(ndim=3), InputSpec(ndim=3)]
+        self.input_spec = [InputSpec(ndim=3), InputSpec(ndim=2)]
         for _ in range(len(self.input_spec), self.num_inputs):
             self.input_spec.append(InputSpec(ndim=2))
 
@@ -4250,7 +4277,7 @@ class LSTMCond(Recurrent):
                                                                'It currently has %d inputs' % len(input_shape)
 
         self.input_dim = input_shape[0][2]
-        if self.input_spec[1].ndim == 3:
+        if K.ndim(self.input_spec[1]) == 3:
             self.context_dim = input_shape[1][2]
             self.static_ctx = False
             assert input_shape[1][1] == input_shape[0][1], 'When using a 3D ctx in LSTMCond, it has to have the same ' \
@@ -4329,40 +4356,31 @@ class LSTMCond(Recurrent):
                            K.zeros((input_shape[0], self.units))]
 
     def preprocess_input(self, inputs, training=None):
-
         if 0 < self.conditional_dropout < 1:
-            input_dim = self.input_dim
-            ones = K.ones_like(K.reshape(inputs[:, :, 0], (-1, inputs.shape[1], 1)))  # (bs, timesteps, 1)
-            ones = K.concatenate([ones] * input_dim, axis=2)
-
+            ones = K.ones_like(K.squeeze(inputs[:, 0:1, :], axis=1))
             def dropped_inputs():
-                return K.dropout(ones, self.recurrent_dropout)
-
+                return K.dropout(ones, self.conditional_dropout)
             cond_dp_mask = [K.in_train_phase(dropped_inputs,
                                              ones,
                                              training=training) for _ in range(4)]
+            preprocessed_input = K.dot(inputs * cond_dp_mask[0][:, None, :], self.conditional_kernel)
         else:
-            cond_dp_mask = [K.cast_to_floatx(1.) for _ in range(4)]
-
-        if 0 < self.dropout < 1:
-            input_dim = self.input_dim
-            ones = K.ones_like(K.reshape(self.context[:, :, 0], (-1, self.context.shape[1], 1)))  # (bs, timesteps, 1)
-            ones = K.concatenate([ones] * input_dim, axis=2)
-
-            def dropped_inputs():
-                return K.dropout(ones, self.recurrent_dropout)
-
-            dp_mask = [K.in_train_phase(dropped_inputs,
-                                        ones,
-                                        training=training) for _ in range(4)]
-        else:
-            dp_mask = [K.cast_to_floatx(1.) for _ in range(4)]
+            preprocessed_input = K.dot(inputs, self.conditional_kernel)
 
         if self.static_ctx:
-            K.dot(inputs * cond_dp_mask, self.conditional_kernel)
+            return preprocessed_input
+
+        # Not Static ctx
+        if 0 < self.dropout < 1:
+            ones = K.ones_like(K.squeeze(self.context[:, 0:1, :], axis=1))
+            def dropped_inputs():
+                return K.dropout(ones, self.dropout)
+            dp_mask = [K.in_train_phase(dropped_inputs, ones,
+                                             training=training) for _ in range(4)]
+            preprocessed_context = K.dot(self.context * dp_mask[0][:, None, :], self.kernel)
         else:
-            return K.dot(inputs * cond_dp_mask, self.conditional_kernel) + \
-                   K.dot(self.context * dp_mask[0], self.kernel)
+            preprocessed_context = K.dot(self.context, self.kernel)
+        return preprocessed_input + preprocessed_context
 
     def compute_output_shape(self, input_shape):
         if self.return_sequences:
@@ -4375,35 +4393,23 @@ class LSTMCond(Recurrent):
             main_out = [main_out, states_dim, states_dim]
         return main_out
 
-    def call(self, x, mask=None, training=None, initial_state=None):
+    def call(self, inputs, mask=None, training=None, initial_state=None):
         # input shape: (nb_samples, time (padded with zeros), input_dim)
         # note that the .build() method of subclasses MUST define
         # self.input_spec with a complete input shape.
-        input_shape = self.input_spec[0].shape
-        state_below = x[0]
-        self.context = x[1]
+        input_shape = K.int_shape(inputs[0])
+        state_below = inputs[0]
+        self.context = inputs[1]
         if self.num_inputs == 2:  # input: [state_below, context]
             self.init_state = None
             self.init_memory = None
         elif self.num_inputs == 3:  # input: [state_below, context, init_generic]
-            self.init_state = x[2]
-            self.init_memory = x[2]
+            self.init_state = inputs[2]
+            self.init_memory = inputs[2]
         elif self.num_inputs == 4:  # input: [state_below, context, init_state, init_memory]
-            self.init_state = x[2]
-            self.init_memory = x[3]
-        if K._BACKEND == 'tensorflow':
-            if not input_shape[1]:
-                raise Exception('When using TensorFlow, you should define '
-                                'explicitly the number of timesteps of '
-                                'your sequences.\n'
-                                'If your first layer is an Embedding, '
-                                'make sure to pass it an "input_length" '
-                                'argument. Otherwise, make sure '
-                                'the first layer has '
-                                'an "input_shape" or "batch_input_shape" '
-                                'argument, including the time axis. '
-                                'Found input shape at layer ' + self.name +
-                                ': ' + str(input_shape))
+            self.init_state = inputs[2]
+            self.init_memory = inputs[3]
+
         if self.stateful:
             initial_states = self.states
         else:
@@ -4453,15 +4459,14 @@ class LSTMCond(Recurrent):
     def step(self, x, states):
         h_tm1 = states[0]  # State
         c_tm1 = states[1]  # Memory
-        rec_dp_mask = states[2]  # Dropout U (recurrent)
+        dp_mask = states[2]  # Dropout W (input)
+        rec_dp_mask = states[3]  # Dropout U (recurrent)
         z = x + K.dot(h_tm1 * rec_dp_mask[0], self.recurrent_kernel)
-
         if self.static_ctx:
-            dp_mask = states[3]  # Dropout W
             context = states[4]
-            mask_context = states[5]  # Context mask
-            if mask_context.ndim > 1:  # Mask the context (only if necessary)
-                context = mask_context[:, :, None] * context
+            #mask_context = states[5]  # Context mask
+            #if mask_context.ndim > 1:  # Mask the context (only if necessary)
+            #    context = mask_context[:, :, None] * context
             z += K.dot(context * dp_mask[0], self.kernel)
         if self.use_bias:
             z = K.bias_add(z, self.bias)
@@ -4480,7 +4485,20 @@ class LSTMCond(Recurrent):
 
     def get_constants(self, inputs, mask_context, training=None):
         constants = []
-        # States[2] - Dropout_U
+
+        # States[3] - Dropout_W
+        if 0 < self.dropout < 1:
+            ones = K.ones_like(K.squeeze(self.context[:, 0:1, :], axis=1))
+            def dropped_inputs():
+                return K.dropout(ones, self.dropout)
+            dp_mask = [K.in_train_phase(dropped_inputs,
+                                        ones,
+                                        training=training) for _ in range(4)]
+            constants.append(dp_mask)
+        else:
+            constants.append([K.cast_to_floatx(1.) for _ in range(4)])
+
+        # States[4] - Dropout_U
         if 0 < self.recurrent_dropout < 1:
             ones = K.ones_like(K.reshape(inputs[:, 0, 0], (-1, 1)))
             ones = K.tile(ones, (1, self.units))
@@ -4495,25 +4513,10 @@ class LSTMCond(Recurrent):
         else:
             constants.append([K.cast_to_floatx(1.) for _ in range(4)])
 
-        # States[3]
-        if 0 < self.dropout < 1:
-            input_shape = self.input_spec[1][0].shape
-            input_dim = input_shape[-1]
-            ones = K.ones_like(K.reshape(x[:, 0, 0], (-1, 1)))
-            ones = K.concatenate([ones] * input_dim, 1)
-            B_W = [K.in_train_phase(K.dropout(ones, self.dropout_W), ones) for _ in range(4)]
-        else:
-            B_W = [K.cast_to_floatx(1.) for _ in range(4)]
-        if self.static_ctx:
-            constants.append(B_W)
-
         # States[4] - context
-        constants.append(self.context)
+        if self.static_ctx:
+            constants.append(self.context)
 
-        # States[5] - mask_context
-        if mask_context is None:
-            mask_context = K.not_equal(K.sum(self.context, axis=2), self.mask_value)
-        constants.append(mask_context)
 
         return constants
 
@@ -4810,13 +4813,13 @@ class AttLSTM(Recurrent):
         else:
             self.bias = None
 
-        self.bias_ba = self.add_weight(shape=self.att_units,
+        self.bias_ba = self.add_weight(shape=(self.att_units,),
                                        name='bias_ba',
                                        initializer=self.bias_ba_initializer,
                                        regularizer=self.bias_ba_regularizer,
                                        constraint=self.bias_ba_constraint)
-
-        self.bias_ca = self.add_weight(shape=self.context_steps,
+        bias_ca_shape = self.context_steps if self.context_steps is None else (self.context_steps,)
+        self.bias_ca = self.add_weight(shape=bias_ca_shape,
                                        name='bias_ca',
                                        initializer=self.bias_ca_initializer,
                                        regularizer=self.bias_ca_regularizer,
@@ -4864,34 +4867,22 @@ class AttLSTM(Recurrent):
 
         return main_out
 
-    def call(self, x, mask=None, training=None, initial_state=None):
+    def call(self, inputs, mask=None, training=None, initial_state=None):
         # input shape: (nb_samples, time (padded with zeros), input_dim)
         # note that the .build() method of subclasses MUST define
         # self.input_spec with a complete input shape.
-        input_shape = self.input_spec[0].shape
-        state_below = x[0]
+        input_shape = K.int_shape(inputs[0])
+        state_below = inputs[0]
         if self.num_inputs == 1:  # input: [context]
             self.init_state = None
             self.init_memory = None
         elif self.num_inputs == 2:  # input: [context, init_generic]
-            self.init_state = x[1]
-            self.init_memory = x[1]
+            self.init_state = inputs[1]
+            self.init_memory = inputs[1]
         elif self.num_inputs == 3:  # input: [context, init_state, init_memory]
-            self.init_state = x[1]
-            self.init_memory = x[2]
-        if K._BACKEND == 'tensorflow':
-            if not input_shape[1]:
-                raise Exception('When using TensorFlow, you should define '
-                                'explicitly the number of timesteps of '
-                                'your sequences.\n'
-                                'If your first layer is an Embedding, '
-                                'make sure to pass it an "input_length" '
-                                'argument. Otherwise, make sure '
-                                'the first layer has '
-                                'an "input_shape" or "batch_input_shape" '
-                                'argument, including the time axis. '
-                                'Found input shape at layer ' + self.name +
-                                ': ' + str(input_shape))
+            self.init_state = inputs[1]
+            self.init_memory = inputs[2]
+
         if self.stateful:
             initial_states = self.states
         else:
@@ -4960,11 +4951,10 @@ class AttLSTM(Recurrent):
         # Attention model (see Formulation in class header)
         p_state_ = K.dot(h_tm1 * att_dp_mask[0], self.attention_recurrent_kernel)
         pctx_ = K.tanh(pctx_ + p_state_[:, None, :])
-        e = K.dot(pctx_, self.attention_context_wa) + self.bias_ca
-        alphas_shape = e.shape
-        alphas = K.softmax(e.reshape([alphas_shape[0], alphas_shape[1]]))
+        e = K.dot_product(pctx_, self.attention_context_wa) + self.bias_ca
+        alphas = K.softmax(K.reshape(e, [K.shape(e)[0], K.shape(e)[1]]))
         # sum over the in_timesteps dimension resulting in [batch_size, input_dim]
-        ctx_ = (x * alphas[:, :, None]).sum(axis=1)
+        ctx_ = K.sum(context * alphas[:, :, None], axis=1)
 
         # LSTM
         z = x + \
@@ -5358,13 +5348,13 @@ class AttLSTMCond(Recurrent):
         else:
             self.bias = None
 
-        self.bias_ba = self.add_weight(shape=self.att_units,
+        self.bias_ba = self.add_weight(shape=(self.att_units,),
                                        name='bias_ba',
                                        initializer=self.bias_ba_initializer,
                                        regularizer=self.bias_ba_regularizer,
                                        constraint=self.bias_ba_constraint)
-
-        self.bias_ca = self.add_weight(shape=self.context_steps,
+        bias_ca_shape = self.context_steps if self.context_steps is None else (self.context_steps,)
+        self.bias_ca = self.add_weight(shape=bias_ca_shape,
                                        name='bias_ca',
                                        initializer=self.bias_ca_initializer,
                                        regularizer=self.bias_ca_regularizer,
@@ -5421,35 +5411,23 @@ class AttLSTMCond(Recurrent):
 
         return main_out
 
-    def call(self, x, mask=None, training=None, initial_state=None):
+    def call(self, inputs, mask=None, training=None, initial_state=None):
         # input shape: (nb_samples, time (padded with zeros), input_dim)
         # note that the .build() method of subclasses MUST define
         # self.input_spec with a complete input shape.
-        input_shape = self.input_spec[0].shape
-        state_below = x[0]
-        self.context = x[1]
+        input_shape = K.int_shape(inputs[0])
+        state_below = inputs[0]
+        self.context = inputs[1]
         if self.num_inputs == 2:  # input: [state_below, context]
             self.init_state = None
             self.init_memory = None
         elif self.num_inputs == 3:  # input: [state_below, context, init_generic]
-            self.init_state = x[2]
-            self.init_memory = x[2]
+            self.init_state = inputs[2]
+            self.init_memory = inputs[2]
         elif self.num_inputs == 4:  # input: [state_below, context, init_state, init_memory]
-            self.init_state = x[2]
-            self.init_memory = x[3]
-        if K._BACKEND == 'tensorflow':
-            if not input_shape[1]:
-                raise Exception('When using TensorFlow, you should define '
-                                'explicitly the number of timesteps of '
-                                'your sequences.\n'
-                                'If your first layer is an Embedding, '
-                                'make sure to pass it an "input_length" '
-                                'argument. Otherwise, make sure '
-                                'the first layer has '
-                                'an "input_shape" or "batch_input_shape" '
-                                'argument, including the time axis. '
-                                'Found input shape at layer ' + self.name +
-                                ': ' + str(input_shape))
+            self.init_state = inputs[2]
+            self.init_memory = inputs[3]
+
         if self.stateful:
             initial_states = self.states
         else:
@@ -5516,20 +5494,19 @@ class AttLSTMCond(Recurrent):
         pctx_ = states[7]  # Projected context (i.e. context * Ua + ba)
         context = states[8]  # Original context
         mask_context = states[9]  # Context mask
-        if mask_context.ndim > 1:  # Mask the context (only if necessary)
+        if K.ndim(mask_context) > 1:  # Mask the context (only if necessary)
             pctx_ = mask_context[:, :, None] * pctx_
             context = mask_context[:, :, None] * context
 
         # Attention model (see Formulation in class header)
         p_state_ = K.dot(h_tm1 * att_dp_mask[0], self.attention_recurrent_kernel)
         pctx_ = K.tanh(pctx_ + p_state_[:, None, :])
-        e = K.dot(pctx_, self.attention_context_wa) + self.bias_ca
-        if mask_context.ndim > 1:  # Mask the context (only if necessary)
+        e = K.dot_product(pctx_, self.attention_context_wa) + self.bias_ca
+        if K.ndim(mask_context) > 1:  # Mask the context (only if necessary)
             e = mask_context * e
-        alphas_shape = e.shape
-        alphas = K.softmax(e.reshape([alphas_shape[0], alphas_shape[1]]))
+        alphas = K.softmax(K.reshape(e, [K.shape(e)[0], K.shape(e)[1]]))
         # sum over the in_timesteps dimension resulting in [batch_size, input_dim]
-        ctx_ = (context * alphas[:, :, None]).sum(axis=1)
+        ctx_ = K.sum(context * alphas[:, :, None], axis=1)
 
         # LSTM
         z = x + \
@@ -5614,6 +5591,7 @@ class AttLSTMCond(Recurrent):
         # States[9] - mask_context
         if mask_context is None:
             mask_context = K.not_equal(K.sum(self.context, axis=2), self.mask_value)
+            mask_context = K.cast(mask_context, K.floatx())
         constants.append(mask_context)
 
         return constants
@@ -5875,13 +5853,14 @@ class AttConditionalLSTMCond(Recurrent):
         self.recurrent_dropout = min(1., max(0., recurrent_dropout))
         self.conditional_dropout = min(1., max(0., conditional_dropout))
         self.attention_dropout = min(1., max(0., attention_dropout))
+
+        # Inputs
         self.num_inputs = num_inputs
         self.input_spec = [InputSpec(ndim=3), InputSpec(ndim=3)]
         for _ in range(len(self.input_spec), self.num_inputs):
             self.input_spec.append(InputSpec(ndim=2))
 
     def build(self, input_shape):
-
         assert len(input_shape) >= 2, 'You should pass two inputs to AttConditionalLSTMCond ' \
                                       '(previous_embedded_words and context) ' \
                                       'and two optional inputs (init_state and init_memory)'
@@ -5970,13 +5949,13 @@ class AttConditionalLSTMCond(Recurrent):
                                          regularizer=self.bias1_regularizer,
                                          constraint=self.bias1_constraint)
 
-            self.bias_ba = self.add_weight(shape=self.att_units,
+            self.bias_ba = self.add_weight(shape=(self.att_units,),
                                            name='bias_ba',
                                            initializer=self.bias_ba_initializer,
                                            regularizer=self.bias_ba_regularizer,
                                            constraint=self.bias_ba_constraint)
-
-            self.bias_ca = self.add_weight(shape=self.context_steps,
+            bias_ca_shape = self.context_steps if self.context_steps is None else (self.context_steps,)
+            self.bias_ca = self.add_weight(shape=bias_ca_shape,
                                            name='bias_ca',
                                            initializer=self.bias_ca_initializer,
                                            regularizer=self.bias_ca_regularizer,
@@ -6040,35 +6019,23 @@ class AttConditionalLSTMCond(Recurrent):
 
         return main_out
 
-    def call(self, x, mask=None, training=None, initial_state=None):
+    def call(self, inputs, mask=None, training=None, initial_state=None):
         # input shape: (nb_samples, time (padded with zeros), input_dim)
         # note that the .build() method of subclasses MUST define
         # self.input_spec with a complete input shape.
-        input_shape = self.input_spec[0].shape
-        state_below = x[0]
-        self.context = x[1]
+        input_shape = K.int_shape(inputs[0])
+        state_below = inputs[0]
+        self.context = inputs[1]
         if self.num_inputs == 2:  # input: [state_below, context]
             self.init_state = None
             self.init_memory = None
         elif self.num_inputs == 3:  # input: [state_below, context, init_generic]
-            self.init_state = x[2]
-            self.init_memory = x[2]
+            self.init_state = inputs[2]
+            self.init_memory = inputs[2]
         elif self.num_inputs == 4:  # input: [state_below, context, init_state, init_memory]
-            self.init_state = x[2]
-            self.init_memory = x[3]
-        if K._BACKEND == 'tensorflow':
-            if not input_shape[1]:
-                raise Exception('When using TensorFlow, you should define '
-                                'explicitly the number of timesteps of '
-                                'your sequences.\n'
-                                'If your first layer is an Embedding, '
-                                'make sure to pass it an "input_length" '
-                                'argument. Otherwise, make sure '
-                                'the first layer has '
-                                'an "input_shape" or "batch_input_shape" '
-                                'argument, including the time axis. '
-                                'Found input shape at layer ' + self.name +
-                                ': ' + str(input_shape))
+            self.init_state = inputs[2]
+            self.init_memory = inputs[3]
+
         if self.stateful:
             initial_states = self.states
         else:
@@ -6085,27 +6052,28 @@ class AttConditionalLSTMCond(Recurrent):
                                              input_length=state_below.shape[1],
                                              pos_extra_outputs_states=[2, 3])
         if self.stateful:
-            self.updates = []
+            updates = []
             for i in range(len(states)):
-                self.updates.append((self.states[i], states[i]))
-
-        # Properly set learning phase
-        if 0 < self.dropout + self.recurrent_dropout:
-            last_output._uses_learning_phase = True
-            outputs._uses_learning_phase = True
-
+                updates.append((self.states[i], states[i]))
+            self.add_update(updates, inputs)
         if self.return_sequences:
             ret = outputs
         else:
             ret = last_output
+
+        # Properly set learning phase
+        if getattr(last_output, '_uses_learning_phase', False):
+            ret._uses_learning_phase = True
 
         if self.return_extra_variables:
             ret = [ret, states[2], states[3]]
 
         # intermediate states as additional outputs
         if self.return_states:
-            if not isinstance(ret, list):
+            if not isinstance(ret, (list, tuple)):
                 ret = [ret]
+            else:
+                states = list(states)
             ret += [states[0], states[1]]
 
         return ret
@@ -6135,7 +6103,7 @@ class AttConditionalLSTMCond(Recurrent):
         pctx_ = states[7]  # Projected context (i.e. context * Ua + ba)
         context = states[8]  # Original context
         mask_context = states[9]  # Context mask
-        if mask_context.ndim > 1:  # Mask the context (only if necessary)
+        if K.ndim(mask_context) > 1:  # Mask the context (only if necessary)
             pctx_ = mask_context[:, :, None] * pctx_
             context = mask_context[:, :, None] * context
 
@@ -6154,15 +6122,14 @@ class AttConditionalLSTMCond(Recurrent):
         h_ = o_ * self.activation(c_)
 
         # Attention model (see Formulation in class header)
-        p_state_ = K.dot(h_ * att_dp_mask[0], self.attention_recurrent_kernel)
+        p_state_ = K.dot_product(h_ * att_dp_mask[0], self.attention_recurrent_kernel)
         pctx_ = K.tanh(pctx_ + p_state_[:, None, :])
-        e = K.dot(pctx_, self.attention_context_wa) + self.bias_ca
-        if mask_context.ndim > 1:  # Mask the context (only if necessary)
+        e = K.dot_product(pctx_, self.attention_context_wa) + self.bias_ca
+        if K.ndim(mask_context) > 1:  # Mask the context (only if necessary)
             e = mask_context * e
-        alphas_shape = e.shape
-        alphas = K.softmax(e.reshape([alphas_shape[0], alphas_shape[1]]))
+        alphas = K.softmax(K.reshape(e, [K.shape(e)[0], K.shape(e)[1]]))
         # sum over the in_timesteps dimension resulting in [batch_size, input_dim]
-        ctx_ = (context * alphas[:, :, None]).sum(axis=1)
+        ctx_ = K.sum(context * alphas[:, :, None], axis=1)
 
         # LSTM
         z = K.dot(h_ * rec_dp_mask[0], self.recurrent_kernel) + \
@@ -6246,6 +6213,7 @@ class AttConditionalLSTMCond(Recurrent):
         # States[9] - mask_context
         if mask_context is None:
             mask_context = K.not_equal(K.sum(self.context, axis=2), self.mask_value)
+            mask_context = K.cast(mask_context, K.floatx())
         constants.append(mask_context)
 
         return constants
@@ -6278,12 +6246,14 @@ class AttConditionalLSTMCond(Recurrent):
         return initial_states + extra_states
 
     def get_config(self):
-        config = {'units': self.units,
-                  "att_units": self.att_units,
+        config = {'return_extra_variables': self.return_extra_variables,
+                  'return_states': self.return_states,
+                  'units': self.units,
+                  'att_units': self.att_units,
                   'activation': activations.serialize(self.activation),
                   'recurrent_activation': activations.serialize(self.recurrent_activation),
-                  'return_extra_variables': self.return_extra_variables,
-                  'return_states': self.return_states,
+                  'use_bias': self.use_bias,
+                  'mask_value': self.mask_value,
                   'kernel_initializer': initializers.serialize(self.kernel_initializer),
                   'recurrent_initializer': initializers.serialize(self.recurrent_initializer),
                   'conditional_initializer': initializers.serialize(self.conditional_initializer),
@@ -6317,7 +6287,7 @@ class AttConditionalLSTMCond(Recurrent):
                   'recurrent_dropout': self.recurrent_dropout,
                   'conditional_dropout': self.conditional_dropout,
                   'attention_dropout': self.attention_dropout,
-                  'mask_value': self.mask_value
+                  'num_inputs': self.num_inputs
                   }
         base_config = super(AttConditionalLSTMCond, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
@@ -6385,18 +6355,9 @@ class AttLSTMCond2Inputs(Recurrent):
                  Ua2_regularizer=None,
                  ba2_regularizer=None,
                  ca2_regularizer=None,
-                 dropout_T=0.,
-                 dropout_W=0.,
-                 dropout_U=0.,
-                 dropout_V=0.,
-                 dropout_wa=0.,
-                 dropout_Wa=0.,
-                 dropout_Ua=0.,
-                 dropout_wa2=0.,
-                 dropout_Wa2=0.,
-                 dropout_Ua2=0.,
-                 num_inputs=5,
-                 **kwargs):
+                 dropout_T=0., dropout_W=0., dropout_U=0., dropout_V=0.,
+                 dropout_wa=0., dropout_Wa=0., dropout_Ua=0.,
+                 dropout_wa2=0., dropout_Wa2=0., dropout_Ua2=0., **kwargs):
 
         super(AttLSTMCond2Inputs, self).__init__(**kwargs)
 
@@ -6407,16 +6368,15 @@ class AttLSTMCond2Inputs(Recurrent):
         self.att_units2 = units if att_units2 == 0 else att_units2
         self.return_extra_variables = return_extra_variables
         self.return_states = return_states
-        self.init = initializers.get(init)
-        self.inner_init = initializers.get(inner_init)
-        self.init_att = initializers.get(init_att)
-        self.forget_bias_init = initializers.get(forget_bias_init)
+        self.init = initializations.get(init)
+        self.inner_init = initializations.get(inner_init)
+        self.init_att = initializations.get(init_att)
+        self.forget_bias_init = initializations.get(forget_bias_init)
         self.activation = activations.get(activation)
         self.inner_activation = activations.get(inner_activation)
         self.consume_less = consume_less
         self.mask_value = mask_value
         self.attend_on_both = attend_on_both
-
         # Dropouts
         self.dropout_T, self.dropout_W, self.dropout_U, self.dropout_V = dropout_T, dropout_W, dropout_U, dropout_V
         self.dropout_wa, self.dropout_Wa, self.dropout_Ua = dropout_wa, dropout_Wa, dropout_Ua
@@ -6435,7 +6395,6 @@ class AttLSTMCond2Inputs(Recurrent):
         self.V_regularizer = regularizers.get(V_regularizer)
         self.U_regularizer = regularizers.get(U_regularizer)
         self.b_regularizer = regularizers.get(b_regularizer)
-
         # attention model learnable params
         self.wa_regularizer = regularizers.get(wa_regularizer)
         self.Wa_regularizer = regularizers.get(Wa_regularizer)
@@ -6449,10 +6408,7 @@ class AttLSTMCond2Inputs(Recurrent):
             self.Ua2_regularizer = regularizers.get(Ua2_regularizer)
             self.ba2_regularizer = regularizers.get(ba2_regularizer)
             self.ca2_regularizer = regularizers.get(ca2_regularizer)
-        self.input_spec = [InputSpec(ndim=3), InputSpec(ndim=3), InputSpec(ndim=3)]
-        for _ in range(len(self.input_spec), self.num_inputs):
-            self.input_spec.append(InputSpec(ndim=2))
-
+        super(AttLSTMCond2Inputs, self).__init__(**kwargs)
 
     def build(self, input_shape):
         assert len(input_shape) >= 3 or 'You should pass two inputs to AttLSTMCond2Inputs ' \
@@ -6474,18 +6430,18 @@ class AttLSTMCond2Inputs(Recurrent):
         self.input_dim = input_shape[0][2]
 
         if self.attend_on_both:
-            assert self.input_spec[1].ndim == 3 and self.input_spec[2].ndim, 'When using two attention models,' \
+            assert K.ndim(self.input_spec[1]) == 3 and K.ndim(self.input_spec[2]), 'When using two attention models,' \
                                                                              'you should pass two 3D tensors' \
                                                                              'to AttLSTMCond2Inputs'
         else:
-            assert self.input_spec[1].ndim == 3, 'When using an attention model, you should pass one 3D tensors' \
+            assert K.ndim(self.input_spec[1]) == 3, 'When using an attention model, you should pass one 3D tensors' \
                                                  'to AttLSTMCond2Inputs'
 
-        if self.input_spec[1].ndim == 3:
+        if K.ndim(self.input_spec[1]) == 3:
             self.context1_steps = input_shape[1][1]
             self.context1_dim = input_shape[1][2]
 
-        if self.input_spec[2].ndim == 3:
+        if K.ndim(self.input_spec[2]) == 3:
             self.context2_steps = input_shape[2][1]
             self.context2_dim = input_shape[2][2]
 
@@ -6505,7 +6461,7 @@ class AttLSTMCond2Inputs(Recurrent):
                                   name='{}_wa'.format(self.name),
                                   regularizer=self.wa_regularizer)
 
-        self.Wa = self.add_weight((self.units, self.context1_dim),
+        self.Wa = self.add_weight((self.output_dim, self.context1_dim),
                                   initializer=self.init_att,
                                   name='{}_Wa'.format(self.name),
                                   regularizer=self.Wa_regularizer)
@@ -6514,12 +6470,12 @@ class AttLSTMCond2Inputs(Recurrent):
                                   name='{}_Ua'.format(self.name),
                                   regularizer=self.Ua_regularizer)
 
-        self.ba = self.add_weight(shape=self.context1_dim,  # self.att_unit1?
+        self.ba = self.add_weight(self.context1_dim,
                                   initializer='zero',
-                                  name='{}_ba'.format(self.name),
+                                  name='{}_ca'.format(self.name),
                                   regularizer=self.ba_regularizer)
 
-        self.ca = self.add_weight(shape=self.context1_steps,
+        self.ca = self.add_weight(self.context1_steps,
                                   initializer='zero',
                                   name='{}_ca'.format(self.name),
                                   regularizer=self.ca_regularizer)
@@ -6531,7 +6487,7 @@ class AttLSTMCond2Inputs(Recurrent):
                                        name='{}_wa2'.format(self.name),
                                        regularizer=self.wa2_regularizer)
 
-            self.Wa2 = self.add_weight((self.units, self.context2_dim),
+            self.Wa2 = self.add_weight((self.output_dim, self.context2_dim),
                                        initializer=self.init,
                                        name='{}_Wa2'.format(self.name),
                                        regularizer=self.Wa2_regularizer)
@@ -6540,48 +6496,44 @@ class AttLSTMCond2Inputs(Recurrent):
                                        name='{}_Ua2'.format(self.name),
                                        regularizer=self.Ua2_regularizer)
 
-            self.ba2 = self.add_weight(shape=self.context2_dim,
+            self.ba2 = self.add_weight(self.context2_dim,
                                        initializer='zero',
-                                       name='{}_ba2'.format(self.name),
                                        regularizer=self.ba2_regularizer)
 
-            self.ca2 = self.add_weight(shape=self.context2_steps,
+            self.ca2 = self.add_weight(self.context2_steps,
                                        initializer='zero',
-                                       name='{}_ca2'.format(self.name),
                                        regularizer=self.ca2_regularizer)
 
         if self.consume_less == 'gpu':
 
-            self.T = self.add_weight((self.context1_dim, 4 * self.units),
+            self.T = self.add_weight((self.context1_dim, 4 * self.output_dim),
                                      initializer=self.init,
                                      name='{}_T'.format(self.name),
                                      regularizer=self.W_regularizer)
-            self.W = self.add_weight((self.context2_dim, 4 * self.units),
+            self.W = self.add_weight((self.context2_dim, 4 * self.output_dim),
                                      initializer=self.init,
                                      name='{}_W'.format(self.name),
                                      regularizer=self.W_regularizer)
-            self.U = self.add_weight((self.units, 4 * self.units),
+            self.U = self.add_weight((self.output_dim, 4 * self.output_dim),
                                      initializer=self.inner_init,
                                      name='{}_U'.format(self.name),
                                      regularizer=self.U_regularizer)
-            self.V = self.add_weight((self.input_dim, 4 * self.units),
+            self.V = self.add_weight((self.input_dim, 4 * self.output_dim),
                                      initializer=self.init,
                                      name='{}_V'.format(self.name),
                                      regularizer=self.V_regularizer)
 
-            '''
             def b_reg(shape, name=None):
-                return K.variable(np.hstack((np.zeros(self.units),
-                                             K.get_value(self.forget_bias_init((self.units,))),
-                                             np.zeros(self.units),
-                                             np.zeros(self.units))),
+                return K.variable(np.hstack((np.zeros(self.output_dim),
+                                             K.get_value(self.forget_bias_init((self.output_dim,))),
+                                             np.zeros(self.output_dim),
+                                             np.zeros(self.output_dim))),
                                   name='{}_b'.format(self.name))
-            '''
-            self.b = self.add_weight((self.units * 4,),
-                                     initializer='zero',
+
+            self.b = self.add_weight((self.output_dim * 4,),
+                                     initializer=b_reg,
                                      name='{}_b'.format(self.name),
                                      regularizer=self.b_regularizer)
-            '''
             self.trainable_weights = [self.wa, self.Wa, self.Ua, self.ba, self.ca,  # AttModel parameters
                                       self.T,
                                       self.W,
@@ -6590,13 +6542,13 @@ class AttLSTMCond2Inputs(Recurrent):
                                       self.b]
             if self.attend_on_both:
                 self.trainable_weights += [self.wa2, self.Wa2, self.Ua2, self.ba2, self.ca2]  # AttModel2 parameters)
-            '''
+
         else:
             raise NotImplementedError
 
-        #if self.initial_weights is not None:
-        #    self.set_weights(self.initial_weights)
-        #    del self.initial_weights
+        if self.initial_weights is not None:
+            self.set_weights(self.initial_weights)
+            del self.initial_weights
         self.built = True
 
     def reset_states(self):
@@ -6607,24 +6559,24 @@ class AttLSTMCond2Inputs(Recurrent):
                             'input_shape must be provided (including batch size).')
         if hasattr(self, 'states'):
             K.set_value(self.states[0],
-                        np.zeros((input_shape[0], self.units)))
+                        np.zeros((input_shape[0], self.output_dim)))
             K.set_value(self.states[1],
-                        np.zeros((input_shape[0], self.units)))
+                        np.zeros((input_shape[0], self.output_dim)))
             K.set_value(self.states[2],
                         np.zeros((input_shape[0], input_shape[3])))
         else:
-            self.states = [K.zeros((input_shape[0], self.units)),
-                           K.zeros((input_shape[0], self.units)),
+            self.states = [K.zeros((input_shape[0], self.output_dim)),
+                           K.zeros((input_shape[0], self.output_dim)),
                            K.zeros((input_shape[0], input_shape[3]))]
 
     def preprocess_input(self, x, B_V):
         return K.dot(x * B_V[0], self.V)
 
-    def compute_output_shape(self, input_shape):
+    def get_output_shape_for(self, input_shape):
         if self.return_sequences:
-            main_out = (input_shape[0][0], input_shape[0][1], self.units)
+            main_out = (input_shape[0][0], input_shape[0][1], self.output_dim)
         else:
-            main_out = (input_shape[0][0], self.units)
+            main_out = (input_shape[0][0], self.output_dim)
 
         if self.return_extra_variables:
             dim_x_att = (input_shape[0][0], input_shape[0][1], self.context1_dim)
@@ -6636,42 +6588,30 @@ class AttLSTMCond2Inputs(Recurrent):
         if self.return_states:
             if not isinstance(main_out, list):
                 main_out = [main_out]
-            states_dim = (input_shape[0][0], input_shape[0][1], self.units)
+            states_dim = (input_shape[0][0], input_shape[0][1], self.output_dim)
             main_out += [states_dim, states_dim]
 
         return main_out
 
-    def call(self, x, mask=None):
+    def call(self, inputs, mask=None):
         # input shape: (nb_samples, time (padded with zeros), input_dim)
         # note that the .build() method of subclasses MUST define
         # self.input_spec with a complete input shape.
 
-        input_shape = self.input_spec[0].shape
-        state_below = x[0]
-        self.context1 = x[1]
-        self.context2 = x[2]
+        input_shape = K.int_shape(inputs[0])
+        state_below = inputs[0]
+        self.context1 = inputs[1]
+        self.context2 = inputs[2]
         if self.num_inputs == 3:  # input: [state_below, context]
             self.init_state = None
             self.init_memory = None
         elif self.num_inputs == 4:  # input: [state_below, context, init_generic]
-            self.init_state = x[3]
-            self.init_memory = x[3]
+            self.init_state = inputs[3]
+            self.init_memory = inputs[3]
         elif self.num_inputs == 5:  # input: [state_below, context, init_state, init_memory]
-            self.init_state = x[3]
-            self.init_memory = x[4]
-        if K._BACKEND == 'tensorflow':
-            if not input_shape[1]:
-                raise Exception('When using TensorFlow, you should define '
-                                'explicitly the number of timesteps of '
-                                'your sequences.\n'
-                                'If your first layer is an Embedding, '
-                                'make sure to pass it an "input_length" '
-                                'argument. Otherwise, make sure '
-                                'the first layer has '
-                                'an "input_shape" or "batch_input_shape" '
-                                'argument, including the time axis. '
-                                'Found input shape at layer ' + self.name +
-                                ': ' + str(input_shape))
+            self.init_state = inputs[3]
+            self.init_memory = inputs[4]
+
         if self.stateful:
             initial_states = self.states
         else:
@@ -6761,7 +6701,7 @@ class AttLSTMCond2Inputs(Recurrent):
             context2 = states[pos_states + 3]  # Context 2
             mask_context2 = states[pos_states + 4]  # Context 2 mask
 
-        if mask_context1.ndim > 1:  # Mask the context (only if necessary)
+        if K.ndim(mask_context1) > 1:  # Mask the context (only if necessary)
             pctx_1 = mask_context1[:, :, None] * pctx_1
             context1 = mask_context1[:, :, None] * context1
 
@@ -6769,14 +6709,13 @@ class AttLSTMCond2Inputs(Recurrent):
         p_state_1 = K.dot(h_tm1 * B_Wa[0], self.Wa)
         pctx_1 = K.tanh(pctx_1 + p_state_1[:, None, :])
         e1 = K.dot(pctx_1 * B_wa[0], self.wa) + self.ca
-        if mask_context1.ndim > 1:  # Mask the context (only if necessary)
+        if K.ndim(mask_context1) > 1:  # Mask the context (only if necessary)
             e1 = mask_context1 * e1
-        alphas_shape1 = e1.shape
-        alphas1 = K.softmax(e1.reshape([alphas_shape1[0], alphas_shape1[1]]))
+        alphas1 = K.softmax(e1.reshape([K.shape(e1)[0], K.shape(e1)[1]]))
         # sum over the in_timesteps dimension resulting in [batch_size, input_dim]
-        ctx_1 = (context1 * alphas1[:, :, None]).sum(axis=1)
+        ctx_1 = K.sum(context1 * alphas1[:, :, None], axis=1)
 
-        if self.attend_on_both and mask_context2.ndim > 1:  # Mask the context2 (only if necessary)
+        if self.attend_on_both and K.ndim(mask_context2) > 1:  # Mask the context2 (only if necessary)
             pctx_2 = mask_context2[:, :, None] * pctx_2
             context2 = mask_context2[:, :, None] * context2
 
@@ -6785,12 +6724,12 @@ class AttLSTMCond2Inputs(Recurrent):
             p_state_2 = K.dot(h_tm1 * B_Wa2[0], self.Wa2)
             pctx_2 = K.tanh(pctx_2 + p_state_2[:, None, :])
             e2 = K.dot(pctx_2 * B_wa2[0], self.wa2) + self.ca2
-            if mask_context2.ndim > 1:  # Mask the context (only if necessary)
+            if K.ndim(mask_context2) > 1:  # Mask the context (only if necessary)
                 e2 = mask_context2 * e2
-            alphas_shape2 = e2.shape
-            alphas2 = K.softmax(e2.reshape([alphas_shape2[0], alphas_shape2[1]]))
+            alphas2 = K.softmax(e2.reshape([K.shape(e2)[0], K.shape(e2)[1]]))
             # sum over the in_timesteps dimension resulting in [batch_size, input_dim]
-            ctx_2 = (context2 * alphas2[:, :, None]).sum(axis=1)
+            ctx_2 = K.sum(context2 * alphas2[:, :, None], axis=1)
+
         else:
             ctx_2 = context2
             alphas2 = mask_context2
@@ -6800,10 +6739,10 @@ class AttLSTMCond2Inputs(Recurrent):
             K.dot(ctx_1 * B_T[0], self.T) + \
             K.dot(ctx_2 * B_W[0], self.W) + \
             self.b
-        z0 = z[:, :self.units]
-        z1 = z[:, self.units: 2 * self.units]
-        z2 = z[:, 2 * self.units: 3 * self.units]
-        z3 = z[:, 3 * self.units:]
+        z0 = z[:, :self.output_dim]
+        z1 = z[:, self.output_dim: 2 * self.output_dim]
+        z2 = z[:, 2 * self.output_dim: 3 * self.output_dim]
+        z3 = z[:, 3 * self.output_dim:]
 
         i = self.inner_activation(z0)
         f = self.inner_activation(z1)
@@ -6817,7 +6756,7 @@ class AttLSTMCond2Inputs(Recurrent):
         # States[6]
         if 0 < self.dropout_U < 1:
             ones = K.ones_like(K.reshape(x[:, 0, 0], (-1, 1)))
-            ones = K.concatenate([ones] * self.units, 1)
+            ones = K.concatenate([ones] * self.output_dim, 1)
             B_U = [K.in_train_phase(K.dropout(ones, self.dropout_U), ones) for _ in range(4)]
             constants.append(B_U)
         else:
@@ -6859,7 +6798,7 @@ class AttLSTMCond2Inputs(Recurrent):
 
         # States[10]
         if 0 < self.dropout_Wa < 1:
-            input_dim = self.units
+            input_dim = self.output_dim
             ones = K.ones_like(K.reshape(x[:, 0, 0], (-1, 1)))
             ones = K.concatenate([ones] * input_dim, 1)
             B_Wa = [K.in_train_phase(K.dropout(ones, self.dropout_Wa), ones)]
@@ -6880,7 +6819,7 @@ class AttLSTMCond2Inputs(Recurrent):
 
             # States[12]
             if 0 < self.dropout_Wa2 < 1:
-                input_dim = self.units
+                input_dim = self.output_dim
                 ones = K.ones_like(K.reshape(x[:, 0, 0], (-1, 1)))
                 ones = K.concatenate([ones] * input_dim, 1)
                 B_Wa2 = [K.in_train_phase(K.dropout(ones, self.dropout_Wa2), ones)]
@@ -6944,7 +6883,7 @@ class AttLSTMCond2Inputs(Recurrent):
             initial_state = K.zeros_like(x)  # (samples, timesteps, input_dim)
             initial_state = K.sum(initial_state, axis=(1, 2))  # (samples,)
             initial_state = K.expand_dims(initial_state)  # (samples, 1)
-            initial_state = K.tile(initial_state, [1, self.units])  # (samples, units)
+            initial_state = K.tile(initial_state, [1, self.output_dim])  # (samples, units)
             if self.init_memory is None:
                 initial_states = [initial_state for _ in range(2)]
             else:
@@ -6976,31 +6915,33 @@ class AttLSTMCond2Inputs(Recurrent):
         return initial_states + extra_states
 
     def get_config(self):
-        config = {"units": self.units,
+        config = {"units": self.output_dim,
                   "att_units1": self.att_units1,
                   "att_units2": self.att_units2,
                   "return_extra_variables": self.return_extra_variables,
                   "return_states": self.return_states,
                   "mask_value": self.mask_value,
                   "attend_on_both": self.attend_on_both,
-                  'unit_forget_bias': initializers.serialize(self.forget_bias_init),
-                  'activation': activations.serialize(self.activation),
-                  'recurrent_activation': activations.serialize(self.inner_activation),
-                  "T_regularizer": regularizers.serialize(self.T_regularizer),
-                  "W_regularizer": regularizers.serialize(self.W_regularizer),
-                  "V_regularizer": regularizers.serialize(self.V_regularizer),
-                  "U_regularizer": regularizers.serialize(self.U_regularizer),
-                  "b_regularizer": regularizers.serialize(self.b_regularizer),
-                  'wa_regularizer': regularizers.serialize(self.wa_regularizer),
-                  'Wa_regularizer': regularizers.serialize(self.Wa_regularizer),
-                  'Ua_regularizer': regularizers.serialize(self.Ua_regularizer),
-                  'ba_regularizer': regularizers.serialize(self.ba_regularizer),
-                  'ca_regularizer': regularizers.serialize(self.ca_regularizer),
-                  'wa2_regularizer': regularizers.serialize(self.wa2_regularizer),
-                  'Wa2_regularizer': regularizers.serialize(self.Wa2_regularizer),
-                  'Ua2_regularizer': regularizers.serialize(self.Ua2_regularizer),
-                  'ba2_regularizer': regularizers.serialize(self.ba2_regularizer),
-                  'ca2_regularizer': regularizers.serialize(self.ca2_regularizer),
+                  "kernel_initializer": self.init.__name__,
+                  "recurrent_initializer": self.inner_init.__name__,
+                  "forget_bias_initializer": self.forget_bias_init.__name__,
+                  "activation": self.activation.__name__,
+                  "recurrent_activation": self.inner_activation.__name__,
+                  "T_regularizer": self.T_regularizer.get_config() if self.T_regularizer else None,
+                  "W_regularizer": self.W_regularizer.get_config() if self.W_regularizer else None,
+                  "V_regularizer": self.V_regularizer.get_config() if self.V_regularizer else None,
+                  "U_regularizer": self.U_regularizer.get_config() if self.U_regularizer else None,
+                  "b_regularizer": self.b_regularizer.get_config() if self.b_regularizer else None,
+                  'wa_regularizer': self.wa_regularizer.get_config() if self.wa_regularizer else None,
+                  'Wa_regularizer': self.Wa_regularizer.get_config() if self.Wa_regularizer else None,
+                  'Ua_regularizer': self.Ua_regularizer.get_config() if self.Ua_regularizer else None,
+                  'ba_regularizer': self.ba_regularizer.get_config() if self.ba_regularizer else None,
+                  'ca_regularizer': self.ca_regularizer.get_config() if self.ca_regularizer else None,
+                  'wa2_regularizer': self.wa2_regularizer.get_config() if self.attend_on_both and self.wa2_regularizer else None,
+                  'Wa2_regularizer': self.Wa2_regularizer.get_config() if self.attend_on_both and self.Wa2_regularizer else None,
+                  'Ua2_regularizer': self.Ua2_regularizer.get_config() if self.attend_on_both and self.Ua2_regularizer else None,
+                  'ba2_regularizer': self.ba2_regularizer.get_config() if self.attend_on_both and self.ba2_regularizer else None,
+                  'ca2_regularizer': self.ca2_regularizer.get_config() if self.attend_on_both and self.ca2_regularizer else None,
                   "dropout_T": self.dropout_T,
                   "dropout_W": self.dropout_W,
                   "dropout_U": self.dropout_U,
@@ -7048,10 +6989,10 @@ class AttLSTMCond3Inputs(Recurrent):
         - [A Theoretically Grounded Application of Dropout in Recurrent Neural Networks](http://arxiv.org/abs/1512.05287)
     '''
 
-    def __init__(self, units, att_units1=0, att_units2=0, att_units3=0,
+    def __init__(self, output_dim, att_units1, att_units2, att_units3,
                  init='glorot_uniform', inner_init='orthogonal', init_att='glorot_uniform',
                  return_states=False, return_extra_variables=False, attend_on_both=False,
-                 forget_bias_init='ones', activation='tanh',
+                 forget_bias_init='one', activation='tanh',
                  inner_activation='hard_sigmoid', consume_less='gpu', mask_value=0.,
                  S_regularizer=None, T_regularizer=None, W_regularizer=None, V_regularizer=None, U_regularizer=None,
                  b_regularizer=None,
@@ -7065,25 +7006,23 @@ class AttLSTMCond3Inputs(Recurrent):
                  dropout_wa=0., dropout_Wa=0., dropout_Ua=0.,
                  dropout_wa2=0., dropout_Wa2=0., dropout_Ua2=0.,
                  dropout_wa3=0., dropout_Wa3=0., dropout_Ua3=0.,
-                 num_inputs=6,
                  **kwargs):
+        self.output_dim = output_dim
+        self.att_units1 = output_dim if att_units1 == 0 else att_units1
+        self.att_units2 = output_dim if att_units2 == 0 else att_units2
+        self.att_units3 = output_dim if att_units3 == 0 else att_units3
 
-        super(AttLSTMCond3Inputs, self).__init__(**kwargs)
-
-        #Main parameters
-        self.units = units
-        self.num_inputs = num_inputs
-        self.att_units1 = units if att_units1 == 0 else att_units1
-        self.att_units2 = units if att_units2 == 0 else att_units2
-        self.att_units3 = units if att_units3 == 0 else att_units3
         self.return_extra_variables = return_extra_variables
         self.return_states = return_states
+        self.init = initializations.get(init)
+        self.inner_init = initializations.get(inner_init)
+        self.init_att = initializations.get(init_att)
+        self.forget_bias_init = initializations.get(forget_bias_init)
         self.activation = activations.get(activation)
         self.inner_activation = activations.get(inner_activation)
         self.consume_less = consume_less
         self.mask_value = mask_value
         self.attend_on_both = attend_on_both
-
         # Dropouts
         self.dropout_S, self.dropout_T, self.dropout_W, self.dropout_U, self.dropout_V = \
             dropout_S, dropout_T, dropout_W, dropout_U, dropout_V
@@ -7098,12 +7037,6 @@ class AttLSTMCond3Inputs(Recurrent):
         if self.attend_on_both and (self.dropout_wa2 or self.dropout_Wa2 or self.dropout_Ua2 or
                                         self.dropout_wa3 or self.dropout_Wa3 or self.dropout_Ua3):
             self.uses_learning_phase = True
-
-        # Initializers
-        self.init = initializers.get(init)
-        self.inner_init = initializers.get(inner_init)
-        self.init_att = initializers.get(init_att)
-        self.forget_bias_init = initializers.get(forget_bias_init)
 
         # Regularizers
         self.S_regularizer = regularizers.get(S_regularizer)
@@ -7131,11 +7064,8 @@ class AttLSTMCond3Inputs(Recurrent):
             self.Ua3_regularizer = regularizers.get(Ua3_regularizer)
             self.ba3_regularizer = regularizers.get(ba3_regularizer)
             self.ca3_regularizer = regularizers.get(ca3_regularizer)
-        self.input_spec = [InputSpec(ndim=3), InputSpec(ndim=3), InputSpec(ndim=3), InputSpec(ndim=3)]
-        for _ in range(len(self.input_spec), self.num_inputs):
-            self.input_spec.append(InputSpec(ndim=2))
+        super(AttLSTMCond3Inputs, self).__init__(**kwargs)
 
-        
     def build(self, input_shape):
         assert len(input_shape) >= 4 or 'You should pass three inputs to AttLSTMCond2Inputs ' \
                                         '(previous_embedded_words, context1, context2, context3) and ' \
@@ -7156,29 +7086,29 @@ class AttLSTMCond3Inputs(Recurrent):
                                InputSpec(shape=input_shape[5])]
             self.num_inputs = 6
         self.input_dim = input_shape[0][2]
-        
+
         if self.attend_on_both:
-            assert self.input_spec[1].ndim == 3 and \
-                   self.input_spec[2].ndim == 3 and \
-                   self.input_spec[3].ndim == 3, 'When using two attention models,' \
+            assert K.ndim(self.input_spec[1]) == 3 and \
+                   K.ndim(self.input_spec[2]) == 3 and \
+                   K.ndim(self.input_spec[3]) == 3, 'When using two attention models,' \
                                                  'you should pass two 3D tensors' \
                                                  'to AttLSTMCond3Inputs'
         else:
-            assert self.input_spec[1].ndim == 3, 'When using an attention model, you should pass one 3D tensors' \
+            assert K.ndim(self.input_spec[1]) == 3, 'When using an attention model, you should pass one 3D tensors' \
                                                  'to AttLSTMCond3Inputs'
 
-        if self.input_spec[1].ndim == 3:
+        if K.ndim(self.input_spec[1]) == 3:
             self.context1_steps = input_shape[1][1]
             self.context1_dim = input_shape[1][2]
 
-        if self.input_spec[2].ndim == 3:
+        if K.ndim(self.input_spec[2]) == 3:
             self.context2_steps = input_shape[2][1]
             self.context2_dim = input_shape[2][2]
 
         else:
             self.context2_dim = input_shape[2][1]
 
-        if self.input_spec[3].ndim == 3:
+        if K.ndim(self.input_spec[3]) == 3:
             self.context3_steps = input_shape[3][1]
             self.context3_dim = input_shape[3][2]
         else:
@@ -7196,22 +7126,21 @@ class AttLSTMCond3Inputs(Recurrent):
                                   name='{}_wa'.format(self.name),
                                   regularizer=self.wa_regularizer)
 
-        self.Wa = self.add_weight((self.units, self.att_units1),
+        self.Wa = self.add_weight((self.output_dim, self.att_units1),
                                   initializer=self.init_att,
                                   name='{}_Wa'.format(self.name),
                                   regularizer=self.Wa_regularizer)
-
         self.Ua = self.add_weight((self.context1_dim, self.att_units1),
                                   initializer=self.inner_init,
                                   name='{}_Ua'.format(self.name),
                                   regularizer=self.Ua_regularizer)
 
-        self.ba = self.add_weight(shape=self.att_units1,
+        self.ba = self.add_weight(self.att_units1,
                                   initializer='zero',
                                   name='{}_ba'.format(self.name),
                                   regularizer=self.ba_regularizer)
 
-        self.ca = self.add_weight(shape=self.context1_steps,
+        self.ca = self.add_weight(self.context1_steps,
                                   initializer='zero',
                                   name='{}_ca'.format(self.name),
                                   regularizer=self.ca_regularizer)
@@ -7223,7 +7152,7 @@ class AttLSTMCond3Inputs(Recurrent):
                                        name='{}_wa2'.format(self.name),
                                        regularizer=self.wa2_regularizer)
 
-            self.Wa2 = self.add_weight((self.units, self.att_units2),
+            self.Wa2 = self.add_weight((self.output_dim, self.att_units2),
                                        initializer=self.init,
                                        name='{}_Wa2'.format(self.name),
                                        regularizer=self.Wa2_regularizer)
@@ -7232,79 +7161,71 @@ class AttLSTMCond3Inputs(Recurrent):
                                        name='{}_Ua2'.format(self.name),
                                        regularizer=self.Ua2_regularizer)
 
-            self.ba2 = self.add_weight(shape=self.att_units2,
-                                       name='{}_ba2'.format(self.name),
+            self.ba2 = self.add_weight(self.att_units2,
                                        initializer='zero',
                                        regularizer=self.ba2_regularizer)
 
-            self.ca2 = self.add_weight(shape=self.context2_steps,
-                                       name='{}_ca2'.format(self.name),
+            self.ca2 = self.add_weight(self.context2_steps,
                                        initializer='zero',
                                        regularizer=self.ca2_regularizer)
 
-            self.wa3 = self.add_weight(shape=(self.att_units3,),
+            self.wa3 = self.add_weight((self.att_units3,),
                                        initializer=self.init,
                                        name='{}_wa3'.format(self.name),
                                        regularizer=self.wa3_regularizer)
 
-            self.Wa3 = self.add_weight(shape=(self.units, self.att_units3),
+            self.Wa3 = self.add_weight((self.output_dim, self.att_units3),
                                        initializer=self.init,
                                        name='{}_Wa3'.format(self.name),
                                        regularizer=self.Wa3_regularizer)
-            self.Ua3 = self.add_weight(shape=(self.context3_dim, self.att_units3),
+            self.Ua3 = self.add_weight((self.context3_dim, self.att_units3),
                                        initializer=self.inner_init,
                                        name='{}_Ua3'.format(self.name),
                                        regularizer=self.Ua3_regularizer)
 
-            self.ba3 = self.add_weight(shape=self.att_units3,
-                                       name='{}_ba3'.format(self.name),
+            self.ba3 = self.add_weight(self.att_units3,
                                        initializer='zero',
                                        regularizer=self.ba3_regularizer)
 
-            self.ca3 = self.add_weight(shape=self.context3_steps,
-                                       name='{}_ca3'.format(self.name),
+            self.ca3 = self.add_weight(self.context3_steps,
                                        initializer='zero',
                                        regularizer=self.ca3_regularizer)
 
         if self.consume_less == 'gpu':
 
-            self.T = self.add_weight(shape=(self.context1_dim, 4 * self.units),
+            self.T = self.add_weight((self.context1_dim, 4 * self.output_dim),
                                      initializer=self.init,
                                      name='{}_T'.format(self.name),
                                      regularizer=self.W_regularizer)
-            self.W = self.add_weight(shape=(self.context2_dim, 4 * self.units),
+            self.W = self.add_weight((self.context2_dim, 4 * self.output_dim),
                                      initializer=self.init,
                                      name='{}_W'.format(self.name),
                                      regularizer=self.W_regularizer)
-            self.S = self.add_weight(shape=(self.context3_dim, 4 * self.units),
+            self.S = self.add_weight((self.context3_dim, 4 * self.output_dim),
                                      initializer=self.init,
                                      name='{}_S'.format(self.name),
                                      regularizer=self.S_regularizer)
 
-            self.U = self.add_weight(shape=(self.units, 4 * self.units),
+            self.U = self.add_weight((self.output_dim, 4 * self.output_dim),
                                      initializer=self.inner_init,
                                      name='{}_U'.format(self.name),
                                      regularizer=self.U_regularizer)
-            self.V = self.add_weight(shape=(self.input_dim, 4 * self.units),
+            self.V = self.add_weight((self.input_dim, 4 * self.output_dim),
                                      initializer=self.init,
                                      name='{}_V'.format(self.name),
                                      regularizer=self.V_regularizer)
 
-            '''
             def b_reg(shape, name=None):
-                return K.variable(np.hstack((np.zeros(self.units),
-                                             K.get_value(self.forget_bias_init((self.units,))),
-                                             np.zeros(self.units),
-                                             np.zeros(self.units))),
+                return K.variable(np.hstack((np.zeros(self.output_dim),
+                                             K.get_value(self.forget_bias_init((self.output_dim,))),
+                                             np.zeros(self.output_dim),
+                                             np.zeros(self.output_dim))),
                                   name='{}_b'.format(self.name))
-            '''
 
-            self.b = self.add_weight(shape=(self.units * 4,),
-                                     initializer='zero',
+            self.b = self.add_weight((self.output_dim * 4,),
+                                     initializer=b_reg,
                                      name='{}_b'.format(self.name),
                                      regularizer=self.b_regularizer)
-
-            """
             self.trainable_weights = [self.wa, self.Wa, self.Ua, self.ba, self.ca,  # AttModel parameters
                                       self.S,
                                       self.T,
@@ -7316,15 +7237,13 @@ class AttLSTMCond3Inputs(Recurrent):
                 self.trainable_weights += [self.wa2, self.Wa2, self.Ua2, self.ba2, self.ca2,  # AttModel2 parameters)
                                            self.wa3, self.Wa3, self.Ua3, self.ba3, self.ca3  # AttModel3 parameters)
                                            ]
-            """
 
         else:
             raise NotImplementedError
 
-        #if self.initial_weights is not None:
-        #    self.set_weights(self.initial_weights)
-        #    del self.initial_weights
-
+        if self.initial_weights is not None:
+            self.set_weights(self.initial_weights)
+            del self.initial_weights
         self.built = True
 
     def reset_states(self):
@@ -7335,24 +7254,24 @@ class AttLSTMCond3Inputs(Recurrent):
                             'input_shape must be provided (including batch size).')
         if hasattr(self, 'states'):
             K.set_value(self.states[0],
-                        np.zeros((input_shape[0], self.units)))
+                        np.zeros((input_shape[0], self.output_dim)))
             K.set_value(self.states[1],
-                        np.zeros((input_shape[0], self.units)))
+                        np.zeros((input_shape[0], self.output_dim)))
             K.set_value(self.states[2],
                         np.zeros((input_shape[0], input_shape[3])))
         else:
-            self.states = [K.zeros((input_shape[0], self.units)),
-                           K.zeros((input_shape[0], self.units)),
+            self.states = [K.zeros((input_shape[0], self.output_dim)),
+                           K.zeros((input_shape[0], self.output_dim)),
                            K.zeros((input_shape[0], input_shape[3]))]
 
     def preprocess_input(self, x, B_V):
         return K.dot(x * B_V[0], self.V)
 
-    def compute_output_shape(self, input_shape):
+    def get_output_shape_for(self, input_shape):
         if self.return_sequences:
-            main_out = (input_shape[0][0], input_shape[0][1], self.units)
+            main_out = (input_shape[0][0], input_shape[0][1], self.output_dim)
         else:
-            main_out = (input_shape[0][0], self.units)
+            main_out = (input_shape[0][0], self.output_dim)
 
         if self.return_extra_variables:
             dim_x_att = (input_shape[0][0], input_shape[0][1], self.context1_dim)
@@ -7362,51 +7281,37 @@ class AttLSTMCond3Inputs(Recurrent):
             dim_x_att3 = (input_shape[0][0], input_shape[0][1], self.context3_dim)
             dim_alpha_att3 = (input_shape[0][0], input_shape[0][1], input_shape[3][1])
 
-            main_out = [main_out, dim_x_att, dim_alpha_att,
-                        dim_x_att2, dim_alpha_att2,
-                        dim_x_att3, dim_alpha_att3]
+            main_out = [main_out, dim_x_att, dim_alpha_att, dim_x_att2, dim_alpha_att2, dim_x_att3, dim_alpha_att3]
 
         if self.return_states:
             if not isinstance(main_out, list):
                 main_out = [main_out]
-            states_dim = (input_shape[0][0], input_shape[0][1], self.units)
+            states_dim = (input_shape[0][0], input_shape[0][1], self.output_dim)
             main_out += [states_dim, states_dim]
 
         return main_out
 
-    def call(self, x, mask=None):
+    def call(self, inputs, mask=None):
         # input shape: (nb_samples, time (padded with zeros), input_dim)
         # note that the .build() method of subclasses MUST define
         # self.input_spec with a complete input shape.
 
-        input_shape = self.input_spec[0].shape
-        state_below = x[0]
-        self.context1 = x[1]
-        self.context2 = x[2]
-        self.context3 = x[3]
+        input_shape = K.int_shape(inputs[0])
+        state_below = inputs[0]
+        self.context1 = inputs[1]
+        self.context2 = inputs[2]
+        self.context3 = inputs[3]
 
         if self.num_inputs == 4:  # input: [state_below, context, context3]
             self.init_state = None
             self.init_memory = None
         elif self.num_inputs == 5:  # input: [state_below, context, context2, init_generic]
-            self.init_state = x[4]
-            self.init_memory = x[4]
+            self.init_state = inputs[4]
+            self.init_memory = inputs[4]
         elif self.num_inputs == 6:  # input: [state_below, context, context2,  init_state, init_memory]
-            self.init_state = x[4]
-            self.init_memory = x[5]
-        if K._BACKEND == 'tensorflow':
-            if not input_shape[1]:
-                raise Exception('When using TensorFlow, you should define '
-                                'explicitly the number of timesteps of '
-                                'your sequences.\n'
-                                'If your first layer is an Embedding, '
-                                'make sure to pass it an "input_length" '
-                                'argument. Otherwise, make sure '
-                                'the first layer has '
-                                'an "input_shape" or "batch_input_shape" '
-                                'argument, including the time axis. '
-                                'Found input shape at layer ' + self.name +
-                                ': ' + str(input_shape))
+            self.init_state = inputs[4]
+            self.init_memory = inputs[5]
+
         if self.stateful:
             initial_states = self.states
         else:
@@ -7507,7 +7412,7 @@ class AttLSTMCond3Inputs(Recurrent):
             context3 = states[pos_states + 5]  # Context 2
             mask_context3 = states[pos_states + 6]  # Context 2 mask
 
-        if mask_context1.ndim > 1:  # Mask the context (only if necessary)
+        if K.ndim(mask_context1) > 1:  # Mask the context (only if necessary)
             pctx_1 = mask_context1[:, :, None] * pctx_1
             context1 = mask_context1[:, :, None] * context1
 
@@ -7515,18 +7420,17 @@ class AttLSTMCond3Inputs(Recurrent):
         p_state_1 = K.dot(h_tm1 * B_Wa[0], self.Wa)
         pctx_1 = K.tanh(pctx_1 + p_state_1[:, None, :])
         e1 = K.dot(pctx_1 * B_wa[0], self.wa) + self.ca
-        if mask_context1.ndim > 1:  # Mask the context (only if necessary)
+        if K.ndim(mask_context1) > 1:  # Mask the context (only if necessary)
             e1 = mask_context1 * e1
-        alphas_shape1 = e1.shape
-        alphas1 = K.softmax(e1.reshape([alphas_shape1[0], alphas_shape1[1]]))
+        alphas1 = K.softmax(e1.reshape([K.shape(e1)[0], K.shape(e1)[1]]))
         # sum over the in_timesteps dimension resulting in [batch_size, input_dim]
-        ctx_1 = (context1 * alphas1[:, :, None]).sum(axis=1)
+        ctx_1 = K.sum(context1 * alphas1[:, :, None], axis=1)
 
         if self.attend_on_both:
-            if mask_context2.ndim > 1:  # Mask the context2 (only if necessary)
+            if K.ndim(mask_context2) > 1:  # Mask the context2 (only if necessary)
                 pctx_2 = mask_context2[:, :, None] * pctx_2
                 context2 = mask_context2[:, :, None] * context2
-            if mask_context3.ndim > 1:  # Mask the context2 (only if necessary)
+            if K.ndim(mask_context3) > 1:  # Mask the context2 (only if necessary)
                 pctx_3 = mask_context3[:, :, None] * pctx_3
                 context3 = mask_context3[:, :, None] * context3
 
@@ -7535,23 +7439,22 @@ class AttLSTMCond3Inputs(Recurrent):
             p_state_2 = K.dot(h_tm1 * B_Wa2[0], self.Wa2)
             pctx_2 = K.tanh(pctx_2 + p_state_2[:, None, :])
             e2 = K.dot(pctx_2 * B_wa2[0], self.wa2) + self.ca2
-            if mask_context2.ndim > 1:  # Mask the context (only if necessary)
+            if K.ndim(mask_context2) > 1:  # Mask the context (only if necessary)
                 e2 = mask_context2 * e2
-            alphas_shape2 = e2.shape
-            alphas2 = K.softmax(e2.reshape([alphas_shape2[0], alphas_shape2[1]]))
+            alphas2 = K.softmax(e2.reshape([K.shape(e2)[0], K.shape(e2)[1]]))
             # sum over the in_timesteps dimension resulting in [batch_size, input_dim]
-            ctx_2 = (context2 * alphas2[:, :, None]).sum(axis=1)
+            ctx_2 = K.sum(context2 * alphas2[:, :, None], axis=1)
 
             # Attention model 3 (see Formulation in class header)
             p_state_3 = K.dot(h_tm1 * B_Wa3[0], self.Wa3)
             pctx_3 = K.tanh(pctx_3 + p_state_3[:, None, :])
             e3 = K.dot(pctx_3 * B_wa3[0], self.wa3) + self.ca3
-            if mask_context3.ndim > 1:  # Mask the context (only if necessary)
+            if K.ndim(mask_context3) > 1:  # Mask the context (only if necessary)
                 e3 = mask_context3 * e3
-            alphas_shape3 = e3.shape
-            alphas3 = K.softmax(e3.reshape([alphas_shape3[0], alphas_shape3[1]]))
+            alphas3 = K.softmax(e3.reshape([K.shape(e3)[0], K.shape(e3)[1]]))
             # sum over the in_timesteps dimension resulting in [batch_size, input_dim]
-            ctx_3 = (context3 * alphas3[:, :, None]).sum(axis=1)
+            ctx_3 = K.sum(context3 * alphas3[:, :, None], axis=1)
+
         else:
             ctx_2 = context2
             alphas2 = mask_context2
@@ -7564,10 +7467,10 @@ class AttLSTMCond3Inputs(Recurrent):
             K.dot(ctx_2 * B_W[0], self.W) + \
             K.dot(ctx_3 * B_S[0], self.S) + \
             self.b
-        z0 = z[:, :self.units]
-        z1 = z[:, self.units: 2 * self.units]
-        z2 = z[:, 2 * self.units: 3 * self.units]
-        z3 = z[:, 3 * self.units:]
+        z0 = z[:, :self.output_dim]
+        z1 = z[:, self.output_dim: 2 * self.output_dim]
+        z2 = z[:, 2 * self.output_dim: 3 * self.output_dim]
+        z3 = z[:, 3 * self.output_dim:]
 
         i = self.inner_activation(z0)
         f = self.inner_activation(z1)
@@ -7582,7 +7485,7 @@ class AttLSTMCond3Inputs(Recurrent):
         # States[8]
         if 0 < self.dropout_U < 1:
             ones = K.ones_like(K.reshape(x[:, 0, 0], (-1, 1)))
-            ones = K.concatenate([ones] * self.units, 1)
+            ones = K.concatenate([ones] * self.output_dim, 1)
             B_U = [K.in_train_phase(K.dropout(ones, self.dropout_U), ones) for _ in range(4)]
             constants.append(B_U)
         else:
@@ -7636,7 +7539,7 @@ class AttLSTMCond3Inputs(Recurrent):
 
         # States[13]
         if 0 < self.dropout_Wa < 1:
-            input_dim = self.units
+            input_dim = self.output_dim
             ones = K.ones_like(K.reshape(x[:, 0, 0], (-1, 1)))
             ones = K.concatenate([ones] * input_dim, 1)
             B_Wa = [K.in_train_phase(K.dropout(ones, self.dropout_Wa), ones)]
@@ -7657,7 +7560,7 @@ class AttLSTMCond3Inputs(Recurrent):
 
             # States[15]
             if 0 < self.dropout_Wa2 < 1:
-                input_dim = self.units
+                input_dim = self.output_dim
                 ones = K.ones_like(K.reshape(x[:, 0, 0], (-1, 1)))
                 ones = K.concatenate([ones] * input_dim, 1)
                 B_Wa2 = [K.in_train_phase(K.dropout(ones, self.dropout_Wa2), ones)]
@@ -7675,7 +7578,7 @@ class AttLSTMCond3Inputs(Recurrent):
 
             # States[17]
             if 0 < self.dropout_Wa3 < 1:
-                input_dim = self.units
+                input_dim = self.output_dim
                 ones = K.ones_like(K.reshape(x[:, 0, 0], (-1, 1)))
                 ones = K.concatenate([ones] * input_dim, 1)
                 B_Wa3 = [K.in_train_phase(K.dropout(ones, self.dropout_Wa3), ones)]
@@ -7761,7 +7664,7 @@ class AttLSTMCond3Inputs(Recurrent):
             initial_state = K.zeros_like(x)  # (samples, timesteps, input_dim)
             initial_state = K.sum(initial_state, axis=(1, 2))  # (samples,)
             initial_state = K.expand_dims(initial_state)  # (samples, 1)
-            initial_state = K.tile(initial_state, [1, self.units])  # (samples, units)
+            initial_state = K.tile(initial_state, [1, self.output_dim])  # (samples, output_dim)
             if self.init_memory is None:
                 initial_states = [initial_state for _ in range(2)]
             else:
@@ -7800,7 +7703,7 @@ class AttLSTMCond3Inputs(Recurrent):
         return initial_states + extra_states
 
     def get_config(self):
-        config = {"units": self.units,
+        config = {"units": self.output_dim,
                   "att_units1": self.att_units1,
                   "att_units2": self.att_units2,
                   "att_units3": self.att_units3,
@@ -7808,11 +7711,11 @@ class AttLSTMCond3Inputs(Recurrent):
                   "return_states": self.return_states,
                   "mask_value": self.mask_value,
                   "attend_on_both": self.attend_on_both,
-                  'kernel_initializer': initializers.serialize(self.W_regularizer),
-                  'recurrent_initializer': initializers.serialize(self.U_regularizer),
-                  'unit_forget_bias': initializers.serialize(self.forget_bias_init),
-                  'activation': activations.serialize(self.activation),
-                  'recurrent_activation': activations.serialize(self.inner_activation),
+                  "kernel_initializer": self.init.__name__,
+                  "recurrent_initializer": self.inner_init.__name__,
+                  "forget_bias_initializer": self.forget_bias_init.__name__,
+                  "activation": self.activation.__name__,
+                  "recurrent_activation": self.inner_activation.__name__,
                   "S_regularizer": self.S_regularizer.get_config() if self.S_regularizer else None,
                   "T_regularizer": self.T_regularizer.get_config() if self.T_regularizer else None,
                   "W_regularizer": self.W_regularizer.get_config() if self.W_regularizer else None,

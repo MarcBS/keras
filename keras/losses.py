@@ -2,6 +2,7 @@ from __future__ import absolute_import
 import six
 from . import backend as K
 from .utils.generic_utils import deserialize_keras_object
+from .utils.generic_utils import serialize_keras_object
 
 
 # noinspection SpellCheckingInspection
@@ -41,9 +42,16 @@ def categorical_hinge(y_true, y_pred):
 
 
 def logcosh(y_true, y_pred):
-    def cosh(x):
-        return (K.exp(x) + K.exp(-x)) / 2
-    return K.mean(K.log(cosh(y_pred - y_true)), axis=-1)
+    """Logarithm of the hyperbolic cosine of the prediction error.
+
+    `log(cosh(x))` is approximately equal to `(x ** 2) / 2` for small `x` and
+    to `abs(x) - log(2)` for large `x`. This means that 'logcosh' works mostly
+    like the mean squared error, but will not be so strongly affected by the
+    occasional wildly incorrect prediction.
+    """
+    def _logcosh(x):
+        return x + K.softplus(-2. * x) - K.log(2.)
+    return K.mean(_logcosh(y_pred - y_true), axis=-1)
 
 
 def categorical_crossentropy(y_true, y_pred):
@@ -79,10 +87,61 @@ def log_diff(args):
     :param args: y_pred, y_true, h_pred, h_true
     :return:
     """
-    y_pred, y_true, h_pred, h_true = args
-    p_y_x = K.mean(K.categorical_crossentropy(y_true, y_pred ))
+    y_true, y_pred, h_true, h_pred = args
+    p_y_x = K.mean(K.categorical_crossentropy(y_true, y_pred))
     p_h_x = K.mean(K.categorical_crossentropy(h_true, h_pred))
-    return p_y_x - p_h_x
+    cost_difference = p_y_x - p_h_x
+    cost_difference = K.switch(cost_difference > -1., cost_difference, 0.)
+    return cost_difference
+
+
+def hybrid_log_diff(args):
+    """
+     Weighted Cross-entropy difference between a GT and a hypothesis
+    :param args: y_pred, y_true, h_pred, h_true
+    :return:
+    """
+    y_true, y_pred, h_true, h_pred, weight1, weight2, constant = args
+    p_y_x =  K.mean(K.categorical_crossentropy(y_true, y_pred))
+    p_h_x = K.mean(K.categorical_crossentropy(h_true, h_pred))
+    cost_difference1 = p_y_x - p_h_x
+    cost_difference1 = K.switch(cost_difference1 > -1., cost_difference1, 0.)
+
+    cost_difference2 = p_y_x - constant
+    cost_difference2 = K.switch(cost_difference2 > -1., cost_difference2, 0.)
+
+    return weight1 * cost_difference1 + weight2 * cost_difference2
+
+
+def weighted_log_diff(args):
+    """
+     Weighted Cross-entropy difference between a GT and a hypothesis
+    :param args: y_pred, y_true, h_pred, h_true
+    :return:
+    """
+    y_true, y_pred, h_true, h_pred, weight = args
+    p_y_x =  K.mean(K.categorical_crossentropy(y_true, y_pred))
+    p_h_x = K.mean(K.categorical_crossentropy(h_true, h_pred))
+    return p_y_x - weight * p_h_x
+
+def log_diff_plus_categorical_crossentropy(args):
+    """
+     Weighted cross-entropy difference between a GT and a hypothesis and weigthed log-diff
+    :param args: y_pred, y_true, h_pred, h_true
+    :return:
+    """
+    y_true, y_pred, h1_true, h1_pred, h2_true, h2_pred, weight = args
+    p_y_x =  K.mean(K.categorical_crossentropy(y_true, y_pred))
+    p_h1_x = K.mean(K.categorical_crossentropy(h1_true, h1_pred))
+    p_h2_x = K.mean(K.categorical_crossentropy(h2_true, h2_pred))
+    cost_difference = p_h1_x - p_h2_x
+    #cost_difference = K.switch(cost_difference > -1., cost_difference, 0.)
+    return weight * p_y_x + (1 - weight) * cost_difference
+
+
+def linear_interpolation_categorical_crossentropy(args):
+    y_true, y_pred, additional_metric, weight = args
+    return K.mean(K.categorical_crossentropy(y_true, y_pred)) + weight * additional_metric
 
 
 def y_true(y_true, y_pred):
@@ -93,6 +152,35 @@ def y_true(y_true, y_pred):
     :return:
     """
     return y_true
+
+
+def nce_correct_prob(y_pred, y_noise):
+    """
+    p(correct| x, y) used in NCE.
+    :param y_pred: Model distribution (p_m(y|x; \theta))
+    :param y_noise: Noisy distribution (p_n(y|x))
+    :return: Probability that a given example is predicted to be a correct training (p(correct|x, y))
+    """
+    return y_pred / (y_pred + y_noise)
+
+
+def noise_contrastive_loss(args):
+    """
+    :param y_distribution:
+    :param y_noise:
+    :return:
+    """
+    #TODO: We are assuming that |U_t| == |U_n|
+    pred_true_model, y_true_model, pred_noise_model, y_true_noise_model = args
+    y_distribution_pred = K.mean(K.categorical_crossentropy(y_true_model, pred_true_model))
+    y_distribution_noise = K.mean(K.categorical_crossentropy(y_true_model, pred_noise_model))
+
+    y_noise_pred = K.mean(K.categorical_crossentropy(y_true_noise_model, pred_true_model))
+    y_noise_noise = K.mean(K.categorical_crossentropy(y_true_noise_model, pred_noise_model))
+
+    return K.mean(K.log(nce_correct_prob(y_distribution_pred, y_distribution_noise))) +\
+           K.mean(K.log(1 - nce_correct_prob(y_noise_pred, y_noise_noise)))
+
 
 
 # Aliases.
@@ -106,7 +194,7 @@ cosine = cosine_proximity
 
 
 def serialize(loss):
-    return loss.__name__
+    return serialize_keras_object(loss)
 
 
 def deserialize(name, custom_objects=None):
@@ -121,6 +209,8 @@ def get(identifier):
         return None
     if isinstance(identifier, six.string_types):
         identifier = str(identifier)
+        return deserialize(identifier)
+    if isinstance(identifier, dict):
         return deserialize(identifier)
     elif callable(identifier):
         return identifier

@@ -1,3 +1,4 @@
+import numpy as np
 import types as python_types
 import warnings
 
@@ -299,8 +300,7 @@ class Merge(Layer):
             for input_i, mask_i in zip(inputs, mask):
                 if mask_i is None:
                     # Input is unmasked. Append all 1s to masks,
-                    # but cast it to bool first
-                    masks.append(K.cast(K.ones_like(input_i), 'bool'))
+                    masks.append(K.ones_like(input_i, dtype='bool'))
                 elif K.ndim(mask_i) < K.ndim(input_i):
                     # Mask is smaller than the input, expand it
                     masks.append(K.expand_dims(mask_i))
@@ -638,14 +638,14 @@ class Highway(Layer):
     """
 
     def __init__(self,
-                 kernel_initializer='glorot_uniform',
+                 init='glorot_uniform',
                  activation=None,
                  weights=None,
-                 kernel_regularizer=None,
-                 bias_regularizer=None,
+                 W_regularizer=None,
+                 b_regularizer=None,
                  activity_regularizer=None,
                  W_constraint=None,
-                 bias_constraint=None,
+                 b_constraint=None,
                  bias=True,
                  input_dim=None,
                  **kwargs):
@@ -655,15 +655,15 @@ class Highway(Layer):
             kwargs.pop('transform_bias')
             warnings.warn('`transform_bias` argument is deprecated and '
                           'has been removed.')
-        self.kernel_initializer = initializers.get(kernel_initializer)
+        self.init = initializers.get(init)
         self.activation = activations.get(activation)
 
-        self.kernel_regularizer = regularizers.get(kernel_regularizer)
-        self.bias_regularizer = regularizers.get(bias_regularizer)
+        self.W_regularizer = regularizers.get(W_regularizer)
+        self.b_regularizer = regularizers.get(b_regularizer)
         self.activity_regularizer = regularizers.get(activity_regularizer)
 
         self.W_constraint = constraints.get(W_constraint)
-        self.bias_constraint = constraints.get(bias_constraint)
+        self.b_constraint = constraints.get(b_constraint)
 
         self.bias = bias
         self.initial_weights = weights
@@ -680,19 +680,19 @@ class Highway(Layer):
                                     shape=(None, input_dim))
 
         self.W = self.add_weight((input_dim, input_dim),
-                                 initializer=self.kernel_initializer,
+                                 initializer=self.init,
                                  name='W',
-                                 regularizer=self.kernel_regularizer,
+                                 regularizer=self.W_regularizer,
                                  constraint=self.W_constraint)
         self.W_carry = self.add_weight((input_dim, input_dim),
-                                       initializer=self.kernel_initializer,
+                                       initializer=self.init,
                                        name='W_carry')
         if self.bias:
             self.b = self.add_weight((input_dim,),
                                      initializer='zero',
                                      name='b',
-                                     regularizer=self.bias_regularizer,
-                                     constraint=self.bias_constraint)
+                                     regularizer=self.b_regularizer,
+                                     constraint=self.b_constraint)
             self.b_carry = self.add_weight((input_dim,),
                                            initializer='one',
                                            name='b_carry')
@@ -718,13 +718,13 @@ class Highway(Layer):
         return output
 
     def get_config(self):
-        config = {'kernel_initializer': initializers.serialize(self.kernel_initializer),
+        config = {'kernel_initializer': initializers.serialize(self.init),
                   'activation': activations.serialize(self.activation),
-                  'kernel_regularizer': regularizers.serialize(self.kernel_regularizer),
-                  'bias_regularizer': regularizers.serialize(self.bias_regularizer),
+                  'W_regularizer': regularizers.serialize(self.W_regularizer),
+                  'b_regularizer': regularizers.serialize(self.b_regularizer),
                   'activity_regularizer': regularizers.serialize(self.activity_regularizer),
                   'W_constraint': constraints.serialize(self.W_constraint),
-                  'bias_constraint': constraints.serialize(self.bias_constraint),
+                  'b_constraint': constraints.serialize(self.b_constraint),
                   'bias': self.bias,
                   'input_dim': self.input_dim}
         base_config = super(Highway, self).get_config()
@@ -952,7 +952,6 @@ class Recurrent(Layer):
         return inputs
 
     def __call__(self, inputs, initial_state=None, **kwargs):
-
 
         # If there are multiple inputs, then
         # they should be the main input and `initial_state`

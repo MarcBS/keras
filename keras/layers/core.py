@@ -21,6 +21,7 @@ from ..utils.generic_utils import func_dump
 from ..utils.generic_utils import func_load
 from ..utils.generic_utils import has_arg
 
+
 class Masking(Layer):
     """Masks a sequence by using a mask value to skip timesteps.
 
@@ -142,7 +143,7 @@ class GuidedDropout(Layer):
     def __init__(self, weights_shape, weights=None, **kwargs):
         self.weights_shape = weights_shape
         self.initial_weights = [weights]
-        self.init = initializations.get('uniform', dim_ordering='th')
+        self.init = initializers.get('uniform', dim_ordering='th')
         super(GuidedDropout, self).__init__(**kwargs)
 
     def build(self, input_shape):
@@ -714,13 +715,11 @@ class Lambda(Layer):
 
     @interfaces.legacy_lambda_support
     def __init__(self, function, output_shape=None,
-                 mask=None, arguments=None,# mask_function=None,
+                 mask=None, arguments=None,
                  supports_masking=True, **kwargs):
         super(Lambda, self).__init__(**kwargs)
         self.function = function
         self.arguments = arguments if arguments else {}
-        self.supports_masking = supports_masking
-
         if mask is not None:
             self.supports_masking = True
         self.mask = mask
@@ -734,6 +733,7 @@ class Lambda(Layer):
                 raise TypeError('In Lambda, `output_shape` '
                                 'must be a list, a tuple, or a function.')
             self._output_shape = output_shape
+
         super(Lambda, self).__init__(**kwargs)
 
     def compute_output_shape(self, input_shape):
@@ -803,17 +803,6 @@ class Lambda(Layer):
         else:
             output_shape = self._output_shape
             output_shape_type = 'raw'
-        '''
-        if isinstance(self._mask_function, python_types.LambdaType):
-            mask_function = func_dump(self._mask)
-            mask_function_type = 'lambda'
-        elif self.mask is None:
-            mask_function = None
-            mask_function_type = None
-        else:
-            mask_function = self.mask.__name__
-            mask_function_type = 'function'
-        '''
 
         config = {'function': function,
                   'function_type': function_type,
@@ -1107,29 +1096,6 @@ class MaskLayer(Layer):
         base_config = super(MaskLayer, self).get_config()
         return dict(list(base_config.items()))
 
-class FlatMask(Layer):
-    """
-    Flattens a n-dimensional mask to an (n-1)-dimensional one.
-
-    """
-
-    def __init__(self, axis=2, **kwargs):
-        self.supports_masking = True
-        self.axis = axis
-        super(FlatMask, self).__init__(**kwargs)
-
-    def call(self, x, mask=None):
-        return x
-
-    def compute_mask(self, input_shape, input_mask=None):
-        return K.any(input_mask, self.axis)
-
-    def compute_output_shape(self, input_shape):
-        return input_shape
-
-    def get_config(self):
-        base_config = super(FlatMask, self).get_config()
-        return dict(list(base_config.items()))
 
 class WeightedSum(Layer):
     ''' Applies a weighted sum over a set of vectors input[0] and their respective weights input[1].

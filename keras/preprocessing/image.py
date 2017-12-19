@@ -319,7 +319,7 @@ def img_to_array(img, data_format=None):
 
 
 def load_img(path, grayscale=False, target_size=None,
-             interpolation='bilinear'):
+             interpolation='nearest'):
     """Loads an image into PIL format.
 
     # Arguments
@@ -332,7 +332,7 @@ def load_img(path, grayscale=False, target_size=None,
             Supported methods are "nearest", "bilinear", and "bicubic".
             If PIL version 1.1.3 or newer is installed, "lanczos" is also
             supported. If PIL version 3.4.0 or newer is installed, "box" and
-            "hamming" are also supported. By default, "bilinear" is used.
+            "hamming" are also supported. By default, "nearest" is used.
 
     # Returns
         A PIL Image instance.
@@ -479,6 +479,32 @@ class ImageDataGenerator(object):
             raise ValueError('`zoom_range` should be a float or '
                              'a tuple or list of two floats. '
                              'Received arg: ', zoom_range)
+        if zca_whitening:
+            if not featurewise_center:
+                self.featurewise_center = True
+                warnings.warn('This ImageDataGenerator specifies '
+                              '`zca_whitening`, which overrides '
+                              'setting of `featurewise_center`.')
+            if featurewise_std_normalization:
+                self.featurewise_std_normalization = False
+                warnings.warn('This ImageDataGenerator specifies '
+                              '`zca_whitening` '
+                              'which overrides setting of'
+                              '`featurewise_std_normalization`.')
+        if featurewise_std_normalization:
+            if not featurewise_center:
+                self.featurewise_center = True
+                warnings.warn('This ImageDataGenerator specifies '
+                              '`featurewise_std_normalization`, '
+                              'which overrides setting of '
+                              '`featurewise_center`.')
+        if samplewise_std_normalization:
+            if not samplewise_center:
+                self.samplewise_center = True
+                warnings.warn('This ImageDataGenerator specifies '
+                              '`samplewise_std_normalization`, '
+                              'which overrides setting of '
+                              '`samplewise_center`.')
 
     def flow(self, x, y=None, batch_size=32, shuffle=True, seed=None,
              save_to_dir=None, save_prefix='', save_format='png'):
@@ -499,7 +525,8 @@ class ImageDataGenerator(object):
                             save_to_dir=None,
                             save_prefix='',
                             save_format='png',
-                            follow_links=False):
+                            follow_links=False,
+                            interpolation='nearest'):
         return DirectoryIterator(
             directory, self,
             target_size=target_size, color_mode=color_mode,
@@ -509,7 +536,8 @@ class ImageDataGenerator(object):
             save_to_dir=save_to_dir,
             save_prefix=save_prefix,
             save_format=save_format,
-            follow_links=follow_links)
+            follow_links=follow_links,
+            interpolation=interpolation)
 
     def standardize(self, x):
         """Apply the normalization configuration to a batch of inputs.
@@ -524,27 +552,25 @@ class ImageDataGenerator(object):
             x = self.preprocessing_function(x)
         if self.rescale:
             x *= self.rescale
-        # x is a single image, so it doesn't have image number at index 0
-        img_channel_axis = self.channel_axis - 1
         if self.samplewise_center:
-            x -= np.mean(x, axis=img_channel_axis, keepdims=True)
+            x -= np.mean(x, keepdims=True)
         if self.samplewise_std_normalization:
-            x /= (np.std(x, axis=img_channel_axis, keepdims=True) + 1e-7)
+            x /= (np.std(x, keepdims=True) + K.epsilon())
 
         if self.featurewise_center:
             if self.mean is not None:
                 x -= self.mean
             else:
                 warnings.warn('This ImageDataGenerator specifies '
-                              '`featurewise_center`, but it hasn\'t'
+                              '`featurewise_center`, but it hasn\'t '
                               'been fit on any training data. Fit it '
                               'first by calling `.fit(numpy_data)`.')
         if self.featurewise_std_normalization:
             if self.std is not None:
-                x /= (self.std + 1e-7)
+                x /= (self.std + K.epsilon())
             else:
                 warnings.warn('This ImageDataGenerator specifies '
-                              '`featurewise_std_normalization`, but it hasn\'t'
+                              '`featurewise_std_normalization`, but it hasn\'t '
                               'been fit on any training data. Fit it '
                               'first by calling `.fit(numpy_data)`.')
         if self.zca_whitening:
@@ -554,7 +580,7 @@ class ImageDataGenerator(object):
                 x = np.reshape(whitex, x.shape)
             else:
                 warnings.warn('This ImageDataGenerator specifies '
-                              '`zca_whitening`, but it hasn\'t'
+                              '`zca_whitening`, but it hasn\'t '
                               'been fit on any training data. Fit it '
                               'first by calling `.fit(numpy_data)`.')
         return x
@@ -761,7 +787,7 @@ class Iterator(Sequence):
         return self._get_batches_of_transformed_samples(index_array)
 
     def __len__(self):
-        return int(np.ceil(self.n / float(self.batch_size)))
+        return (self.n + self.batch_size - 1) // self.batch_size  # round up
 
     def on_epoch_end(self):
         self._set_index_array()
@@ -1004,15 +1030,21 @@ class DirectoryIterator(Iterator):
             images (if `save_to_dir` is set).
         save_format: Format to use for saving sample images
             (if `save_to_dir` is set).
+        interpolation: Interpolation method used to resample the image if the
+            target size is different from that of the loaded image.
+            Supported methods are "nearest", "bilinear", and "bicubic".
+            If PIL version 1.1.3 or newer is installed, "lanczos" is also
+            supported. If PIL version 3.4.0 or newer is installed, "box" and
+            "hamming" are also supported. By default, "nearest" is used.
     """
 
     def __init__(self, directory, image_data_generator,
                  target_size=(256, 256), color_mode='rgb',
                  classes=None, class_mode='categorical',
                  batch_size=32, shuffle=True, seed=None,
-                 data_format=None,
-                 save_to_dir=None, save_prefix='', save_format='png',
-                 follow_links=False):
+                 data_format=None, save_to_dir=None,
+                 save_prefix='', save_format='png',
+                 follow_links=False, interpolation='nearest'):
         if data_format is None:
             data_format = K.image_data_format()
         self.directory = directory
@@ -1044,6 +1076,7 @@ class DirectoryIterator(Iterator):
         self.save_to_dir = save_to_dir
         self.save_prefix = save_prefix
         self.save_format = save_format
+        self.interpolation = interpolation
 
         white_list_formats = {'png', 'jpg', 'jpeg', 'bmp', 'ppm'}
 
@@ -1095,7 +1128,8 @@ class DirectoryIterator(Iterator):
             fname = self.filenames[j]
             img = load_img(os.path.join(self.directory, fname),
                            grayscale=grayscale,
-                           target_size=self.target_size)
+                           target_size=self.target_size,
+                           interpolation=self.interpolation)
             x = img_to_array(img, data_format=self.data_format)
             x = self.image_data_generator.random_transform(x)
             x = self.image_data_generator.standardize(x)
@@ -1106,7 +1140,7 @@ class DirectoryIterator(Iterator):
                 img = array_to_img(batch_x[i], self.data_format, scale=True)
                 fname = '{prefix}_{index}_{hash}.{format}'.format(prefix=self.save_prefix,
                                                                   index=j,
-                                                                  hash=np.random.randint(1e4),
+                                                                  hash=np.random.randint(1e7),
                                                                   format=self.save_format)
                 img.save(os.path.join(self.save_to_dir, fname))
         # build batch of labels

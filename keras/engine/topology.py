@@ -16,6 +16,7 @@ from .. import backend as K
 from .. import initializers
 from ..utils.io_utils import ask_to_proceed_with_overwrite
 from ..utils.layer_utils import print_summary as print_layer_summary
+from ..utils.layer_utils import count_params
 from ..utils.generic_utils import has_arg
 from ..utils import conv_utils
 from ..legacy import interfaces
@@ -271,13 +272,9 @@ class Layer(object):
                           'dtype',
                           'name',
                           'trainable',
+                          'updatable',
                           'weights',
                           'input_dtype',  # legacy
-                          'kernel_regularizer',
-                          'kernel_initializer', ##
-                          'recurrent_activation',
-                          'recurrent_initializer',
-                          'unit_forget_bias'
                           }
         for kwarg in kwargs:
             if kwarg not in allowed_kwargs:
@@ -289,6 +286,7 @@ class Layer(object):
         self.name = name
 
         self.trainable = kwargs.get('trainable', True)
+        self.updatable = kwargs.get('updatable', True)
         if 'input_shape' in kwargs or 'batch_input_shape' in kwargs:
             # In this case we will later create an input layer
             # to insert before the current layer
@@ -606,6 +604,7 @@ class Layer(object):
             # Actually call the layer, collecting output(s), mask(s), and shape(s).
             output = self.call(inputs, **kwargs)
             output_mask = self.compute_mask(inputs, previous_mask)
+
             # If the layer returns tensors from its inputs, unmodified,
             # we copy them to avoid loss of tensor metadata.
             output_ls = _to_list(output)
@@ -1273,7 +1272,7 @@ class Layer(object):
                                    self.name + ', but the layer isn\'t built. '
                                    'You can build it manually via: `' +
                                    self.name + '.build(batch_input_shape)`.')
-        return sum([K.count_params(p) for p in self.weights])
+        return count_params(self.weights)
 
 
 class InputLayer(Layer):
@@ -1381,7 +1380,7 @@ def Input(shape=None, batch_shape=None,
     """`Input()` is used to instantiate a Keras tensor.
 
     A Keras tensor is a tensor object from the underlying backend
-    (Theano or TensorFlow), which we augment with certain
+    (Theano, TensorFlow or CNTK), which we augment with certain
     attributes that allow us to build a Keras model
     just by knowing the inputs and outputs of the model.
 
@@ -1390,9 +1389,9 @@ def Input(shape=None, batch_shape=None,
     `model = Model(input=[a, b], output=c)`
 
     The added Keras attributes are:
-        ._keras_shape: Integer shape tuple propagated
+        `_keras_shape`: Integer shape tuple propagated
             via Keras-side shape inference.
-        ._keras_history: Last layer applied to the tensor.
+        `_keras_history`: Last layer applied to the tensor.
             the entire layer graph is retrievable from that layer,
             recursively.
 
@@ -1428,11 +1427,11 @@ def Input(shape=None, batch_shape=None,
         ```
     """
     if not batch_shape and tensor is None:
-        assert shape, ('Please provide to Input either a `shape`'
-                       ' or a `batch_shape` argument. Note that '
-                       '`shape` does not include the batch '
-                       'dimension.')
-    if shape and not batch_shape:
+        assert shape is not None, ('Please provide to Input either a `shape`'
+                                   ' or a `batch_shape` argument. Note that '
+                                   '`shape` does not include the batch '
+                                   'dimension.')
+    if shape is not None and not batch_shape:
         batch_shape = (None,) + tuple(shape)
     if not dtype:
         dtype = K.floatx()
@@ -1498,8 +1497,6 @@ class Container(Layer):
 
         self.supports_masking = False
         self.trainable = True
-        self._per_input_losses = {}
-        self._per_input_updates = {}
 
         # Container-specific properties.
         if isinstance(inputs, (list, tuple)):
@@ -1875,29 +1872,22 @@ class Container(Layer):
 
     @property
     def updates(self):
-        """Retrieve the model's updates.
-
-        Will only include updates that are either
-        inconditional, or conditional on inputs to this model
-        (e.g. will not include updates that depend on tensors
-        that aren't inputs to this model).
-
-        # Returns
-            A list of update ops.
-        """
         updates = []
         for layer in self.layers:
             if hasattr(layer, 'updates'):
-                # Collect updates that are dependent on inputs
-                # that are part of the model.
-                for node_index, node in enumerate(layer.inbound_nodes):
-                    node_key = self._node_key(layer, node_index)
-                    if node_key in self.container_nodes:
-                        # The model owns this layer node.
-                        inputs = node.input_tensors
-                        updates += layer.get_updates_for(inputs)
-                # Collect unconditional updates.
-                updates += layer.get_updates_for(None)
+                if len(layer.inbound_nodes) == 1:
+                    updates += layer.updates
+                else:
+                    # Collect updates that are dependent on inputs
+                    # that are part of the model.
+                    for node_index, node in enumerate(layer.inbound_nodes):
+                        node_key = layer.name + '_ib-' + str(node_index)
+                        if node_key in self.container_nodes:
+                            # The model owns this layer node.
+                            inputs = node.input_tensors
+                            updates += layer.get_updates_for(inputs)
+                    # Collect unconditional updates.
+                    updates += layer.get_updates_for(None)
         return updates
 
     @property
@@ -1958,6 +1948,8 @@ class Container(Layer):
         for layer in self.layers:
             if getattr(layer, 'stateful', False):
                 if hasattr(layer, 'updates'):
+                    if hasattr(layer, 'updatable') and not layer.updatable:
+                        continue
                     state_updates += layer.updates
         return state_updates
 
@@ -3030,6 +3022,28 @@ def preprocess_weights_for_loading(layer, weights,
             weights[0] = np.transpose(weights[0], (3, 2, 0, 1))
             if layer.__class__.__name__ == 'ConvLSTM2D':
                 weights[1] = np.transpose(weights[1], (3, 2, 0, 1))
+
+    # convert the weights of CuDNNLSTM so that they could be loaded into LSTM
+    if layer.__class__.__name__ == 'LSTM' and len(weights) == 3:
+        # determine if we're loading a CuDNNLSTM layer from the number of bias weights:
+        # CuDNNLSTM has (units * 8) weights; while LSTM has (units * 4)
+        # if there's no bias weight in the file, skip this conversion
+        units = weights[1].shape[0]
+        bias = weights[2]
+        if len(bias) == units * 8:
+            # reshape the kernels
+            kernels = np.split(weights[0], 4, axis=1)
+            kernels = [kernel.reshape(-1).reshape(kernel.shape, order='F') for kernel in kernels]
+            weights[0] = np.concatenate(kernels, axis=1)
+
+            # transpose the recurrent kernels
+            recurrent_kernels = np.split(weights[1], 4, axis=1)
+            recurrent_kernels = [kernel.T for kernel in recurrent_kernels]
+            weights[1] = np.concatenate(recurrent_kernels, axis=1)
+
+            # split the bias into half and merge
+            weights[2] = bias[:units * 4] + bias[units * 4:]
+
     return weights
 
 

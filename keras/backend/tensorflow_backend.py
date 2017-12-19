@@ -1,11 +1,11 @@
 import tensorflow as tf
-from tensorflow.python.client import device_lib
 from tensorflow.python.training import moving_averages
 from tensorflow.python.ops import tensor_array_ops
 from tensorflow.python.ops import control_flow_ops
 from tensorflow.python.ops import functional_ops
 from tensorflow.python.ops import ctc_ops as ctc
 from tensorflow.python.ops import variables as tf_variables
+from tensorflow.python.client import device_lib
 
 from collections import defaultdict
 
@@ -36,7 +36,7 @@ _GRAPH_LEARNING_PHASES = {}
 
 # This dictionary holds a mapping {graph: UID_DICT}.
 # each UID_DICT is a dictionary mapping name prefixes to a current index,
-# used for generic graph-specific string UIDs
+# used for generating graph-specific string UIDs
 # for various names (e.g. layer names).
 _GRAPH_UID_DICTS = {}
 
@@ -45,9 +45,10 @@ _GRAPH_UID_DICTS = {}
 # Change its value via `manual_variable_initialization(value)`.
 _MANUAL_VAR_INIT = False
 
-# This list queries the devices.
+# This list holds the available devices.
+# It is populated when `_get_available_gpus()` is called for the first time.
 # We assume our devices don't change during our lifetime.
-_LOCAL_DEVICES = device_lib.list_local_devices()
+_LOCAL_DEVICES = None
 
 def printing(x, string=''):
     """Prints the value of a tensor variable
@@ -182,17 +183,22 @@ def get_session():
             for v in variables:
                 if not getattr(v, '_keras_initialized', False):
                     candidate_vars.append(v)
-            # This step is expensive, so we only run it on variables
-            # not already marked as initialized.
-            is_initialized = session.run(
-                [tf.is_variable_initialized(v) for v in candidate_vars])
-            uninitialized_vars = []
-            for flag, v in zip(is_initialized, candidate_vars):
-                if not flag:
-                    uninitialized_vars.append(v)
-                v._keras_initialized = True
-            if uninitialized_vars:
-                session.run(tf.variables_initializer(uninitialized_vars))
+            if candidate_vars:
+                # This step is expensive, so we only run it on variables
+                # not already marked as initialized.
+                is_initialized = session.run(
+                    [tf.is_variable_initialized(v) for v in candidate_vars])
+                uninitialized_vars = []
+                for flag, v in zip(is_initialized, candidate_vars):
+                    if not flag:
+                        uninitialized_vars.append(v)
+                    v._keras_initialized = True
+                if uninitialized_vars:
+                    session.run(tf.variables_initializer(uninitialized_vars))
+    # hack for list_devices() function.
+    # list_devices() function is not available under tensorflow r1.3.
+    if not hasattr(session, 'list_devices'):
+        session.list_devices = lambda: device_lib.list_local_devices()
     return session
 
 
@@ -258,6 +264,9 @@ def _get_available_gpus():
     # Returns
         A list of available GPU devices.
     """
+    global _LOCAL_DEVICES
+    if _LOCAL_DEVICES is None:
+        _LOCAL_DEVICES = get_session().list_devices()
     return [x.name for x in _LOCAL_DEVICES if x.device_type == 'GPU']
 
 
@@ -287,10 +296,7 @@ def _to_tensor(x, dtype):
     # Returns
         A tensor.
     """
-    x = tf.convert_to_tensor(x)
-    if x.dtype != dtype:
-        x = tf.cast(x, dtype)
-    return x
+    return tf.convert_to_tensor(x, dtype=dtype)
 
 
 def is_sparse(tensor):
@@ -367,7 +373,7 @@ def variable(value, dtype=None, name=None, constraint=None):
         'float64'
         >>> print(kvar)
         example_var
-        >>> kvar.eval()
+        >>> K.eval(kvar)
         array([[ 1.,  2.],
                [ 3.,  4.]])
     ```
@@ -549,7 +555,7 @@ def shape(x):
 
 
 def int_shape(x):
-    """Returns the shape tensor or variable as a tuple of int or None entries.
+    """Returns the shape of tensor or variable as a tuple of int or None entries.
 
     # Arguments
         x: Tensor or variable.
@@ -665,6 +671,8 @@ def zeros(shape, dtype=None, name=None):
 
     # Returns
         A variable (including Keras metadata), filled with `0.0`.
+        Note that if `shape` was symbolic, we cannot return a variable,
+        and will return a dynamically-shaped tensor instead.
 
     # Example
     ```python
@@ -679,8 +687,10 @@ def zeros(shape, dtype=None, name=None):
     if dtype is None:
         dtype = floatx()
     tf_dtype = tf.as_dtype(dtype)
-    return variable(tf.constant_initializer(0., dtype=tf_dtype)(shape),
-                    dtype, name)
+    v = tf.zeros(shape=shape, dtype=tf_dtype, name=name)
+    if py_all(v.get_shape().as_list()):
+        return variable(v, dtype=dtype, name=name)
+    return v
 
 
 def zeros_symbolic(shape, dtype=floatx(), name=None):
@@ -690,7 +700,7 @@ def zeros_symbolic(shape, dtype=floatx(), name=None):
 
 
 def ones(shape, dtype=None, name=None):
-    """Instantiates an all-ones tensor variable and returns it.
+    """Instantiates an all-ones variable and returns it.
 
     # Arguments
         shape: Tuple of integers, shape of returned Keras variable.
@@ -699,6 +709,8 @@ def ones(shape, dtype=None, name=None):
 
     # Returns
         A Keras variable, filled with `1.0`.
+        Note that if `shape` was symbolic, we cannot return a variable,
+        and will return a dynamically-shaped tensor instead.
 
     # Example
     ```python
@@ -713,8 +725,10 @@ def ones(shape, dtype=None, name=None):
     if dtype is None:
         dtype = floatx()
     tf_dtype = tf.as_dtype(dtype)
-    return variable(tf.constant_initializer(1., dtype=tf_dtype)(shape),
-                    dtype, name)
+    v = tf.ones(shape=shape, dtype=tf_dtype, name=name)
+    if py_all(v.get_shape().as_list()):
+        return variable(v, dtype=dtype, name=name)
+    return v
 
 
 def eye(size, dtype=None, name=None):
@@ -739,7 +753,10 @@ def eye(size, dtype=None, name=None):
     ```
 
     """
-    return variable(np.eye(size), dtype, name)
+    if dtype is None:
+        dtype = floatx()
+    tf_dtype = tf.as_dtype(dtype)
+    return variable(tf.eye(size, dtype=tf_dtype), dtype, name)
 
 
 def zeros_like(x, dtype=None, name=None):
@@ -792,16 +809,17 @@ def ones_like(x, dtype=None, name=None):
     return tf.ones_like(x, dtype=dtype, name=name)
 
 
-def identity(x):
+def identity(x, name=None):
     """Returns a tensor with the same content as the input tensor.
 
     # Arguments
         x: The input tensor.
+        name: String, name for the variable to create.
 
     # Returns
         A tensor of the same shape, type and content.
     """
-    return tf.identity(x)
+    return tf.identity(x, name)
 
 
 def random_uniform_variable(shape, low, high, dtype=None,
@@ -879,13 +897,14 @@ def random_normal_variable(shape, mean, scale, dtype=None,
 
 
 def count_params(x):
-    """Returns the number of scalars in a Keras variable.
+    """Returns the static number of elements in a Keras variable or tensor.
 
     # Arguments
-        x: Keras variable.
+        x: Keras variable or tensor.
 
     # Returns
-        Integer, the number of scalars in `x`.
+        Integer, the number of elements in `x`, i.e., the product of the
+        array's static dimensions.
 
     # Example
     ```python
@@ -897,8 +916,7 @@ def count_params(x):
                [ 0.,  0.,  0.]], dtype=float32)
     ```
     """
-    shape = x.get_shape()
-    return np.prod([shape[i]._value for i in range(len(shape))])
+    return np.prod(int_shape(x))
 
 
 def cast(x, dtype):
@@ -1094,7 +1112,7 @@ def batch_dot(x, y, axes=None):
 
     # Examples
         Assume `x = [[1, 2], [3, 4]]` and `y = [[5, 6], [7, 8]]`
-        `batch_dot(x, y, axes=1) = [[17, 53]]` which is the main diagonal
+        `batch_dot(x, y, axes=1) = [[17], [53]]` which is the main diagonal
         of `x.dot(y.T)`, although we never have to calculate the off-diagonal
         elements.
 
@@ -1155,6 +1173,18 @@ def batch_dot(x, y, axes=None):
     if ndim(out) == 1:
         out = expand_dims(out, 1)
     return out
+
+
+def dot_product(x, kernel):
+    """
+    Wrapper for dot product operation, in order to be compatible with both
+    Theano and Tensorflow
+    Args:
+        x (): input
+        kernel (): weights
+    Returns:
+    """
+    return squeeze(dot(x, expand_dims(kernel)), axis=-1)
 
 
 def transpose(x):
@@ -1696,6 +1726,114 @@ def cos(x):
     return tf.cos(x)
 
 
+def _regular_normalize_batch_in_training(x, gamma, beta,
+                                         reduction_axes, epsilon=1e-3):
+    """Non-fused version of `normalize_batch_in_training`.
+
+    # Arguments
+        x: Input tensor or variable.
+        gamma: Tensor by which to scale the input.
+        beta: Tensor with which to center the input.
+        reduction_axes: iterable of integers,
+            axes over which to normalize.
+        epsilon: Fuzz factor.
+
+    # Returns
+        A tuple length of 3, `(normalized_tensor, mean, variance)`.
+    """
+    mean, var = tf.nn.moments(x, reduction_axes,
+                              shift=None, name=None, keep_dims=False)
+    normed = tf.nn.batch_normalization(x, mean, var,
+                                       beta, gamma,
+                                       epsilon)
+    return normed, mean, var
+
+
+def _broadcast_normalize_batch_in_training(x, gamma, beta,
+                                           reduction_axes, epsilon=1e-3):
+    """Non-fused, broadcast version of `normalize_batch_in_training`.
+
+    # Arguments
+        x: Input tensor or variable.
+        gamma: Tensor by which to scale the input.
+        beta: Tensor with which to center the input.
+        reduction_axes: iterable of integers,
+            axes over which to normalize.
+        epsilon: Fuzz factor.
+
+    # Returns
+        A tuple length of 3, `(normalized_tensor, mean, variance)`.
+    """
+    mean, var = tf.nn.moments(x, reduction_axes,
+                              shift=None, name=None, keep_dims=False)
+    target_shape = []
+    for axis in range(ndim(x)):
+        if axis in reduction_axes:
+            target_shape.append(1)
+        else:
+            target_shape.append(tf.shape(x)[axis])
+    target_shape = tf.stack(target_shape)
+
+    broadcast_mean = tf.reshape(mean, target_shape)
+    broadcast_var = tf.reshape(var, target_shape)
+    if gamma is None:
+        broadcast_gamma = None
+    else:
+        broadcast_gamma = tf.reshape(gamma, target_shape)
+    if beta is None:
+        broadcast_beta = None
+    else:
+        broadcast_beta = tf.reshape(beta, target_shape)
+
+    normed = tf.nn.batch_normalization(
+        x,
+        broadcast_mean,
+        broadcast_var,
+        broadcast_beta,
+        broadcast_gamma,
+        epsilon)
+    return normed, mean, var
+
+
+def _fused_normalize_batch_in_training(x, gamma, beta, reduction_axes,
+                                       epsilon=1e-3):
+    """Fused version of `normalize_batch_in_training`.
+
+    # Arguments
+        x: Input tensor or variable.
+        gamma: Tensor by which to scale the input.
+        beta: Tensor with which to center the input.
+        reduction_axes: iterable of integers,
+            axes over which to normalize.
+        epsilon: Fuzz factor.
+
+    # Returns
+        A tuple length of 3, `(normalized_tensor, mean, variance)`.
+    """
+    if list(reduction_axes) == [0, 1, 2]:
+        normalization_axis = 3
+        tf_data_format = 'NHWC'
+    else:
+        normalization_axis = 1
+        tf_data_format = 'NCHW'
+
+    if gamma is None:
+        gamma = tf.constant(1.0,
+                            dtype=x.dtype,
+                            shape=[x.get_shape()[normalization_axis]])
+    if beta is None:
+        beta = tf.constant(0.0,
+                           dtype=x.dtype,
+                           shape=[x.get_shape()[normalization_axis]])
+
+    return tf.nn.fused_batch_norm(
+        x,
+        gamma,
+        beta,
+        epsilon=epsilon,
+        data_format=tf_data_format)
+
+
 def normalize_batch_in_training(x, gamma, beta,
                                 reduction_axes, epsilon=1e-3):
     """Computes mean and std for batch then apply batch_normalization on batch.
@@ -1711,36 +1849,23 @@ def normalize_batch_in_training(x, gamma, beta,
     # Returns
         A tuple length of 3, `(normalized_tensor, mean, variance)`.
     """
-    mean, var = tf.nn.moments(x, reduction_axes,
-                              shift=None, name=None, keep_dims=False)
-    if sorted(reduction_axes) == list(range(ndim(x)))[:-1]:
-        normed = tf.nn.batch_normalization(x, mean, var,
-                                           beta, gamma,
-                                           epsilon)
+    if ndim(x) == 4 and list(reduction_axes) in [[0, 1, 2], [0, 2, 3]]:
+        if not _has_nchw_support() and list(reduction_axes) == [0, 2, 3]:
+            return _broadcast_normalize_batch_in_training(x, gamma, beta,
+                                                          reduction_axes,
+                                                          epsilon=epsilon)
+        return _fused_normalize_batch_in_training(
+            x, gamma, beta, reduction_axes,
+            epsilon=epsilon)
     else:
-        # need broadcasting
-        target_shape = []
-        for axis in range(ndim(x)):
-            if axis in reduction_axes:
-                target_shape.append(1)
-            else:
-                target_shape.append(tf.shape(x)[axis])
-        target_shape = tf.stack(target_shape)
-
-        broadcast_mean = tf.reshape(mean, target_shape)
-        broadcast_var = tf.reshape(var, target_shape)
-        if gamma is None:
-            broadcast_gamma = None
+        if sorted(reduction_axes) == list(range(ndim(x)))[:-1]:
+            return _regular_normalize_batch_in_training(x, gamma, beta,
+                                                        reduction_axes,
+                                                        epsilon=epsilon)
         else:
-            broadcast_gamma = tf.reshape(gamma, target_shape)
-        if beta is None:
-            broadcast_beta = None
-        else:
-            broadcast_beta = tf.reshape(beta, target_shape)
-        normed = tf.nn.batch_normalization(x, broadcast_mean, broadcast_var,
-                                           broadcast_beta, broadcast_gamma,
-                                           epsilon)
-    return normed, mean, var
+            return _broadcast_normalize_batch_in_training(x, gamma, beta,
+                                                          reduction_axes,
+                                                          epsilon=epsilon)
 
 
 def batch_normalization(x, mean, var, beta, gamma, epsilon=1e-3):
@@ -2347,11 +2472,21 @@ def print_tensor(x, message=''):
 class Function(object):
     """Runs a computation graph.
 
+    It's possible to pass arguments to `tf.Session.run()` via `session_kwargs`.
+    In particular additional operations via `fetches` argument and additional
+    tensor substitutions via `feed_dict` arguments. Note that given
+    substitutions are merged with substitutions from `inputs`. Even though
+    `feed_dict` is passed once in the constructor (called in `model.compile()`)
+    we can modify the values in the dictionary. Through this feed_dict we can
+    provide additional substitutions besides Keras inputs.
+
     # Arguments
         inputs: Feed placeholders to the computation graph.
         outputs: Output tensors to fetch.
         updates: Additional update ops to be run at function call.
         name: a name to help users identify what this function does.
+        session_kwargs: arguments to `tf.Session.run()`: `fetches`, `feed_dict`,
+        `options`, `run_metadata`
     """
 
     def __init__(self, inputs, outputs, updates=None, name=None, **session_kwargs):
@@ -2378,12 +2513,18 @@ class Function(object):
                     updates_ops.append(update)
             self.updates_op = tf.group(*updates_ops)
         self.name = name
+        # additional tensor substitutions
+        self.feed_dict = session_kwargs.pop('feed_dict', {})
+        # additional operations
+        self.fetches = session_kwargs.pop('fetches', [])
+        if not isinstance(self.fetches, list):
+            self.fetches = [self.fetches]
         self.session_kwargs = session_kwargs
 
     def __call__(self, inputs):
         if not isinstance(inputs, (list, tuple)):
             raise TypeError('`inputs` should be a list or tuple.')
-        feed_dict = {}
+        feed_dict = self.feed_dict.copy()
         for tensor, value in zip(self.inputs, inputs):
             if is_sparse(tensor):
                 sparse_coo = value.tocoo()
@@ -2391,9 +2532,9 @@ class Function(object):
                                           np.expand_dims(sparse_coo.col, 1)), 1)
                 value = (indices, sparse_coo.data, sparse_coo.shape)
             feed_dict[tensor] = value
+        fetches = self.outputs + [self.updates_op] + self.fetches
         session = get_session()
-        updated = session.run(self.outputs + [self.updates_op],
-                              feed_dict=feed_dict,
+        updated = session.run(fetches=fetches, feed_dict=feed_dict,
                               **self.session_kwargs)
         return updated[:len(self.outputs)]
 
@@ -2455,7 +2596,7 @@ def stop_gradient(variables):
 
 def rnn(step_function, inputs, initial_states,
         go_backwards=False, mask=None, constants=None,
-        unroll=False, input_length=None):
+        unroll=False, input_length=None, pos_extra_outputs_states=None):
     """Iterates over the time dimension of a tensor.
 
     # Arguments
@@ -2505,6 +2646,9 @@ def rnn(step_function, inputs, initial_states,
     ndim = len(inputs.get_shape())
     if ndim < 3:
         raise ValueError('Input should be at least 3D.')
+
+    # Transpose to time-major, i.e.
+    # from (batch, time, ...) to (time, batch, ...)
     axes = [1, 0] + list(range(2, ndim))
     inputs = tf.transpose(inputs, (axes))
 
@@ -2585,7 +2729,12 @@ def rnn(step_function, inputs, initial_states,
                 successive_outputs.append(output)
                 successive_states.append(states)
             last_output = successive_outputs[-1]
-            new_states = successive_states[-1]
+            if pos_extra_outputs_states is None:
+                new_states = successive_states[-1]
+            else:
+                new_states = [tf.stack(successive_states[i_s]) if i_s in pos_extra_outputs_states
+                              else successive_states[i_s][-1] for i_s, state in enumerate(successive_states)]
+
             outputs = tf.stack(successive_outputs)
 
     else:
@@ -2606,6 +2755,11 @@ def rnn(step_function, inputs, initial_states,
             tensor_array_name='input_ta')
         input_ta = input_ta.unstack(inputs)
         time = tf.constant(0, dtype='int32', name='time')
+        if pos_extra_outputs_states is not None:
+            states_ta = [tensor_array_ops.TensorArray(
+                dtype=outputs.dtype,
+                size=time_steps,
+                tensor_array_name='states_ta_' + str(i)) for i in pos_extra_outputs_states]
 
         if mask is not None:
             if not states:
@@ -2623,34 +2777,66 @@ def rnn(step_function, inputs, initial_states,
                 size=time_steps,
                 tensor_array_name='mask_ta')
             mask_ta = mask_ta.unstack(mask)
+            if pos_extra_outputs_states is not None:
+                def _step(time, output_ta_t, states_ta_t, *states):
+                    """RNN step function.
 
-            def _step(time, output_ta_t, *states):
-                """RNN step function.
+                    # Arguments
+                        time: Current timestep value.
+                        output_ta_t: TensorArray.
+                        *states: List of states.
 
-                # Arguments
-                    time: Current timestep value.
-                    output_ta_t: TensorArray.
-                    *states: List of states.
+                    # Returns
+                        Tuple: `(time + 1,output_ta_t) + tuple(new_states)`
+                    """
+                    current_input = input_ta.read(time)
+                    mask_t = mask_ta.read(time)
+                    output, new_states = step_function(current_input,
+                                                       tuple(states) +
+                                                       tuple(constants))
+                    if getattr(output, '_uses_learning_phase', False):
+                        global uses_learning_phase
+                        uses_learning_phase = True
 
-                # Returns
-                    Tuple: `(time + 1,output_ta_t) + tuple(new_states)`
-                """
-                current_input = input_ta.read(time)
-                mask_t = mask_ta.read(time)
-                output, new_states = step_function(current_input,
-                                                   tuple(states) +
-                                                   tuple(constants))
-                if getattr(output, '_uses_learning_phase', False):
-                    global uses_learning_phase
-                    uses_learning_phase = True
-                for state, new_state in zip(states, new_states):
-                    new_state.set_shape(state.get_shape())
-                tiled_mask_t = tf.tile(mask_t,
-                                       tf.stack([1, tf.shape(output)[1]]))
-                output = tf.where(tiled_mask_t, output, states[0])
-                new_states = [tf.where(tiled_mask_t, new_states[i], states[i]) for i in range(len(states))]
-                output_ta_t = output_ta_t.write(time, output)
-                return (time + 1, output_ta_t) + tuple(new_states)
+                    for state, new_state in zip(states, new_states):
+                        new_state.set_shape(state.get_shape())
+                    tiled_mask_t = tf.tile(mask_t,
+                                           tf.stack([1, tf.shape(output)[1]]))
+                    output = tf.where(tiled_mask_t, output, states[0])
+                    tiled_masks_t = [tf.tile(mask_t, tf.stack([1, tf.shape(states[i])[1]])) for i in range(len(states))]
+                    new_states = [tf.where(tiled_masks_t[i], new_states[i], states[i]) for i in range(len(states))]
+                    for i in pos_extra_outputs_states:
+                        states_ta_t[i - len(pos_extra_outputs_states)] = states_ta_t[i - len(pos_extra_outputs_states)].write(time, new_states[i])
+                    output_ta_t = output_ta_t.write(time, output)
+                    return (time + 1, output_ta_t, states_ta_t) + tuple(new_states)
+            else:
+                def _step(time, output_ta_t, *states):
+                    """RNN step function.
+
+                    # Arguments
+                        time: Current timestep value.
+                        output_ta_t: TensorArray.
+                        *states: List of states.
+
+                    # Returns
+                        Tuple: `(time + 1,output_ta_t) + tuple(new_states)`
+                    """
+                    current_input = input_ta.read(time)
+                    mask_t = mask_ta.read(time)
+                    output, new_states = step_function(current_input,
+                                                       tuple(states) +
+                                                       tuple(constants))
+                    if getattr(output, '_uses_learning_phase', False):
+                        global uses_learning_phase
+                        uses_learning_phase = True
+                    for state, new_state in zip(states, new_states):
+                        new_state.set_shape(state.get_shape())
+                    tiled_mask_t = tf.tile(mask_t,
+                                           tf.stack([1, tf.shape(output)[1]]))
+                    output = tf.where(tiled_mask_t, output, states[0])
+                    new_states = [tf.where(tiled_mask_t, new_states[i], states[i]) for i in range(len(states))]
+                    output_ta_t = output_ta_t.write(time, output)
+                    return (time + 1, output_ta_t) + tuple(new_states)
         else:
             def _step(time, output_ta_t, *states):
                 """RNN step function.
@@ -2674,22 +2860,42 @@ def rnn(step_function, inputs, initial_states,
                     new_state.set_shape(state.get_shape())
                 output_ta_t = output_ta_t.write(time, output)
                 return (time + 1, output_ta_t) + tuple(new_states)
-
+        loop_vars = (time, output_ta, states_ta) + states if pos_extra_outputs_states is not None\
+            else (time, output_ta) + states
         final_outputs = control_flow_ops.while_loop(
             cond=lambda time, *_: time < time_steps,
             body=_step,
-            loop_vars=(time, output_ta) + states,
+            loop_vars=loop_vars,
             parallel_iterations=32,
             swap_memory=True)
         last_time = final_outputs[0]
         output_ta = final_outputs[1]
-        new_states = final_outputs[2:]
+
+        if pos_extra_outputs_states is not None:
+            non_extra_states = [final_outputs[i + 3] for i in range(len(final_outputs[3:]))
+                                if i not in pos_extra_outputs_states]
+            states = non_extra_states + final_outputs[2]
+        else:
+            new_states = final_outputs[2:]
+        if pos_extra_outputs_states is not None:
+            new_states = []
+            for i_s, state in enumerate(states):
+                if i_s in pos_extra_outputs_states: # This +1 accounts for the last_output
+                    new_states.append(state.stack())
+                else:
+                    new_states.append(state)
 
         outputs = output_ta.stack()
         last_output = output_ta.read(last_time - 1)
-
     axes = [1, 0] + list(range(2, len(outputs.get_shape())))
     outputs = tf.transpose(outputs, axes)
+
+
+    # if pos_extra_outputs_states is not None:
+    #     for state_n in pos_extra_outputs_states:
+    #         axes = [1, 0] + list(range(2, len(new_states[state_n].get_shape())))
+    #         new_states[state_n] = tf.transpose(new_states[state_n], axes)
+
     last_output._uses_learning_phase = uses_learning_phase
     return last_output, outputs, new_states
 
@@ -2972,8 +3178,9 @@ def sparse_categorical_crossentropy(target, output, from_logits=False):
     res = tf.nn.sparse_softmax_cross_entropy_with_logits(
         labels=targets,
         logits=logits)
-    if len(output_shape) == 3:
-        # if our output includes timesteps we need to reshape
+    if len(output_shape) >= 3:
+        # if our output includes timestep dimension
+        # or spatial dimensions we need to reshape
         return tf.reshape(res, tf.shape(output)[:-1])
     else:
         return res
@@ -3124,25 +3331,6 @@ def in_top_k(predictions, targets, k):
 
 # CONVOLUTIONS
 
-def _preprocess_deconv3d_output_shape(x, shape, data_format):
-    """Get the output_shape for the 3D deconvolution.
-
-    # Arguments
-        x: input tensor.
-        shape: output shape.
-        data_format: string, `"channels_last"` or `"channels_first"`.
-
-    # Returns
-        The output shape.
-    """
-    if data_format == 'channels_first':
-        shape = (shape[0], shape[2], shape[3], shape[4], shape[1])
-
-    if shape[0] is None:
-        shape = (tf.shape(x)[0], ) + tuple(shape[1:])
-        shape = tf.stack(list(shape))
-    return shape
-
 
 def _preprocess_conv2d_input(x, data_format):
     """Transpose and cast the input before the conv2d.
@@ -3221,7 +3409,15 @@ def conv1d(x, kernel, strides=1, padding='valid',
 
     # Returns
         A tensor, result of 1D convolution.
+
+    # Raises
+        ValueError: if `data_format` is neither `channels_last` or `channels_first`.
     """
+    if data_format is None:
+        data_format = image_data_format()
+    if data_format not in {'channels_first', 'channels_last'}:
+        raise ValueError('Unknown data_format ' + str(data_format))
+
     kernel_shape = kernel.get_shape().as_list()
     if padding == 'causal':
         # causal (dilated) convolution:
@@ -3650,7 +3846,11 @@ def bias_add(x, bias, data_format=None):
     elif ndim(x) == 4:
         if data_format == 'channels_first':
             if len(bias_shape) == 1:
-                x += reshape(bias, (1, bias_shape[0], 1, 1))
+                if _has_nchw_support():
+                    x = tf.nn.bias_add(x, bias,
+                                       data_format='NCHW')
+                else:
+                    x += reshape(bias, (1, bias_shape[0], 1, 1))
             else:
                 x += reshape(bias, (1, bias_shape[2]) + bias_shape[:2])
         elif data_format == 'channels_last':
@@ -3863,7 +4063,7 @@ def ctc_batch_cost(y_true, y_pred, input_length, label_length):
     input_length = tf.to_int32(tf.squeeze(input_length))
     sparse_labels = tf.to_int32(ctc_label_dense_to_sparse(y_true, label_length))
 
-    y_pred = tf.log(tf.transpose(y_pred, perm=[1, 0, 2]) + 1e-8)
+    y_pred = tf.log(tf.transpose(y_pred, perm=[1, 0, 2]) + epsilon())
 
     return tf.expand_dims(ctc.ctc_loss(inputs=y_pred,
                                        labels=sparse_labels,
@@ -3899,7 +4099,7 @@ def ctc_decode(y_pred, input_length, greedy=True, beam_width=100,
             Tensor `(top_paths, )` that contains
                 the log probability of each decoded sequence.
     """
-    y_pred = tf.log(tf.transpose(y_pred, perm=[1, 0, 2]) + 1e-8)
+    y_pred = tf.log(tf.transpose(y_pred, perm=[1, 0, 2]) + epsilon())
     input_length = tf.to_int32(input_length)
 
     if greedy:

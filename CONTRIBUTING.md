@@ -48,6 +48,8 @@ You can also use Github issues to request features you would like to see in Kera
 1. **Keras improvements and bugfixes** go to the [Keras `master` branch](https://github.com/fchollet/keras/tree/master).
 2. **Experimental new features** such as layers and datasets go to [keras-contrib](https://github.com/farizrahman4u/keras-contrib). Unless it is a new feature listed in [Requests for Contributions](https://github.com/fchollet/keras/projects/1), in which case it belongs in core Keras. If you think your feature belongs in core Keras, you can submit a design doc to explain your feature and argue for it (see explanations below).
 
+Please note that PRs that are primarily about **code style** (as opposed to fixing bugs, improving docs, or adding new functionality) will likely be rejected.
+
 Here's a quick guide to submitting your improvements:
 
 1. If your PR introduces a change in functionality, make sure you start by writing a design doc and sending it to the Keras mailing list to discuss whether the change should be made, and how to handle it. This will save you from having your PR closed down the road! Of course, if your PR is a simple bug fix, you don't need to do that. The process for writing and submitting design docs is as follow:
@@ -74,15 +76,15 @@ Here's a quick guide to submitting your improvements:
     - with the CNTK backend, on Python 2.7 and Python 3.5. Make sure you have the development version of CNTK.
 
 7. We use PEP8 syntax conventions, but we aren't dogmatic when it comes to line length. Make sure your lines stay reasonably sized, though. To make your life easier, we recommend running a PEP8 linter:
-  - Install PEP8 packages: `pip install pep8 pytest-pep8 autopep8`
-  - Run a standalone PEP8 check: `py.test --pep8 -m pep8`
-  - You can automatically fix some PEP8 error by running: `autopep8 -i --select <errors> <FILENAME>` for example: `autopep8 -i --select E128 tests/keras/backend/test_backends.py`
+    - Install PEP8 packages: `pip install pep8 pytest-pep8 autopep8`
+    - Run a standalone PEP8 check: `py.test --pep8 -m pep8`
+    - You can automatically fix some PEP8 error by running: `autopep8 -i --select <errors> <FILENAME>` for example: `autopep8 -i --select E128 tests/keras/backend/test_backends.py`
 
-8. When committing, use appropriate, descriptive commit messages. Make sure that your branch history is not a string of "bug fix", "fix", "oops", etc. When submitting your PR, squash your commits into a single commit with an appropriate commit message, to make sure the project history stays clean and readable. See ['rebase and squash'](http://rebaseandsqua.sh/) for technical help on how to squash your commits.
+8. When committing, use appropriate, descriptive commit messages.
 
 9. Update the documentation. If introducing new functionality, make sure you include code snippets demonstrating the usage of your new feature.
 
-10. Submit your PR. If your changes have been approved in a previous discussion, and if you have complete (and passing) unit tests as well as proper docstrings/documentation, your PR is likely to be merged promptly. Otherwise, well...
+10. Submit your PR. If your changes have been approved in a previous discussion, and if you have complete (and passing) unit tests as well as proper docstrings/documentation, your PR is likely to be merged promptly.
 
 ---
 
