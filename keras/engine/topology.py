@@ -273,7 +273,11 @@ class Layer(object):
                           'trainable',
                           'weights',
                           'input_dtype',  # legacy
-                          'kernel_regularizer'
+                          'kernel_regularizer',
+                          'kernel_initializer', ##
+                          'recurrent_activation',
+                          'recurrent_initializer',
+                          'unit_forget_bias'
                           }
         for kwarg in kwargs:
             if kwarg not in allowed_kwargs:
