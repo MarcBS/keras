@@ -833,8 +833,8 @@ class SimpleRNNCell(Layer):
         self.recurrent_constraint = constraints.get(recurrent_constraint)
         self.bias_constraint = constraints.get(bias_constraint)
 
-        self.dropout = min(1., max(0., dropout))
-        self.recurrent_dropout = min(1., max(0., recurrent_dropout))
+        self.dropout = min(1., max(0., dropout)) if dropout is not None else 0.
+        self.recurrent_dropout = min(1., max(0., recurrent_dropout)) if recurrent_dropout is not None else 0.
         self.state_size = self.units
         self._dropout_mask = None
         self._recurrent_dropout_mask = None
@@ -987,6 +987,8 @@ class SimpleRNN(RNN):
             warnings.warn('The `implementation` argument '
                           'in `SimpleRNN` has been deprecated. '
                           'Please remove it from your layer call.')
+        dropout = 0. if dropout is None else dropout
+        recurrent_dropout = 0. if recurrent_dropout is None else recurrent_dropout
         if K.backend() == 'theano' and dropout + recurrent_dropout > 0.:
             warnings.warn(
                 'RNN dropout is no longer supported with the Theano backend '
@@ -1195,8 +1197,8 @@ class GRUCell(Layer):
         self.recurrent_constraint = constraints.get(recurrent_constraint)
         self.bias_constraint = constraints.get(bias_constraint)
 
-        self.dropout = min(1., max(0., dropout))
-        self.recurrent_dropout = min(1., max(0., recurrent_dropout))
+        self.dropout = min(1., max(0., dropout))  if dropout is not None else 0.
+        self.recurrent_dropout = min(1., max(0., recurrent_dropout))  if recurrent_dropout is not None else 0.
         self.implementation = implementation
         self.state_size = self.units
         self._dropout_mask = None
@@ -1432,6 +1434,8 @@ class GRU(RNN):
             warnings.warn('`implementation=0` has been deprecated, '
                           'and now defaults to `implementation=2`.'
                           'Please update your layer call.')
+        dropout = 0. if dropout is None else dropout
+        recurrent_dropout = 0. if recurrent_dropout is None else recurrent_dropout
         if K.backend() == 'theano' and dropout + recurrent_dropout > 0.:
             warnings.warn(
                 'RNN dropout is no longer supported with the Theano backend '
@@ -1696,9 +1700,9 @@ class GRUCond(Recurrent):
         self.bias_constraint = constraints.get(bias_constraint)
 
         # Dropouts
-        self.dropout = min(1., max(0., dropout))
-        self.recurrent_dropout = min(1., max(0., recurrent_dropout))
-        self.conditional_dropout = min(1., max(0., conditional_dropout))
+        self.dropout = min(1., max(0., dropout)) if dropout is not None else 0.
+        self.recurrent_dropout = min(1., max(0., recurrent_dropout)) if recurrent_dropout is not None else 0.
+        self.conditional_dropout = min(1., max(0., conditional_dropout)) if conditional_dropout is not None else 0.
         self.num_inputs = num_inputs
         self.input_spec = [InputSpec(ndim=3), InputSpec(ndim=3)]
         for _ in range(len(self.input_spec), self.num_inputs):
@@ -2153,9 +2157,9 @@ class AttGRU(Recurrent):
         self.bias_ca_constraint = constraints.get(bias_ca_constraint)
 
         # Dropouts
-        self.dropout = min(1., max(0., dropout))
-        self.recurrent_dropout = min(1., max(0., recurrent_dropout))
-        self.attention_dropout = min(1., max(0., attention_dropout))
+        self.dropout = min(1., max(0., dropout)) if dropout is not None else 0.
+        self.recurrent_dropout = min(1., max(0., recurrent_dropout)) if recurrent_dropout is not None else 0.
+        self.attention_dropout = min(1., max(0., attention_dropout)) if attention_dropout is not None else 0.
         self.num_inputs = num_inputs
         self.input_spec = [InputSpec(ndim=3)]
         for _ in range(len(self.input_spec), self.num_inputs):
@@ -2662,10 +2666,10 @@ class AttGRUCond(Recurrent):
         self.bias_ca_constraint = constraints.get(bias_ca_constraint)
 
         # Dropouts
-        self.dropout = min(1., max(0., dropout))
-        self.recurrent_dropout = min(1., max(0., recurrent_dropout))
-        self.conditional_dropout = min(1., max(0., conditional_dropout))
-        self.attention_dropout = min(1., max(0., attention_dropout))
+        self.dropout = min(1., max(0., dropout))  if dropout is not None else 0.
+        self.recurrent_dropout = min(1., max(0., recurrent_dropout))  if recurrent_dropout is not None else 0.
+        self.conditional_dropout = min(1., max(0., conditional_dropout))  if conditional_dropout is not None else 0.
+        self.attention_dropout = min(1., max(0., attention_dropout)) if attention_dropout is not None else 0.
         self.num_inputs = num_inputs
         self.input_spec = [InputSpec(ndim=3), InputSpec(ndim=3)]
         for _ in range(len(self.input_spec), self.num_inputs):
@@ -3221,10 +3225,10 @@ class AttConditionalGRUCond(Recurrent):
         self.bias_ca_constraint = constraints.get(bias_ca_constraint)
 
         # Dropouts
-        self.dropout = min(1., max(0., dropout))
-        self.recurrent_dropout = min(1., max(0., recurrent_dropout))
-        self.conditional_dropout = min(1., max(0., conditional_dropout))
-        self.attention_dropout = min(1., max(0., attention_dropout))
+        self.dropout = min(1., max(0., dropout)) if dropout is not None else 0.
+        self.recurrent_dropout = min(1., max(0., recurrent_dropout)) if recurrent_dropout is not None else 0.
+        self.conditional_dropout = min(1., max(0., conditional_dropout)) if conditional_dropout is not None else 0.
+        self.attention_dropout = min(1., max(0., attention_dropout)) if attention_dropout is not None else 0.
         self.num_inputs = num_inputs
         self.input_spec = [InputSpec(ndim=3), InputSpec(ndim=3)]
         for _ in range(len(self.input_spec), self.num_inputs):
@@ -3731,8 +3735,8 @@ class LSTMCell(Layer):
         self.recurrent_constraint = constraints.get(recurrent_constraint)
         self.bias_constraint = constraints.get(bias_constraint)
 
-        self.dropout = min(1., max(0., dropout))
-        self.recurrent_dropout = min(1., max(0., recurrent_dropout))
+        self.dropout = min(1., max(0., dropout)) if dropout is not None else 0.
+        self.recurrent_dropout = min(1., max(0., recurrent_dropout)) if recurrent_dropout is not None else 0.
         self.implementation = implementation
         self.state_size = (self.units, self.units)
         self._dropout_mask = None
@@ -3991,6 +3995,8 @@ class LSTM(RNN):
             warnings.warn('`implementation=0` has been deprecated, '
                           'and now defaults to `implementation=2`.'
                           'Please update your layer call.')
+        dropout = 0. if dropout is None else dropout
+        recurrent_dropout = 0. if recurrent_dropout is None else recurrent_dropout
         if K.backend() == 'theano' and dropout + recurrent_dropout > 0.:
             warnings.warn(
                 'RNN dropout is no longer supported with the Theano backend '
@@ -4261,9 +4267,9 @@ class LSTMCond(Recurrent):
         self.bias_ca_constraint = constraints.get(bias_ca_constraint)
 
         # Dropouts
-        self.dropout = min(1., max(0., dropout))
-        self.recurrent_dropout = min(1., max(0., recurrent_dropout))
-        self.conditional_dropout = min(1., max(0., conditional_dropout))
+        self.dropout = min(1., max(0., dropout))if dropout is not None else 0.
+        self.recurrent_dropout = min(1., max(0., recurrent_dropout))if recurrent_dropout is not None else 0.
+        self.conditional_dropout = min(1., max(0., conditional_dropout))if conditional_dropout is not None else 0.
         self.num_inputs = num_inputs
         self.input_spec = [InputSpec(ndim=3), InputSpec(ndim=2)]
         for _ in range(len(self.input_spec), self.num_inputs):
@@ -4741,9 +4747,9 @@ class AttLSTM(Recurrent):
         self.bias_ca_constraint = constraints.get(bias_ca_constraint)
 
         # Dropouts
-        self.dropout = min(1., max(0., dropout))
-        self.recurrent_dropout = min(1., max(0., recurrent_dropout))
-        self.attention_dropout = min(1., max(0., attention_dropout))
+        self.dropout = min(1., max(0., dropout))if dropout is not None else 0.
+        self.recurrent_dropout = min(1., max(0., recurrent_dropout))if recurrent_dropout is not None else 0.
+        self.attention_dropout = min(1., max(0., attention_dropout))if attention_dropout is not None else 0.
         self.num_inputs = num_inputs
         self.input_spec = [InputSpec(ndim=3)]
         for _ in range(len(self.input_spec), self.num_inputs):
@@ -5268,10 +5274,10 @@ class AttLSTMCond(Recurrent):
         self.bias_ca_constraint = constraints.get(bias_ca_constraint)
 
         # Dropouts
-        self.dropout = min(1., max(0., dropout))
-        self.recurrent_dropout = min(1., max(0., recurrent_dropout))
-        self.conditional_dropout = min(1., max(0., conditional_dropout))
-        self.attention_dropout = min(1., max(0., attention_dropout))
+        self.dropout = min(1., max(0., dropout)) if dropout is not None else 0.
+        self.recurrent_dropout = min(1., max(0., recurrent_dropout)) if recurrent_dropout is not None else 0.
+        self.conditional_dropout = min(1., max(0., conditional_dropout)) if conditional_dropout is not None else 0.
+        self.attention_dropout = min(1., max(0., attention_dropout)) if attention_dropout is not None else 0.
         self.num_inputs = num_inputs
         self.input_spec = [InputSpec(ndim=3), InputSpec(ndim=3)]
         for _ in range(len(self.input_spec), self.num_inputs):
@@ -5849,10 +5855,10 @@ class AttConditionalLSTMCond(Recurrent):
         self.bias_ca_constraint = constraints.get(bias_ca_constraint)
 
         # Dropouts
-        self.dropout = min(1., max(0., dropout))
-        self.recurrent_dropout = min(1., max(0., recurrent_dropout))
-        self.conditional_dropout = min(1., max(0., conditional_dropout))
-        self.attention_dropout = min(1., max(0., attention_dropout))
+        self.dropout = min(1., max(0., dropout))if dropout is not None else 0.
+        self.recurrent_dropout = min(1., max(0., recurrent_dropout))if recurrent_dropout is not None else 0.
+        self.conditional_dropout = min(1., max(0., conditional_dropout))if conditional_dropout is not None else 0.
+        self.attention_dropout = min(1., max(0., attention_dropout))if attention_dropout is not None else 0.
 
         # Inputs
         self.num_inputs = num_inputs
