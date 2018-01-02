@@ -1667,6 +1667,7 @@ class GRUCond(Recurrent):
                  recurrent_dropout=0.,
                  conditional_dropout=0.,
                  num_inputs=4,
+                 static_ctx=False,
                  **kwargs):
 
         super(GRUCond, self).__init__(**kwargs)
@@ -1705,6 +1706,10 @@ class GRUCond(Recurrent):
         self.conditional_dropout = min(1., max(0., conditional_dropout)) if conditional_dropout is not None else 0.
         self.num_inputs = num_inputs
         self.input_spec = [InputSpec(ndim=3), InputSpec(ndim=3)]
+        if static_ctx:
+            self.input_spec = [InputSpec(ndim=3), InputSpec(ndim=2)]
+        else:
+            self.input_spec = [InputSpec(ndim=3), InputSpec(ndim=3)]
         for _ in range(len(self.input_spec), self.num_inputs):
             self.input_spec.append(InputSpec(ndim=2))
 
@@ -4226,6 +4231,7 @@ class LSTMCond(Recurrent):
                  recurrent_dropout=0.,
                  conditional_dropout=0.,
                  num_inputs=4,
+                 static_ctx=False,
                  **kwargs):
 
         super(LSTMCond, self).__init__(**kwargs)
@@ -4271,7 +4277,11 @@ class LSTMCond(Recurrent):
         self.recurrent_dropout = min(1., max(0., recurrent_dropout))if recurrent_dropout is not None else 0.
         self.conditional_dropout = min(1., max(0., conditional_dropout))if conditional_dropout is not None else 0.
         self.num_inputs = num_inputs
-        self.input_spec = [InputSpec(ndim=3), InputSpec(ndim=2)]
+        if static_ctx:
+            self.input_spec = [InputSpec(ndim=3), InputSpec(ndim=2)]
+        else:
+            self.input_spec = [InputSpec(ndim=3), InputSpec(ndim=3)]
+
         for _ in range(len(self.input_spec), self.num_inputs):
             self.input_spec.append(InputSpec(ndim=2))
 
