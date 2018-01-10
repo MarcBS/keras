@@ -1,4 +1,9 @@
+"""Built-in optimizer classes.
+"""
 from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
 import six
 import copy
 from six.moves import zip
@@ -591,7 +596,7 @@ class Adam(Optimizer):
         if self.amsgrad:
             vhats = [K.zeros(K.int_shape(p), dtype=K.dtype(p)) for p in params]
         else:
-            vhats = [None for p in params]
+            vhats = [K.zeros(1) for _ in params]
         self.weights = [self.iterations] + ms + vs + vhats
 
         for p, g, m, v, vhat, lmul in zip(params, grads, ms, vs, vhats, learning_rate_multipliers):

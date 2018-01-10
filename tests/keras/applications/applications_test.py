@@ -311,6 +311,90 @@ def test_mobilenet_image_size():
 
 
 @keras_test
+@pytest.mark.parametrize('fun', [
+    applications.DenseNet121,
+    applications.DenseNet169,
+    applications.DenseNet201],
+    ids=['DenseNet121', 'DenseNet169', 'DenseNet201'])
+def test_densenet(fun):
+    def target(queue):
+        model = fun(weights=None)
+        queue.put(model.output_shape)
+    queue = Queue()
+    p = Process(target=target, args=(queue,))
+    p.start()
+    p.join()
+    assert not queue.empty(), 'Model creation failed.'
+    model_output_shape = queue.get_nowait()
+    assert model_output_shape == (None, 1000)
+
+
+@keras_test
+@pytest.mark.parametrize('fun,dim', [
+    (applications.DenseNet121, 1024),
+    (applications.DenseNet169, 1664),
+    (applications.DenseNet201, 1920)],
+    ids=['DenseNet121', 'DenseNet169', 'DenseNet201'])
+def test_densenet_no_top(fun, dim):
+    def target(queue):
+        model = fun(weights=None, include_top=False)
+        queue.put(model.output_shape)
+    queue = Queue()
+    p = Process(target=target, args=(queue,))
+    p.start()
+    p.join()
+    assert not queue.empty(), 'Model creation failed.'
+    model_output_shape = queue.get_nowait()
+    assert model_output_shape == (None, None, None, dim)
+
+
+@keras_test
+@pytest.mark.parametrize('fun,dim', [
+    (applications.DenseNet121, 1024),
+    (applications.DenseNet169, 1664),
+    (applications.DenseNet201, 1920)],
+    ids=['DenseNet121', 'DenseNet169', 'DenseNet201'])
+def test_densenet_pooling(fun, dim):
+    def target(queue):
+        model = fun(weights=None, include_top=False, pooling='avg')
+        queue.put(model.output_shape)
+    queue = Queue()
+    p = Process(target=target, args=(queue,))
+    p.start()
+    p.join()
+    assert not queue.empty(), 'Model creation failed.'
+    model_output_shape = queue.get_nowait()
+    assert model_output_shape == (None, None, None, dim)
+
+
+@keras_test
+@pytest.mark.parametrize('fun,dim', [
+    (applications.DenseNet121, 1024),
+    (applications.DenseNet169, 1664),
+    (applications.DenseNet201, 1920)],
+    ids=['DenseNet121', 'DenseNet169', 'DenseNet201'])
+def test_densenet_variable_input_channels(fun, dim):
+    def target(queue, input_shape):
+        model = fun(weights=None, include_top=False, input_shape=input_shape)
+        queue.put(model.output_shape)
+
+    queue = Queue()
+    p = Process(target=target, args=(queue, (None, None, 1)))
+    p.start()
+    p.join()
+    assert not queue.empty(), 'Model creation failed.'
+    model_output_shape = queue.get_nowait()
+    assert model_output_shape == (None, None, None, dim)
+
+    p = Process(target=target, args=(queue, (None, None, 4)))
+    p.start()
+    p.join()
+    assert not queue.empty(), 'Model creation failed.'
+    model_output_shape = queue.get_nowait()
+    assert model_output_shape == (None, None, None, dim)
+
+
+@keras_test
 @pytest.mark.skipif((K.backend() != 'tensorflow'),
                     reason='NASNets are supported only on TensorFlow')
 def test_nasnet():

@@ -1,4 +1,7 @@
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import print_function
+
 import cntk as C
 import numpy as np
 from .common import floatx, epsilon, image_dim_ordering, image_data_format
@@ -1502,6 +1505,11 @@ def conv2d(x, kernel, strides=(1, 1), padding='valid',
     return _postprocess_conv2d_output(x, data_format)
 
 
+def separable_conv1d(x, depthwise_kernel, pointwise_kernel, strides=1,
+                     padding='valid', data_format=None, dilation_rate=1):
+    raise NotImplementedError
+
+
 def separable_conv2d(x, depthwise_kernel, pointwise_kernel, strides=(1, 1),
                      padding='valid', data_format=None, dilation_rate=(1, 1)):
     raise NotImplementedError
@@ -2002,8 +2010,8 @@ def spatial_3d_padding(x, padding=((1, 1), (1, 1), (1, 1)), data_format=None):
     return x
 
 
-def one_hot(indices, nb_classes):
-    return C.one_hot(indices, nb_classes)
+def one_hot(indices, num_classes):
+    return C.one_hot(indices, num_classes)
 
 
 def get_value(x):

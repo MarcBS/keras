@@ -1,25 +1,28 @@
 # -*- coding: utf-8 -*-
+"""Core Keras layers.
+"""
 from __future__ import absolute_import
 from __future__ import division
+from __future__ import print_function
+
+import numpy as np
 
 import copy
 import types as python_types
 import warnings
 
-import numpy as np
-
-from .. import activations
 from .. import backend as K
-from .. import constraints
+from .. import activations
 from .. import initializers
 from .. import regularizers
+from .. import constraints
 from ..engine import InputSpec
 from ..engine import Layer
-from ..legacy import interfaces
-from ..utils.generic_utils import deserialize_keras_object
 from ..utils.generic_utils import func_dump
 from ..utils.generic_utils import func_load
+from ..utils.generic_utils import deserialize_keras_object
 from ..utils.generic_utils import has_arg
+from ..legacy import interfaces
 
 
 class Masking(Layer):
@@ -67,6 +70,9 @@ class Masking(Layer):
         config = {'mask_value': self.mask_value}
         base_config = super(Masking, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
 
 
 class Dropout(Layer):
@@ -125,6 +131,9 @@ class Dropout(Layer):
                   'seed': self.seed}
         base_config = super(Dropout, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
 
 
 class GuidedDropout(Layer):
@@ -347,6 +356,9 @@ class Activation(Layer):
         base_config = super(Activation, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
 
 class Reshape(Layer):
     """Reshapes an output to a certain shape.
@@ -565,9 +577,9 @@ class Flatten(Layer):
             raise ValueError('The shape of the input to "Flatten" '
                              'is not fully defined '
                              '(got ' + str(input_shape[1:]) + '. '
-                                                              'Make sure to pass a complete "input_shape" '
-                                                              'or "batch_input_shape" argument to the first '
-                                                              'layer in your model.')
+                             'Make sure to pass a complete "input_shape" '
+                             'or "batch_input_shape" argument to the first '
+                             'layer in your model.')
         return (input_shape[0], np.prod(input_shape[1:]))
 
     def call(self, inputs):
@@ -715,8 +727,7 @@ class Lambda(Layer):
 
     @interfaces.legacy_lambda_support
     def __init__(self, function, output_shape=None,
-                 mask=None, arguments=None,
-                 supports_masking=True, **kwargs):
+                 mask=None, arguments=None, **kwargs):
         super(Lambda, self).__init__(**kwargs)
         self.function = function
         self.arguments = arguments if arguments else {}
@@ -1047,6 +1058,9 @@ class ActivityRegularization(Layer):
                   'l2': self.l2}
         base_config = super(ActivityRegularization, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
 
 
 class MaskedMean(Layer):

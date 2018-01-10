@@ -1,3 +1,7 @@
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
 import tensorflow as tf
 from tensorflow.python.training import moving_averages
 from tensorflow.python.ops import tensor_array_ops
@@ -92,7 +96,9 @@ def clear_session():
     tf.reset_default_graph()
     reset_uids()
     _SESSION = None
-    phase = tf.placeholder(dtype='bool', name='keras_learning_phase')
+    phase = tf.placeholder_with_default(False,
+                                        shape=(),
+                                        name='keras_learning_phase')
     _GRAPH_LEARNING_PHASES = {}
     _GRAPH_LEARNING_PHASES[tf.get_default_graph()] = phase
 
@@ -125,8 +131,9 @@ def learning_phase():
     """
     graph = tf.get_default_graph()
     if graph not in _GRAPH_LEARNING_PHASES:
-        phase = tf.placeholder(dtype='bool',
-                               name='keras_learning_phase')
+        phase = tf.placeholder_with_default(False,
+                                            shape=(),
+                                            name='keras_learning_phase')
         _GRAPH_LEARNING_PHASES[graph] = phase
     return _GRAPH_LEARNING_PHASES[graph]
 
@@ -1013,7 +1020,7 @@ def moving_average_update(x, value, momentum):
         An operation to update the variable.
     """
     return moving_averages.assign_moving_average(
-        x, value, momentum, zero_debias=False)
+        x, value, momentum, zero_debias=True)
 
 
 # LINEAR ALGEBRA
@@ -1252,7 +1259,7 @@ def max(x, axis=None, keepdims=False):
     # Returns
         A tensor with maximum values of `x`.
     """
-    return tf.reduce_max(x, axis=axis, keep_dims=keepdims)
+    return tf.reduce_max(x, axis, keepdims)
 
 
 def min(x, axis=None, keepdims=False):
@@ -1269,7 +1276,7 @@ def min(x, axis=None, keepdims=False):
     # Returns
         A tensor with miminum values of `x`.
     """
-    return tf.reduce_min(x, axis=axis, keep_dims=keepdims)
+    return tf.reduce_min(x, axis, keepdims)
 
 
 def sum(x, axis=None, keepdims=False):
@@ -1286,7 +1293,7 @@ def sum(x, axis=None, keepdims=False):
     # Returns
         A tensor with sum of `x`.
     """
-    return tf.reduce_sum(x, axis=axis, keep_dims=keepdims)
+    return tf.reduce_sum(x, axis, keepdims)
 
 
 def prod(x, axis=None, keepdims=False):
@@ -1303,7 +1310,7 @@ def prod(x, axis=None, keepdims=False):
     # Returns
         A tensor with the product of elements of `x`.
     """
-    return tf.reduce_prod(x, axis=axis, keep_dims=keepdims)
+    return tf.reduce_prod(x, axis, keepdims)
 
 
 def cumsum(x, axis=0):
@@ -1348,11 +1355,11 @@ def var(x, axis=None, keepdims=False):
     """
     if x.dtype.base_dtype == tf.bool:
         x = tf.cast(x, floatx())
-    m = tf.reduce_mean(x, axis=axis, keep_dims=True)
+    m = tf.reduce_mean(x, axis, True)
     devs_squared = tf.square(x - m)
     return tf.reduce_mean(devs_squared,
-                          axis=axis,
-                          keep_dims=keepdims)
+                          axis,
+                          keepdims)
 
 
 def std(x, axis=None, keepdims=False):
@@ -1380,7 +1387,7 @@ def mean(x, axis=None, keepdims=False):
         axis: A list of integer. Axes to compute the mean.
         keepdims: A boolean, whether to keep the dimensions or not.
             If `keepdims` is `False`, the rank of the tensor is reduced
-            by 1 for each entry in `axis`. If `keep_dims` is `True`,
+            by 1 for each entry in `axis`. If `keepdims` is `True`,
             the reduced dimensions are retained with length 1.
 
     # Returns
@@ -1388,7 +1395,7 @@ def mean(x, axis=None, keepdims=False):
     """
     if x.dtype.base_dtype == tf.bool:
         x = tf.cast(x, floatx())
-    return tf.reduce_mean(x, axis=axis, keep_dims=keepdims)
+    return tf.reduce_mean(x, axis, keepdims)
 
 
 def any(x, axis=None, keepdims=False):
@@ -1403,7 +1410,7 @@ def any(x, axis=None, keepdims=False):
         A uint8 tensor (0s and 1s).
     """
     x = tf.cast(x, tf.bool)
-    return tf.reduce_any(x, axis=axis, keep_dims=keepdims)
+    return tf.reduce_any(x, axis, keepdims)
 
 
 def all(x, axis=None, keepdims=False):
@@ -1418,7 +1425,7 @@ def all(x, axis=None, keepdims=False):
         A uint8 tensor (0s and 1s).
     """
     x = tf.cast(x, tf.bool)
-    return tf.reduce_all(x, axis=axis, keep_dims=keepdims)
+    return tf.reduce_all(x, axis, keepdims)
 
 
 def argmax(x, axis=-1):
@@ -1536,7 +1543,7 @@ def logsumexp(x, axis=None, keepdims=False):
     # Returns
         The reduced tensor.
     """
-    return tf.reduce_logsumexp(x, axis=axis, keep_dims=keepdims)
+    return tf.reduce_logsumexp(x, axis, keepdims)
 
 
 def round(x):
@@ -1742,7 +1749,7 @@ def _regular_normalize_batch_in_training(x, gamma, beta,
         A tuple length of 3, `(normalized_tensor, mean, variance)`.
     """
     mean, var = tf.nn.moments(x, reduction_axes,
-                              shift=None, name=None, keep_dims=False)
+                              None, None, False)
     normed = tf.nn.batch_normalization(x, mean, var,
                                        beta, gamma,
                                        epsilon)
@@ -1765,7 +1772,7 @@ def _broadcast_normalize_batch_in_training(x, gamma, beta,
         A tuple length of 3, `(normalized_tensor, mean, variance)`.
     """
     mean, var = tf.nn.moments(x, reduction_axes,
-                              shift=None, name=None, keep_dims=False)
+                              None, None, False)
     target_shape = []
     for axis in range(ndim(x)):
         if axis in reduction_axes:
@@ -2131,8 +2138,16 @@ def arange(start, stop=None, step=1, dtype='int32'):
 
     """
     # Match the behavior of numpy and Theano by returning an empty seqence.
-    if stop is None and start < 0:
-        start = 0
+    if stop is None:
+        try:
+            if start < 0:
+                start = 0
+        except TypeError:
+            # Handle case where start is a tensor
+            start = tf.cond(start < 0,
+                            true_fn=lambda: tf.constant(0, dtype=start.dtype),
+                            false_fn=lambda: start)
+
     result = tf.range(start, limit=stop, delta=step, name='arange')
     if dtype != 'int32':
         result = cast(result, dtype)
@@ -3057,7 +3072,7 @@ def elu(x, alpha=1.):
 
     # Arguments
         x: A tensor or variable to compute the activation function for.
-        alpha: A scalar, slope of positive section.
+        alpha: A scalar, slope of negative section.
 
     # Returns
         A tensor.
@@ -3139,13 +3154,13 @@ def categorical_crossentropy(target, output, from_logits=False):
     if not from_logits:
         # scale preds so that the class probas of each sample sum to 1
         output /= tf.reduce_sum(output,
-                                axis=len(output.get_shape()) - 1,
-                                keep_dims=True)
+                                len(output.get_shape()) - 1,
+                                True)
         # manual computation of crossentropy
         _epsilon = _to_tensor(epsilon(), output.dtype.base_dtype)
         output = tf.clip_by_value(output, _epsilon, 1. - _epsilon)
         return - tf.reduce_sum(target * tf.log(output),
-                               axis=len(output.get_shape()) - 1)
+                               len(output.get_shape()) - 1)
     else:
         return tf.nn.softmax_cross_entropy_with_logits(labels=target,
                                                        logits=output)
@@ -3330,6 +3345,27 @@ def in_top_k(predictions, targets, k):
 
 
 # CONVOLUTIONS
+
+
+def _preprocess_conv1d_input(x, data_format):
+    """Transpose and cast the input before the conv1d.
+
+    # Arguments
+        x: input tensor.
+        data_format: string, `"channels_last"` or `"channels_first"`.
+
+    # Returns
+        A tensor.
+    """
+    if dtype(x) == 'float64':
+        x = tf.cast(x, 'float32')
+    tf_data_format = 'NHWC'  # to pass TF Conv2dNative operations
+    if data_format == 'channels_first':
+        if not _has_nchw_support():
+            x = tf.transpose(x, (0, 2, 1))  # NCW -> NWC
+        else:
+            tf_data_format = 'NCHW'
+    return x, tf_data_format
 
 
 def _preprocess_conv2d_input(x, data_format):
@@ -3529,6 +3565,57 @@ def conv2d_transpose(x, kernel, output_shape, strides=(1, 1),
                                data_format=tf_data_format)
     if data_format == 'channels_first' and tf_data_format == 'NHWC':
         x = tf.transpose(x, (0, 3, 1, 2))  # NHWC -> NCHW
+    return x
+
+
+def separable_conv1d(x, depthwise_kernel, pointwise_kernel, strides=1,
+                     padding='valid', data_format=None, dilation_rate=1):
+    """1D convolution with separable filters.
+
+    # Arguments
+        x: input tensor
+        depthwise_kernel: convolution kernel for the depthwise convolution.
+        pointwise_kernel: kernel for the 1x1 convolution.
+        strides: stride integer.
+        padding: string, `"same"` or `"valid"`.
+        data_format: string, `"channels_last"` or `"channels_first"`.
+        dilation_rate: integer dilation rate.
+
+    # Returns
+        Output tensor.
+
+    # Raises
+        ValueError: if `data_format` is neither `channels_last` or `channels_first`.
+    """
+    if data_format is None:
+        data_format = image_data_format()
+    if data_format not in {'channels_first', 'channels_last'}:
+        raise ValueError('Unknown data_format ' + str(data_format))
+
+    x, tf_data_format = _preprocess_conv1d_input(x, data_format)
+    padding = _preprocess_padding(padding)
+    if tf_data_format == 'NHWC':
+        spatial_start_dim = 1
+        strides = (1, 1) + strides + (1,)
+    else:
+        spatial_start_dim = 2
+        strides = (1, 1, 1) + strides
+    x = tf.expand_dims(x, spatial_start_dim)
+    depthwise_kernel = tf.expand_dims(depthwise_kernel, 0)
+    pointwise_kernel = tf.expand_dims(pointwise_kernel, 0)
+    dilation_rate = (1,) + dilation_rate
+
+    x = tf.nn.separable_conv2d(x, depthwise_kernel, pointwise_kernel,
+                               strides=strides,
+                               padding=padding,
+                               rate=dilation_rate,
+                               data_format=tf_data_format)
+
+    x = tf.squeeze(x, [spatial_start_dim])
+
+    if data_format == 'channels_first' and tf_data_format == 'NHWC':
+        x = tf.transpose(x, (0, 2, 1))  # NWC -> NCW
+
     return x
 
 
