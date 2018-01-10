@@ -727,10 +727,12 @@ class Lambda(Layer):
 
     @interfaces.legacy_lambda_support
     def __init__(self, function, output_shape=None,
-                 mask=None, arguments=None, **kwargs):
+                 mask=None, arguments=None,
+                 supports_masking=True, **kwargs):
         super(Lambda, self).__init__(**kwargs)
         self.function = function
         self.arguments = arguments if arguments else {}
+        self.supports_masking = supports_masking
         if mask is not None:
             self.supports_masking = True
         self.mask = mask
