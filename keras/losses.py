@@ -106,6 +106,23 @@ def log_diff(args):
     return cost_difference
 
 
+def kl_diff(args):
+    """
+     Cross-entropy difference between a GT and a hypothesis
+    :param args: y_pred, y_true, h_pred, h_true
+    :return:
+    """
+    y_true, y_pred, h_true, h_pred = args
+    kldiff_y = kullback_leibler_divergence(y_true, y_true * y_pred)
+    kldiff_h = kullback_leibler_divergence(y_true, y_true * h_pred)
+    # kldiff = K.printing(kldiff, "kldiff = ")
+    #p_y_x = K.categorical_crossentropy(y_true, y_pred)
+    # p_y_x = K.printing(p_y_x, "p_y_x = ")
+    # p_h_x = K.mean(K.categorical_crossentropy(h_true, h_pred))
+    cost_difference = kldiff_y + kldiff_h
+    # cost_difference = K.switch(cost_difference > -1., cost_difference, 0.)
+    return cost_difference
+
 def hybrid_log_diff(args):
     """
      Weighted Cross-entropy difference between a GT and a hypothesis
