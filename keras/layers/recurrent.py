@@ -106,7 +106,7 @@ class StackedRNNCells(Layer):
                 output_dim = cell.state_size[0]
             else:
                 output_dim = cell.state_size
-            input_shape = (input_shape[0], input_shape[1], output_dim)
+            input_shape = (input_shape[0], output_dim)
         self.built = True
 
     def get_config(self):
@@ -459,9 +459,9 @@ class RNN(Layer):
             # initial_state was passed in call, check compatibility
             if [spec.shape[-1] for spec in self.state_spec] != state_size:
                 raise ValueError(
-                    'An initial_state was passed that is not compatible with '
+                    'An `initial_state` was passed that is not compatible with '
                     '`cell.state_size`. Received `state_spec`={}; '
-                    'However `cell.state_size` is '
+                    'however `cell.state_size` is '
                     '{}'.format(self.state_spec, self.cell.state_size))
         else:
             self.state_spec = [InputSpec(shape=(None, dim))
@@ -1047,6 +1047,8 @@ class SimpleRNN(RNN):
         self.activity_regularizer = regularizers.get(activity_regularizer)
 
     def call(self, inputs, mask=None, training=None, initial_state=None):
+        self.cell._dropout_mask = None
+        self.cell._recurrent_dropout_mask = None
         return super(SimpleRNN, self).call(inputs,
                                            mask=mask,
                                            training=training,
@@ -1516,6 +1518,8 @@ class GRU(RNN):
         self.activity_regularizer = regularizers.get(activity_regularizer)
 
     def call(self, inputs, mask=None, training=None, initial_state=None):
+        self.cell._dropout_mask = None
+        self.cell._recurrent_dropout_mask = None
         return super(GRU, self).call(inputs,
                                      mask=mask,
                                      training=training,
@@ -4104,6 +4108,8 @@ class LSTM(RNN):
         self.activity_regularizer = regularizers.get(activity_regularizer)
 
     def call(self, inputs, mask=None, training=None, initial_state=None):
+        self.cell._dropout_mask = None
+        self.cell._recurrent_dropout_mask = None
         return super(LSTM, self).call(inputs,
                                       mask=mask,
                                       training=training,

@@ -65,6 +65,15 @@ class InputSpec(object):
         self.min_ndim = min_ndim
         self.axes = axes or {}
 
+    def __repr__(self):
+        spec = [('dtype=' + str(self.dtype)) if self.dtype else '',
+                ('shape=' + str(self.shape)) if self.shape else '',
+                ('ndim=' + str(self.ndim)) if self.ndim else '',
+                ('max_ndim=' + str(self.max_ndim)) if self.max_ndim else '',
+                ('min_ndim=' + str(self.min_ndim)) if self.min_ndim else '',
+                ('axes=' + str(self.axes)) if self.axes else '']
+        return 'InputSpec(%s)' % ', '.join(x for x in spec if x)
+
 
 class Node(object):
     """A `Node` describes the connectivity between two layers.
@@ -249,6 +258,7 @@ class Layer(object):
     def __init__(self, **kwargs):
         self.input_spec = None
         self.supports_masking = False
+        self.stateful = False
 
         # These properties will be set upon call of self.build()
         self._trainable_weights = []
@@ -274,7 +284,6 @@ class Layer(object):
                           'dtype',
                           'name',
                           'trainable',
-                          'updatable',
                           'weights',
                           'input_dtype',  # legacy
                           }
@@ -288,7 +297,6 @@ class Layer(object):
         self.name = name
 
         self.trainable = kwargs.get('trainable', True)
-        self.updatable = kwargs.get('updatable', True)
         if 'input_shape' in kwargs or 'batch_input_shape' in kwargs:
             # In this case we will later create an input layer
             # to insert before the current layer
@@ -336,6 +344,8 @@ class Layer(object):
 
     @property
     def updates(self):
+        if not self.trainable and not self.stateful:
+            return []
         return self._updates
 
     @property
@@ -1148,6 +1158,8 @@ class Layer(object):
         self._per_input_updates[inputs_hash] += updates
 
     def get_updates_for(self, inputs):
+        if not self.trainable and not self.stateful:
+            return []
         if inputs is not None:
             inputs_hash = _object_list_uid(inputs)
         else:
@@ -1499,7 +1511,6 @@ class Container(Layer):
 
         self.supports_masking = False
         self.trainable = True
-        self.updatable = True
         self._per_input_losses = {}
         self._per_input_updates = {}
 
@@ -1887,13 +1898,11 @@ class Container(Layer):
         # Returns
             A list of update ops.
         """
-        if not self.updatable:
+        if not self.trainable and not self.stateful:
             return []
         updates = []
         for layer in self.layers:
             if hasattr(layer, 'updates'):
-                if hasattr(layer, 'updatable') and not layer.updatable:
-                    continue
                 # Collect updates that are dependent on inputs
                 # that are part of the model.
                 for node_index, node in enumerate(layer._inbound_nodes):
@@ -1962,11 +1971,8 @@ class Container(Layer):
         """
         state_updates = []
         for layer in self.layers:
-            if getattr(layer, 'stateful', False):
-                if hasattr(layer, 'updates'):
-                    if hasattr(layer, 'updatable') and not layer.updatable:
-                        continue
-                    state_updates += layer.updates
+            if layer.stateful:
+                state_updates += layer.updates
         return state_updates
 
     @property
