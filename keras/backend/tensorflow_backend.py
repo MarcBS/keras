@@ -4063,12 +4063,13 @@ def random_multinomial(shape, p=0.0, dtype=None, seed=None):
 
 # COUNT SKETCH
 def count_sketch(h, s, x, d=16000):
-    raise NotImplementedError, 'count_sketch is not implemented in the tensorflow backend'
+    print ('count_sketch is not implemented in the tensorflow backend')
+    pass
 
 def __count_sketch(h, s, v,  # Sequences
                    y, # Outputs info
                    ):
-    raise NotImplementedError, '__count_sketch is not implemented in the tensorflow backend'
+    pass
 
 # 1d Convolution
 def scan_conv1d(u, v):
@@ -4079,8 +4080,8 @@ def scan_conv1d(u, v):
         u: first set of vectors
         v: second set of vectors
     '''
-
-    raise NotImplementedError, 'scan_conv1d is not implemented in the tensorflow backend'
+    print ('scan_conv1d is not implemented in the tensorflow backend')
+    pass
 
 
 # CTC
