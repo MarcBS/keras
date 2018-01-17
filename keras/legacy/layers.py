@@ -587,8 +587,8 @@ class MaxoutDense(Layer):
         return output
 
     def get_config(self):
-        config = {'units': self.output_dim,
-                  'kernel_initializer': initializers.serialize(self.init),
+        config = {'output_dim': self.output_dim,
+                  'init': initializers.serialize(self.init),
                   'nb_feature': self.nb_feature,
                   'W_regularizer': regularizers.serialize(self.W_regularizer),
                   'b_regularizer': regularizers.serialize(self.b_regularizer),
@@ -722,7 +722,7 @@ class Highway(Layer):
         return output
 
     def get_config(self):
-        config = {'kernel_initializer': initializers.serialize(self.init),
+        config = {'init': initializers.serialize(self.init),
                   'activation': activations.serialize(self.activation),
                   'W_regularizer': regularizers.serialize(self.W_regularizer),
                   'b_regularizer': regularizers.serialize(self.b_regularizer),
