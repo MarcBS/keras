@@ -14,23 +14,30 @@ from ..legacy import interfaces
 
 
 def L1_norm(x):
-    '''Computes the L1 norm of the input
-    '''
+    """Computes the L1 norm of the input
+    # Arguments
+        x: input tensor to normalize
+    """
     return K.l1_normalize(x, axis=1)
 
 def L2_norm(x, axis=1):
-    '''Computes the L2 norm of the input
-    '''
+    """Computes the L2 norm of the input
+    # Arguments
+        x: input tensor to normalize
+        axis: integer, normalization axis
+    """
     return K.l2_normalize(x, axis=axis)
 
 def signed_sqrt(x):
-    '''Signed square root of the input
-    '''
+    """Signed square root of the input
+    # Arguments
+        x: input tensor to normalize
+    """
     return K.switch(x >= 0, K.sqrt(x), -K.sqrt(-x))
 
 
 class Scale(Layer):
-    '''Learns a set of weights and biases used for scaling the input data.
+    """Learns a set of weights and biases used for scaling the input data.
     the output consists simply in an element-wise multiplication of the input
     and a sum of a set of constants:
 
@@ -56,7 +63,7 @@ class Scale(Layer):
             [initializations](../initializations.md)), or alternatively,
             Theano/TensorFlow function to use for weights initialization.
             This parameter is only relevant if you don't pass a `weights` argument.
-    '''
+    """
     def __init__(self, weights=None, axis=-1, momentum = 0.9, beta_init='zero', gamma_init='one', **kwargs):
         self.momentum = momentum
         self.axis = axis

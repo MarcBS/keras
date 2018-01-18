@@ -37,7 +37,7 @@ def caffe_to_keras(prototext, caffemodel, phase='train', debug=False):
         input_dim.append(int(layers[0].input_param.shape[0].dim[3]))
     else:
         input_dim = tuple(config.input_dim[:])
-    print layers
+    print (layers)
     print("CREATING MODEL")
     model = create_model(layers,
                          0 if phase == 'train' else 1,
