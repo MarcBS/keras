@@ -15,8 +15,10 @@ from ..legacy import interfaces
 
 def L1_norm(x):
     """Computes the L1 norm of the input
+
     # Arguments
         x: input tensor to normalize
+
     # Returns
         L1-normalized input
     """
@@ -25,9 +27,11 @@ def L1_norm(x):
 
 def L2_norm(x, axis=1):
     """Computes the L2 norm of the input
+
     # Arguments
         x: input tensor to normalize
         axis: integer, normalization axis
+
     # Returns
         L2-normalized input
     """
@@ -36,8 +40,10 @@ def L2_norm(x, axis=1):
 
 def signed_sqrt(x):
     """Signed square root of the input
+
     # Arguments
         x: input tensor to normalize
+        
     # Returns
         signedSqrt-normalized input
     """
