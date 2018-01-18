@@ -17,6 +17,8 @@ def L1_norm(x):
     """Computes the L1 norm of the input
     # Arguments
         x: input tensor to normalize
+    # Returns
+        L1-normalized input
     """
     return K.l1_normalize(x, axis=1)
 
@@ -26,6 +28,8 @@ def L2_norm(x, axis=1):
     # Arguments
         x: input tensor to normalize
         axis: integer, normalization axis
+    # Returns
+        L2-normalized input
     """
     return K.l2_normalize(x, axis=axis)
 
@@ -34,6 +38,8 @@ def signed_sqrt(x):
     """Signed square root of the input
     # Arguments
         x: input tensor to normalize
+    # Returns
+        signedSqrt-normalized input
     """
     return K.switch(x >= 0, K.sqrt(x), -K.sqrt(-x))
 
