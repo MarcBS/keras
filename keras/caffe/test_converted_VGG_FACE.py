@@ -9,7 +9,7 @@ if __name__ == "__main__":
     
     model_path = '/media/HDD_3TB/CNN_MODELS/VGG_Face'
 
-    print "Preparing test image."
+    print ("Preparing test image.")
     # Read image
     im = misc.imread('models/cat.jpg')
 
@@ -34,7 +34,7 @@ if __name__ == "__main__":
 
 
     # Load the converted model
-    print "Loading model."
+    print ("Loading model.")
     # Load model structure
     model = model_from_json(open(model_path+'/Keras_model_structure.json').read())
     # Load model weights
@@ -44,19 +44,8 @@ if __name__ == "__main__":
     out_layer_names = model.output_names
     in_layer_names = model.input_names
 
-    '''
-    # Compile converted model
-    print "Compiling model."
-    sgd = SGD(lr=0.1, decay=1e-6, momentum=0.9, nesterov=True)
-    loss = dict()
-    for out in out_layer_names:
-        loss[out] = 'categorical_crossentropy'
-        last_out = out
-    model.compile(optimizer=sgd, loss=loss)
-    '''    
-
     # Predict image output
-    print "Applying prediction."
+    print ("Applying prediction.")
     in_data = dict()
     for in_name in in_layer_names:
         in_data[in_name] = im
@@ -69,4 +58,4 @@ if __name__ == "__main__":
             classes.append(line.rstrip('\n'))
 
     for i, o in enumerate(out_layer_names):
-        print 'Prediction on output layer "'+o+'": '+str(classes[np.argmax(out[i])])
+        print ('Prediction on output layer "'+o+'": '+str(classes[np.argmax(out[i])]))

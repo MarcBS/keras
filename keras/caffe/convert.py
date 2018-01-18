@@ -54,7 +54,6 @@ def caffe_to_keras(prototext, caffemodel, phase='train', debug=False):
     else:
         raise Exception('could not load any layers from caffemodel')
 
-    print "Printing the converted model:"
     model.summary()
 
     print('')
@@ -89,7 +88,7 @@ def preprocessPrototxt(prototxt, debug=False):
 
     p = '\n'.join(p)
     if debug:
-        print 'Writing preprocessed prototxt to debug.prototxt'
+        print ('Writing preprocessed prototxt to debug.prototxt')
         f = open('debug.prototxt', 'w')
         f.write(p)
         f.close()
@@ -159,8 +158,8 @@ def create_model(layers, phase, input_dim, debug=False):
                 input_layer_names.append(layers[input_layer].name)
 
             if debug:
-                print "Layer", str(n_layer) + ":", name
-                print '\t input shape: ' + str(input_layers[0]._keras_shape)
+                print ("Layer", str(n_layer) + ":", name)
+                print ('\t input shape: ' + str(input_layers[0]._keras_shape))
 
             if type(input_layers) is list and len(input_layers) == 1:
                 input_layers = input_layers[0]
@@ -362,8 +361,8 @@ def create_model(layers, phase, input_dim, debug=False):
                 moving_average = layer.batch_norm_param.moving_average_fraction  # unused
 
                 if debug:
-                    print '\t -- BatchNormalization'
-                    print '\t axis: ' + str(axis)
+                    print ('\t -- BatchNormalization')
+                    print ('\t axis: ' + str(axis))
 
                 net_node[layer_nb] = BatchNormalization(epsilon=epsilon, axis=axis, name=name)(input_layers)
 
@@ -371,8 +370,8 @@ def create_model(layers, phase, input_dim, debug=False):
                 axis = layer.scale_param.axis
 
                 if debug:
-                    print '\t -- Scale'
-                    print '\t axis: ' + str(axis)
+                    print ('\t -- Scale')
+                    print ('\t axis: ' + str(axis))
 
                 net_node[layer_nb] = Scale(axis=axis, name=name)(input_layers)
 
@@ -544,4 +543,4 @@ def load_weights(model, weights):
     for layer in model.layers:
         if weights.has_key(layer.name):
             model.get_layer(layer.name).set_weights(weights[layer.name])
-            print "Copied wts for layer:", layer.name
+            print ("Copied wts for layer:", layer.name)
