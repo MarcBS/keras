@@ -9,11 +9,12 @@ from .. import backend as K
 from .. import activations, initializations, regularizers, constraints
 from ..engine import Layer, InputSpec
 
+
 # Access to attention layers from recurrent.py
 
 
 class Attention(Layer):
-    ''' Attention layer that does not depend on temporal information. The output information
+    """ Attention layer that does not depend on temporal information. The output information
         provided are the attention vectors 'alpha' over the input data.
 
     # Arguments
@@ -43,7 +44,7 @@ class Attention(Layer):
 
     # Formulation
 
-    '''
+    """
 
     def __init__(self, nb_attention,
                  init='glorot_uniform', inner_init='orthogonal',
@@ -183,7 +184,7 @@ class Attention(Layer):
 
 
 class SoftAttention(Layer):
-    ''' Simple soft Attention layer
+    """ Simple soft Attention layer
     The output information provided are the attended input an the attention weights 'alpha' over the input data.
 
     # Arguments
@@ -229,12 +230,13 @@ class SoftAttention(Layer):
                 wa                Wa                     Ua                 ba
             [input_dim] [input_dim, input_dim] [units, input_dim] [input_dim]
 
-    '''
+    """
 
     def __init__(self, att_dim, sum_weighted_output=True,
                  init='glorot_uniform', activation='tanh',
                  dropout_Wa=0., dropout_Ua=0.,
-                 wa_regularizer=None, Wa_regularizer=None, Ua_regularizer=None, ba_regularizer=None, ca_regularizer=None,
+                 wa_regularizer=None, Wa_regularizer=None, Ua_regularizer=None, ba_regularizer=None,
+                 ca_regularizer=None,
                  **kwargs):
         self.att_dim = att_dim
         self.init = initializations.get(init)
@@ -250,11 +252,10 @@ class SoftAttention(Layer):
         self.ba_regularizer = regularizers.get(ba_regularizer)
         self.ca_regularizer = regularizers.get(ca_regularizer)
 
-
-        if self.dropout_Wa or self.dropout_Ua :
+        if self.dropout_Wa or self.dropout_Ua:
             self.uses_learning_phase = True
         super(SoftAttention, self).__init__(**kwargs)
-        #self.input_spec = [InputSpec(ndim=3)]
+        # self.input_spec = [InputSpec(ndim=3)]
 
     def build(self, input_shape):
         assert len(input_shape) == 2, 'You should pass two inputs to SoftAttention '
@@ -264,29 +265,29 @@ class SoftAttention(Layer):
         self.context_dim = input_shape[1][1]
 
         # Initialize Att model params (following the same format for any option of self.consume_less)
-        self.wa = self.add_weight((self.att_dim, ),
-                                   initializer=self.init,
-                                   name='{}_wa'.format(self.name),
-                                   regularizer=self.wa_regularizer)
+        self.wa = self.add_weight((self.att_dim,),
+                                  initializer=self.init,
+                                  name='{}_wa'.format(self.name),
+                                  regularizer=self.wa_regularizer)
 
         self.Wa = self.add_weight((self.input_dim, self.att_dim),
-                                   initializer=self.init,
-                                   name='{}_Wa'.format(self.name),
-                                   regularizer=self.Wa_regularizer)
+                                  initializer=self.init,
+                                  name='{}_Wa'.format(self.name),
+                                  regularizer=self.Wa_regularizer)
 
         self.Ua = self.add_weight((self.context_dim, self.att_dim),
-                                   initializer=self.init,
-                                   name='{}_Ua'.format(self.name),
-                                   regularizer=self.Ua_regularizer)
+                                  initializer=self.init,
+                                  name='{}_Ua'.format(self.name),
+                                  regularizer=self.Ua_regularizer)
 
         self.ba = self.add_weight(self.att_dim,
-                                   initializer='zero',
-                                   name='{}_ba'.format(self.name),
+                                  initializer='zero',
+                                  name='{}_ba'.format(self.name),
                                   regularizer=self.ba_regularizer)
 
         self.ca = self.add_weight(self.input_steps,
                                   initializer='zero',
-                                   name='{}_ca'.format(self.name),
+                                  name='{}_ca'.format(self.name),
                                   regularizer=self.ca_regularizer)
 
         self.trainable_weights = [self.wa, self.Wa, self.Ua, self.ba, self.ca]  # AttModel parameters
@@ -325,13 +326,13 @@ class SoftAttention(Layer):
 
         [attended_representation, alphas] = self.attention_step(preprocessed_input, constants)
 
-        return  [attended_representation, alphas]
+        return [attended_representation, alphas]
 
     def attention_step(self, x, constants):
         # Att model dropouts
-        B_Wa = constants[0]                                  # Dropout Wa
+        B_Wa = constants[0]  # Dropout Wa
 
-        pctx_ = constants[1]                               # Original context
+        pctx_ = constants[1]  # Original context
 
         # Attention model (see Formulation in class header)
         p_state_ = K.dot(x * B_Wa[0], self.Wa)
@@ -381,7 +382,6 @@ class SoftAttention(Layer):
         main_out = [dim_x_att, dim_alpha_att]
         return main_out
 
-
     def compute_mask(self, input, input_mask=None):
         return [None, None]
 
@@ -402,9 +402,8 @@ class SoftAttention(Layer):
         return dict(list(base_config.items()) + list(config.items()))
 
 
-
 class SoftMultistepsAttention(Layer):
-    ''' Multi timesteps soft Attention layer
+    """ Multi timesteps soft Attention layer
     The output information provided are the attended input an the attention weights 'alpha' over the input data.
 
     # Arguments
@@ -450,13 +449,14 @@ class SoftMultistepsAttention(Layer):
                 wa                Wa                     Ua                 ba
             [input_dim] [input_dim, input_dim] [units, input_dim] [input_dim]
 
-    '''
+    """
 
     def __init__(self, att_dim, sum_weighted_output=True,
                  init='glorot_uniform', activation='tanh',
                  return_sequences=True,
                  dropout_Wa=0., dropout_Ua=0.,
-                 wa_regularizer=None, Wa_regularizer=None, Ua_regularizer=None, ba_regularizer=None, ca_regularizer=None,
+                 wa_regularizer=None, Wa_regularizer=None, Ua_regularizer=None, ba_regularizer=None,
+                 ca_regularizer=None,
                  **kwargs):
         self.att_dim = att_dim
         self.init = initializations.get(init)
@@ -473,11 +473,10 @@ class SoftMultistepsAttention(Layer):
         self.ba_regularizer = regularizers.get(ba_regularizer)
         self.ca_regularizer = regularizers.get(ca_regularizer)
 
-
-        if self.dropout_Wa or self.dropout_Ua :
+        if self.dropout_Wa or self.dropout_Ua:
             self.uses_learning_phase = True
         super(SoftMultistepsAttention, self).__init__(**kwargs)
-        #self.input_spec = [InputSpec(ndim=3)]
+        # self.input_spec = [InputSpec(ndim=3)]
 
     def build(self, input_shape):
         assert len(input_shape) == 2, 'You should pass two inputs to SoftMultistepsAttention '
@@ -487,29 +486,29 @@ class SoftMultistepsAttention(Layer):
         self.context_dim = input_shape[1][2]
 
         # Initialize Att model params (following the same format for any option of self.consume_less)
-        self.wa = self.add_weight((self.att_dim, ),
-                                   initializer=self.init,
-                                   name='{}_wa'.format(self.name),
-                                   regularizer=self.wa_regularizer)
+        self.wa = self.add_weight((self.att_dim,),
+                                  initializer=self.init,
+                                  name='{}_wa'.format(self.name),
+                                  regularizer=self.wa_regularizer)
 
         self.Wa = self.add_weight((self.input_dim, self.att_dim),
-                                   initializer=self.init,
-                                   name='{}_Wa'.format(self.name),
-                                   regularizer=self.Wa_regularizer)
+                                  initializer=self.init,
+                                  name='{}_Wa'.format(self.name),
+                                  regularizer=self.Wa_regularizer)
 
         self.Ua = self.add_weight((self.context_dim, self.att_dim),
-                                   initializer=self.init,
-                                   name='{}_Ua'.format(self.name),
-                                   regularizer=self.Ua_regularizer)
+                                  initializer=self.init,
+                                  name='{}_Ua'.format(self.name),
+                                  regularizer=self.Ua_regularizer)
 
         self.ba = self.add_weight(self.att_dim,
-                                   initializer='zero',
-                                   name='{}_ba'.format(self.name),
+                                  initializer='zero',
+                                  name='{}_ba'.format(self.name),
                                   regularizer=self.ba_regularizer)
 
         self.ca = self.add_weight(self.input_steps,
                                   initializer='zero',
-                                   name='{}_ca'.format(self.name),
+                                  name='{}_ca'.format(self.name),
                                   regularizer=self.ca_regularizer)
 
         self.trainable_weights = [self.wa, self.Wa, self.Ua, self.ba, self.ca]  # AttModel parameters
@@ -547,7 +546,7 @@ class SoftMultistepsAttention(Layer):
         preprocessed_input = self.preprocess_input(state_below)
 
         last_output, outputs, states = K.rnn(self.attention_step, preprocessed_input,
-                                             [None, None], #self.get_extra_states(x),
+                                             [None, None],  # self.get_extra_states(x),
                                              go_backwards=False,
                                              mask=None,
                                              # mask[1], #TODO: What does this mask mean? How should it be applied?
@@ -571,9 +570,9 @@ class SoftMultistepsAttention(Layer):
 
     def attention_step(self, x, constants):
         # Att model dropouts
-        B_Wa = constants[0]                                  # Dropout Wa
+        B_Wa = constants[0]  # Dropout Wa
 
-        pctx_ = constants[1]                               # Original context
+        pctx_ = constants[1]  # Original context
 
         # Attention model (see Formulation in class header)
         p_state_ = K.dot(x * B_Wa[0], self.Wa)
@@ -623,7 +622,6 @@ class SoftMultistepsAttention(Layer):
         main_out = [dim_x_att, dim_alpha_att]
         return main_out
 
-
     def compute_mask(self, input, input_mask=None):
         return [None, None]
 
@@ -646,7 +644,7 @@ class SoftMultistepsAttention(Layer):
 
 
 class AttentionComplex(Layer):
-    ''' Attention layer that does not depend on temporal information. The output information
+    """ Attention layer that does not depend on temporal information. The output information
         provided are the attention vectors 'alpha' over the input data.
 
     # Arguments
@@ -676,7 +674,7 @@ class AttentionComplex(Layer):
 
     # Formulation
 
-    '''
+    """
 
     def __init__(self, nb_attention,
                  init='glorot_uniform', inner_init='orthogonal',
@@ -867,7 +865,7 @@ class AttentionComplex(Layer):
 
 
 class ConvAtt(Layer):
-    '''Convolution operator for filtering windows of two-dimensional inputs with Attention mechanism.
+    """Convolution operator for filtering windows of two-dimensional inputs with Attention mechanism.
     The first input corresponds to the image and the second input to the weighting vector (which contains a set of steps).
     When using this layer as the first layer in a model,
     provide the keyword argument `input_shape`
@@ -934,7 +932,7 @@ class ConvAtt(Layer):
             or 4D tensor with shape:
             `(samples, rows, cols, nb_filter)` if dim_ordering='tf'.
             `rows` and `cols` values might have changed due to padding.
-        '''
+        """
 
     def __init__(self, nb_embedding, nb_glimpses=1, concat_timesteps=True,
                  init='glorot_uniform', activation=None, weights=None, return_states=True,
@@ -950,8 +948,8 @@ class ConvAtt(Layer):
             raise ValueError('Invalid border mode for Convolution2D:', border_mode)
         self.nb_embedding = nb_embedding
         self.nb_glimpses = nb_glimpses
-        self.concat_timesteps = concat_timesteps    # if True output_size=(samples, nb_glimpses*num_timesteps, rows, cols)
-                                                    # if False output_size=(samples, num_timesteps, nb_glimpses, rows, cols)
+        self.concat_timesteps = concat_timesteps  # if True output_size=(samples, nb_glimpses*num_timesteps, rows, cols)
+        # if False output_size=(samples, num_timesteps, nb_glimpses, rows, cols)
         self.nb_row = 1
         self.nb_col = 1
         self.return_states = return_states
@@ -1053,17 +1051,17 @@ class ConvAtt(Layer):
         else:
             raise ValueError('Invalid dim_ordering:', self.dim_ordering)
 
-        '''
+        """
         rows = conv_output_length(rows, self.nb_row,
                                   self.border_mode, self.subsample[0])
         cols = conv_output_length(cols, self.nb_col,
                                   self.border_mode, self.subsample[1])
-        '''
+        """
 
-        #return (input_shape[0][0], self.num_words, self.nb_embedding, rows, cols)
+        # return (input_shape[0][0], self.num_words, self.nb_embedding, rows, cols)
 
         if self.return_states:
-            if False:#self.nb_glimpses > 0:
+            if False:  # self.nb_glimpses > 0:
                 if self.concat_timesteps:
                     if self.dim_ordering == 'th':
                         return (input_shape[0][0], self.nb_glimpses * self.num_words, rows, cols)
@@ -1087,7 +1085,7 @@ class ConvAtt(Layer):
                         return (input_shape[0][0], self.num_words, rows, cols, self.nb_embedding)
 
         else:
-            if False:#self.nb_glimpses > 0:
+            if False:  # self.nb_glimpses > 0:
                 if self.dim_ordering == 'th':
                     return (input_shape[0][0], self.nb_glimpses, rows, cols)
                 elif self.dim_ordering == 'tf':
@@ -1097,7 +1095,6 @@ class ConvAtt(Layer):
                     return (input_shape[0][0], self.nb_embedding, rows, cols)
                 elif self.dim_ordering == 'tf':
                     return (input_shape[0][0], rows, cols, self.nb_embedding)
-
 
     def call(self, x, mask=None):
 
@@ -1129,7 +1126,7 @@ class ConvAtt(Layer):
         if self.return_states:
             # Join temporal and glimpses dimensions
             if self.concat_timesteps:
-                outputs = K.permute_dimensions(outputs, (0,3,4,2,1))
+                outputs = K.permute_dimensions(outputs, (0, 3, 4, 2, 1))
                 shp = outputs.shape
                 outputs = K.reshape(outputs, (shp[0], shp[1], shp[2], -1))
                 outputs = K.permute_dimensions(outputs, (0, 3, 1, 2))
@@ -1153,7 +1150,7 @@ class ConvAtt(Layer):
         initial_state = K.repeat_elements(initial_state, self.nb_embedding, 1)
 
         return [initial_state]
-        #return [initial_state, initial_state] # (samples, nb_glimpses, height, width)
+        # return [initial_state, initial_state] # (samples, nb_glimpses, height, width)
 
     def step(self, x, states):
         context = states[1]
@@ -1170,7 +1167,6 @@ class ConvAtt(Layer):
         else:
             e_t = activation_t
 
-
         # Apply softmax on att. weights
         e_t_reshaped = e_t.sum(axis=1)
         alphas_shape = e_t_reshaped.shape
@@ -1180,7 +1176,6 @@ class ConvAtt(Layer):
 
         # Weight input image vectors according to alphas
         attended_ctx = context * alphas[:, None, :, :]
-
 
         ############################################################
 
@@ -1198,8 +1193,8 @@ class ConvAtt(Layer):
         #    attended_ctx = (attended_ctx).sum(axis=1)
         """
 
-        #return e_t, [e_t]
-        return attended_ctx, [attended_ctx] #[attended_ctx, e_t]
+        # return e_t, [e_t]
+        return attended_ctx, [attended_ctx]  # [attended_ctx, e_t]
 
     def compute_mask(self, input, mask):
         if self.nb_glimpses > 0:
@@ -1243,10 +1238,8 @@ class ConvAtt(Layer):
                                           self.b_learning_rate_multiplier]
 
 
-
-
 class ConvCoAtt(Layer):
-    '''Convolution operator for filtering windows of two-dimensional inputs with Attention mechanism.
+    """Convolution operator for filtering windows of two-dimensional inputs with Attention mechanism.
     The first input corresponds to the image and the second input to the weighting vector (which contains a set of steps).
     When using this layer as the first layer in a model,
     provide the keyword argument `input_shape`
@@ -1313,7 +1306,7 @@ class ConvCoAtt(Layer):
             or 4D tensor with shape:
             `(samples, rows, cols, nb_filter)` if dim_ordering='tf'.
             `rows` and `cols` values might have changed due to padding.
-        '''
+        """
 
     def __init__(self, nb_embedding, nb_glimpses=1, concat_timesteps=True,
                  init='glorot_uniform', activation=None, weights=None, return_states=True,
@@ -1330,11 +1323,11 @@ class ConvCoAtt(Layer):
         self.nb_embedding = nb_embedding
         self.nb_glimpses = nb_glimpses
 
-        self.return_states = return_states          # if True see self.concat_timesteps
-                                                    # if False output_size=(samples, nb_glimpses, rows, cols)
+        self.return_states = return_states  # if True see self.concat_timesteps
+        # if False output_size=(samples, nb_glimpses, rows, cols)
 
-        self.concat_timesteps = concat_timesteps    # if True output_size=(samples, nb_glimpses*num_timesteps, rows, cols)
-                                                    # if False output_size=(samples, num_timesteps, nb_glimpses, rows, cols)
+        self.concat_timesteps = concat_timesteps  # if True output_size=(samples, nb_glimpses*num_timesteps, rows, cols)
+        # if False output_size=(samples, num_timesteps, nb_glimpses, rows, cols)
         self.nb_row = 1
         self.nb_col = 1
         self.init = initializations.get(init, dim_ordering=dim_ordering)
@@ -1379,7 +1372,7 @@ class ConvCoAtt(Layer):
             self.num_col = input_shape[0][3]
             if self.nb_glimpses > 0:
                 self.U_shape = (self.nb_glimpses, self.nb_embedding, self.nb_row, self.nb_col)
-            self.W_shape = (self.nb_embedding, img_size+qst_size, self.nb_row, self.nb_col)
+            self.W_shape = (self.nb_embedding, img_size + qst_size, self.nb_row, self.nb_col)
         elif self.dim_ordering == 'tf':
             img_size = input_shape[0][3]
             qst_size = input_shape[1][2]
@@ -1387,7 +1380,7 @@ class ConvCoAtt(Layer):
             self.num_col = input_shape[0][2]
             if self.nb_glimpses > 0:
                 self.U_shape = (self.nb_row, self.nb_col, self.nb_embedding, self.nb_glimpses)
-            self.W_shape = (self.nb_row, self.nb_col, img_size+qst_size, self.nb_embedding)
+            self.W_shape = (self.nb_row, self.nb_col, img_size + qst_size, self.nb_embedding)
         else:
             raise ValueError('Invalid dim_ordering:', self.dim_ordering)
         if self.nb_glimpses > 0:
@@ -1430,14 +1423,14 @@ class ConvCoAtt(Layer):
         else:
             raise ValueError('Invalid dim_ordering:', self.dim_ordering)
 
-        '''
+        """
         rows = conv_output_length(rows, self.nb_row,
                                   self.border_mode, self.subsample[0])
         cols = conv_output_length(cols, self.nb_col,
                                   self.border_mode, self.subsample[1])
-        '''
+        """
 
-        #return (input_shape[0][0], self.num_words, self.nb_embedding, rows, cols)
+        # return (input_shape[0][0], self.num_words, self.nb_embedding, rows, cols)
 
         if self.return_states:
             if self.nb_glimpses > 0:
@@ -1475,7 +1468,6 @@ class ConvCoAtt(Layer):
                 elif self.dim_ordering == 'tf':
                     return (input_shape[0][0], rows, cols, self.nb_embedding)
 
-
     def call(self, x, mask=None):
 
         preprocessed_img = x[0]
@@ -1495,7 +1487,7 @@ class ConvCoAtt(Layer):
         if self.return_states:
             # Join temporal and glimpses dimensions
             if self.concat_timesteps:
-                outputs = K.permute_dimensions(outputs, (0,3,4,2,1))
+                outputs = K.permute_dimensions(outputs, (0, 3, 4, 2, 1))
                 shp = outputs.shape
                 outputs = K.reshape(outputs, (shp[0], shp[1], shp[2], -1))
                 outputs = K.permute_dimensions(outputs, (0, 3, 1, 2))
@@ -1513,7 +1505,7 @@ class ConvCoAtt(Layer):
         initial_state = K.repeat_elements(initial_state, self.nb_embedding, 1)
 
         return [initial_state]
-        #return [initial_state, initial_state] # (samples, nb_glimpses, height, width)
+        # return [initial_state, initial_state] # (samples, nb_glimpses, height, width)
 
     def step(self, x, states):
         context = states[1]
@@ -1531,11 +1523,11 @@ class ConvCoAtt(Layer):
 
         word_ctx = K.concatenate([x, context], axis=concat_axis)
         word_ctx = K.conv2d(word_ctx,
-                     self.W,
-                     strides=(1, 1),
-                     border_mode='valid',
-                     dim_ordering=self.dim_ordering,
-                     filter_shape=self.W_shape)
+                            self.W,
+                            strides=(1, 1),
+                            border_mode='valid',
+                            dim_ordering=self.dim_ordering,
+                            filter_shape=self.W_shape)
 
         if self.bias:
             if self.dim_ordering == 'th':
@@ -1565,12 +1557,11 @@ class ConvCoAtt(Layer):
         alphas = alphas.reshape([alphas_shape[0], alphas_shape[1], alphas_shape[2]])
 
         # Weight input image vectors according to alphas
-        #attended = context * alphas[:, None, :, :]
+        # attended = context * alphas[:, None, :, :]
         attended = word_ctx * alphas[:, None, :, :]
 
-        #return e_t, [e_t]
-        return attended, [attended] #[attended, e_t]
-
+        # return e_t, [e_t]
+        return attended, [attended]  # [attended, e_t]
 
     def compute_mask(self, input, mask):
         if self.nb_glimpses > 0:
@@ -1610,4 +1601,3 @@ class ConvCoAtt(Layer):
         self.b_learning_rate_multiplier = b_learning_rate_multiplier
         self.learning_rate_multipliers = [self.W_learning_rate_multiplier,
                                           self.b_learning_rate_multiplier]
-

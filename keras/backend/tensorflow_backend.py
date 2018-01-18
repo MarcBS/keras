@@ -958,12 +958,16 @@ def cast(x, dtype):
     return tf.cast(x, dtype)
 
 
-
 def ceil(x, name=None):
+    """Ceil the tensor x.
+    """
     return tf.ceil(x, name=name)
 
 
 def floor(x, name=None):
+    """Floor the tensor x.
+    """
+
     return tf.floor(x, name=name)
 
 # UPDATES OPS
@@ -3095,8 +3099,8 @@ def softmax(x):
 
 
 def softmax_3d(x):
-    '''Softmax on the last axis of a 2d or 3d tensor.
-    '''
+    """Softmax on the last axis of a 2d or 3d tensor.
+    """
     nd = ndim(x)
     if nd == 2:
         return softmax(x)
@@ -3225,6 +3229,8 @@ def binary_crossentropy(target, output, from_logits=False):
 
 
 def weighted_binary_crossentropy(target, output, from_logits=False, lambda_w_rec=1.0, lambda_w_pre=1.0):
+    """Compute the weighted crossentropy of binary random variables.
+    """
     if from_logits:
         output = tf.nn.sigmoid(output)
     # avoid numerical instability with _EPSILON clipping
@@ -4054,6 +4060,8 @@ def truncated_normal(shape, mean=0.0, stddev=1.0, dtype=None, seed=None):
 
 
 def random_multinomial(shape, p=0.0, dtype=None, seed=None):
+    """Instantiates a random multinomial tensor of a given shape
+    """
     if dtype is None:
         dtype = floatx()
     if seed is None:

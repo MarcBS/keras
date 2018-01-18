@@ -150,7 +150,7 @@ class PReLU(Layer):
 
 
 class ChannelWisePReLU(Layer):
-    '''Channel-wise Parametric Rectified Linear Unit:
+    """Channel-wise Parametric Rectified Linear Unit:
     `f(x) = alphas * x for x < 0`,
     `f(x) = x for x >= 0`,
     where `alphas` is a learned vector with the same number of elments as channels has x (or features).
@@ -170,7 +170,7 @@ class ChannelWisePReLU(Layer):
         axis: Channels axis.
     # References
         - [Delving Deep into Rectifiers: Surpassing Human-Level Performance on ImageNet Classification](http://arxiv.org/pdf/1502.01852v1.pdf)
-    '''
+    """
     def __init__(self, init='zero', weights=None, channels_shared=False, axis=1, **kwargs):
         self.supports_masking = True
         self.init = initializations.get(init)

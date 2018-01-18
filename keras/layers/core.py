@@ -95,7 +95,6 @@ class Dropout(Layer):
     # References
         - [Dropout: A Simple Way to Prevent Neural Networks from Overfitting](http://www.cs.toronto.edu/~rsalakhu/papers/srivastava14a.pdf)
     """
-
     @interfaces.legacy_dropout_support
     def __init__(self, rate, noise_shape=None, seed=None, **kwargs):
         super(Dropout, self).__init__(**kwargs)
@@ -120,7 +119,6 @@ class Dropout(Layer):
             def dropped_inputs():
                 return K.dropout(inputs, self.rate, noise_shape,
                                  seed=self.seed)
-
             return K.in_train_phase(dropped_inputs, inputs,
                                     training=training)
         return inputs
@@ -138,16 +136,14 @@ class Dropout(Layer):
 
 class GuidedDropout(Layer):
     # TODO: Test this layer
-    '''Applies a guided Dropout to the input, where the output activations are set
+    """Applies a guided Dropout to the input, where the output activations are set
     to 0 given by the weights of the layer.
 
     Inputs:
         modulated_input: (batch_size, num_features)
         modulator_input: (batch_size, num_dropout_matrices)
-
-    Weights:
-        W: (num_dropout_matrices, num_features)
-    '''
+        weights_shape: (num_dropout_matrices, num_features)
+    """
 
     def __init__(self, weights_shape, weights=None, **kwargs):
         self.weights_shape = weights_shape
@@ -512,7 +508,7 @@ class Permute(Layer):
 
 
 class PermuteGeneral(Layer):
-    '''Permutes the dimensions of the input according to a given pattern.
+    """Permutes the dimensions of the input according to a given pattern.
     This is just like the layer Permute, but DOES INCLUDE the batch dimension.
 
     # Arguments
@@ -528,7 +524,7 @@ class PermuteGeneral(Layer):
     # Output shape
         Same as the input shape, but with the dimensions re-ordered according
         to the specified pattern.
-    '''
+    """
 
     def __init__(self, dims, **kwargs):
         super(PermuteGeneral, self).__init__(**kwargs)
@@ -629,7 +625,7 @@ class RepeatVector(Layer):
 
 
 class RepeatMatrix(Layer):
-    '''Repeats the input n times.
+    """Repeats the input n times.
        Applies the same procedure as RepeatVector() but for inputs of any dimenions.
        The new dimension will be introduced in the position defined by the user.
 
@@ -642,7 +638,7 @@ class RepeatMatrix(Layer):
 
     # Output shape
         R+1-dimensional tensor of shape `(nb_samples, n, dim2, dim3, ..., dimR)` if dim==1.
-    '''
+    """
 
     def __init__(self, n, dim=1, **kwargs):
         self.supports_masking = True
@@ -1026,10 +1022,12 @@ class Dense(Layer):
 
     # TODO: Check this method
     def set_lr_multipliers(self, W_learning_rate_multiplier, b_learning_rate_multiplier):
+        # Set lr multipliers to weights
         self.W_learning_rate_multiplier = W_learning_rate_multiplier
+        # Set lr multipliers to biases
         self.b_learning_rate_multiplier = b_learning_rate_multiplier
-        self.learning_rate_multipliers = [self.W_learning_rate_multiplier,
-                                          self.b_learning_rate_multiplier]
+        # Assign lr multipliers
+        self.learning_rate_multipliers = [self.W_learning_rate_multiplier, self.b_learning_rate_multiplier]
 
 
 class ActivityRegularization(Layer):
@@ -1091,8 +1089,7 @@ class MaskedMean(Layer):
 
 
 class MaskLayer(Layer):
-    """
-    Applies to the input layer its mask
+    """Applies to the layer its mask
     """
 
     def __init__(self, **kwargs):
@@ -1114,7 +1111,7 @@ class MaskLayer(Layer):
 
 
 class WeightedSum(Layer):
-    ''' Applies a weighted sum over a set of vectors input[0] and their respective weights input[1].
+    """ Applies a weighted sum over a set of vectors input[0] and their respective weights input[1].
         First, the weights are tiled for matching the length of the input vectors on dim=1.
         Second, an element-wise multiplication is applied over the inputs.
         Third, the output tensor is summed over the defined set of dimensions if
@@ -1133,7 +1130,7 @@ class WeightedSum(Layer):
     # Output shape
         Vector with the same number of dimensions and length as input[0] but having removed the dimensions
         specified in sum_dims (if any).
-    '''
+    """
 
     def __init__(self, sum_dims=[], **kwargs):
         assert isinstance(sum_dims, list)
@@ -1187,19 +1184,22 @@ class WeightedSum(Layer):
 
 
 class WeightedMerge(Layer):
-    ''' Applies a weighted merge over a set of tensors.
+    """ Applies a weighted merge over a set of tensors.
         This layer learns a set of lambda weights for applying a weighted sum
         for merging the input tensors.
 
     # Parameters
-        :param mode: merge mode used. Possible values are 'sum' (default) or 'mul'.
+        mode: merge mode used. Possible values are 'sum' (default) or 'mul'.
+        init: Initialization function.
+        lambdas_regularizer: Regularizers for the weights.
+        weigthts: Initial weights for each element to merge.
 
     # Input shape
         List of tensors of any dimensions but with the same shape.
 
     # Output shape
         Tensor with the same number of dimensions as the input tensors.
-    '''
+    """
 
     def __init__(self, mode='sum', init='glorot_uniform', lambdas_regularizer=None, weights=None, **kwargs):
         # self.out_shape = out_shape
@@ -1218,25 +1218,27 @@ class WeightedMerge(Layer):
         super(WeightedMerge, self).__init__(**kwargs)
 
     def build(self, input_shape):
-
+        # Cnvert input_shape to list
         if not isinstance(input_shape, list):
             input_shape = [input_shape]
         s = input_shape[0]
+        # Check all input_shape are compatible
         for i in range(1, len(input_shape)):
             for s1, s2 in zip(input_shape[i], s):
                 assert s1 == s2 or s1 is None or s2 is None, 'The shapes of some input tensors do not match ' \
                                                              '(' + str(input_shape[i]) + ' vs ' + str(s) + ').'
-                # assert input_shape[i] == s, 'The shapes of some input tensors do not match ' \
-                #                        '('+str(input_shape[i])+' vs '+str(s)+').'
-
+        # Initialize weights
         self.lambdas = self.init((len(input_shape),), name='{}_lambdas'.format(self.name))
+        # Set weights to trainable
         self.trainable_weights = [self.lambdas]
+        # List of regularizers
         self.regularizers = []
 
+        # Add lambdas regularizers (if necessary)
         if self.lambdas_regularizer:
             self.lambdas_regularizer.set_param(self.lambdas)
             self.regularizers.append(self.lambdas_regularizer)
-
+        # Set initial weights (if necessary)
         if self.initial_weights is not None:
             self.set_weights(self.initial_weights)
             del self.initial_weights
@@ -1279,8 +1281,7 @@ class WeightedMerge(Layer):
 
 
 class SetSubtensor(Layer):
-    """
-    This layer performs a set_subtensor operation over two layers
+    """This layer performs a set_subtensor operation over two layers
     # Arguments
         indices: list of strings specifying the indexation over the two input layers
 
@@ -1318,6 +1319,8 @@ class SetSubtensor(Layer):
 
 
 class RemoveMask(Layer):
+    """Removes the mask of the Layer.
+    """
     def __init__(self, **kwargs):
         super(RemoveMask, self).__init__(**kwargs)
 
@@ -1330,7 +1333,7 @@ class RemoveMask(Layer):
 
 
 class ZeroesLayer(Layer):
-    '''Given any input, produces an output input_dim zeroes
+    """Given any input, produces an output input_dim zeroes
 
     # Example
 
@@ -1352,7 +1355,7 @@ class ZeroesLayer(Layer):
         nD tensor with shape: `(nb_samples, ..., units)`.
         For instance, for a 2D input with shape `(nb_samples, input_dim)`,
         the output would have shape `(nb_samples, units)`.
-    '''
+    """
 
     def __init__(self, output_dim, input_dim=None, **kwargs):
         self.output_dim = output_dim
@@ -1389,7 +1392,7 @@ class ZeroesLayer(Layer):
 
 
 class EqualDimensions(Layer):
-    '''Zero-padding layer for 2D input (e.g. picture).
+    """Zero-padding layer for 2D input (e.g. picture).
 
     # Arguments
         dim_ordering: 'th' or 'tf'.
@@ -1410,7 +1413,7 @@ class EqualDimensions(Layer):
         `(samples, channels, rows+1, cols+1)` if dim_ordering='th'
         or 4D tensor with shape:
         `(samples, rows+1, cols+1, channels)` if dim_ordering='tf'.
-    '''
+    """
 
     def __init__(self,
                  dim_ordering='default',
@@ -1438,7 +1441,7 @@ class EqualDimensions(Layer):
 
 
 class Concat(Layer):
-    '''Concatenates multiple inputs along the specified axis. Inputs should have the same
+    """Concatenates multiple inputs along the specified axis. Inputs should have the same
     shape except for the dimension specified in axis, which can have different sizes.
 
     # Arguments
@@ -1455,7 +1458,7 @@ class Concat(Layer):
             It defaults to the `image_dim_ordering` value found in your
             Keras config file at `~/.keras/keras.json`.
             If you never set it, then it will be "tf".
-    '''
+    """
 
     def __init__(self, axis=1,
                  cropping=None, dim_ordering='default',

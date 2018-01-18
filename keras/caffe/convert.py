@@ -9,15 +9,14 @@ from ..models import Model
 
 
 def caffe_to_keras(prototext, caffemodel, phase='train', debug=False):
-    '''
-        Converts a Caffe Graph into a Keras Graph
+    """Converts a Caffe Graph into a Keras Graph
         prototext: model description file in caffe
         caffemodel: stored weights file
         phase: train or test
 
         Usage:
             model = caffe_to_keras('VGG16.prototxt', 'VGG16_700iter.caffemodel')
-    '''
+    """
     config = caffe.NetParameter()
     prototext = preprocessPrototxt(prototext, debug)
     text_format.Merge(prototext, config)

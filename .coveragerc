@@ -4,3 +4,6 @@ show_missing = True
 omit =
     keras/applications/*
     keras/datasets/*
+    keras/caffe/*
+    keras/layers/attention.py
+    keras/layers/googlenet_custom_layers.py
