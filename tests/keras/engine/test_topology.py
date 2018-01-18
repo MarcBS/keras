@@ -737,6 +737,7 @@ def test_layer_sharing_at_heterogeneous_depth_with_concat():
 @keras_test
 def test_multi_output_mask():
     """Fixes #7589"""
+
     class ArbitraryMultiOutputLayer(Layer):
         def __init__(self, **kwargs):
             super(ArbitraryMultiOutputLayer, self).__init__(**kwargs)

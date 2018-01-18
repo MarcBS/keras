@@ -126,7 +126,7 @@ def test_statefulness(layer_class):
     model.add(layer)
     model.compile(optimizer='sgd', loss='mse')
     out1 = model.predict(np.ones((num_samples, timesteps)))
-    assert(out1.shape == (num_samples, units))
+    assert (out1.shape == (num_samples, units))
 
     # train once so that the states change
     model.train_on_batch(np.ones((num_samples, timesteps)),
@@ -134,13 +134,13 @@ def test_statefulness(layer_class):
     out2 = model.predict(np.ones((num_samples, timesteps)))
 
     # if the state is not reset, output should be different
-    assert(out1.max() != out2.max())
+    assert (out1.max() != out2.max())
 
     # check that output changes after states are reset
     # (even though the model itself didn't change)
     layer.reset_states()
     out3 = model.predict(np.ones((num_samples, timesteps)))
-    assert(out2.max() != out3.max())
+    assert (out2.max() != out3.max())
 
     # check that container-level reset_states() works
     model.reset_states()
@@ -149,7 +149,7 @@ def test_statefulness(layer_class):
 
     # check that the call to `predict` updated the states
     out5 = model.predict(np.ones((num_samples, timesteps)))
-    assert(out4.max() != out5.max())
+    assert (out4.max() != out5.max())
 
 
 @rnn_test
@@ -432,9 +432,7 @@ def test_state_reuse_with_dropout(layer_class):
 
 @keras_test
 def test_minimal_rnn_cell_non_layer():
-
     class MinimalRNNCell(object):
-
         def __init__(self, units, input_dim):
             self.units = units
             self.state_size = units
@@ -468,9 +466,7 @@ def test_minimal_rnn_cell_non_layer():
 
 @keras_test
 def test_minimal_rnn_cell_non_layer_multiple_states():
-
     class MinimalRNNCell(object):
-
         def __init__(self, units, input_dim):
             self.units = units
             self.state_size = (units, units)
@@ -508,9 +504,7 @@ def test_minimal_rnn_cell_non_layer_multiple_states():
 
 @keras_test
 def test_minimal_rnn_cell_layer():
-
     class MinimalRNNCell(keras.layers.Layer):
-
         def __init__(self, units, **kwargs):
             self.units = units
             self.state_size = units
@@ -699,9 +693,7 @@ def test_batch_size_equal_one(layer_class):
 
 
 def test_rnn_cell_with_constants_layer():
-
     class RNNCellWithConstants(keras.layers.Layer):
-
         def __init__(self, units, **kwargs):
             self.units = units
             self.state_size = units
@@ -780,9 +772,7 @@ def test_rnn_cell_with_constants_layer():
 
 
 def test_rnn_cell_with_constants_layer_passing_initial_state():
-
     class RNNCellWithConstants(keras.layers.Layer):
-
         def __init__(self, units, **kwargs):
             self.units = units
             self.state_size = units

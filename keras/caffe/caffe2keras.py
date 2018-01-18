@@ -2,7 +2,7 @@ import keras.caffe.convert as convert
 import pprint
 import argparse
 
-""" 
+"""
 USAGE EXAMPLE
     python caffe2keras.py -load_path 'models/' -prototxt 'train_val_for_keras.prototxt'
                            -caffemodel 'bvlc_googlenet.caffemodel'

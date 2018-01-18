@@ -171,6 +171,7 @@ class ChannelWisePReLU(Layer):
     # References
         - [Delving Deep into Rectifiers: Surpassing Human-Level Performance on ImageNet Classification](http://arxiv.org/pdf/1502.01852v1.pdf)
     """
+
     def __init__(self, init='zero', weights=None, channels_shared=False, axis=1, **kwargs):
         self.supports_masking = True
         self.init = initializations.get(init)
@@ -180,7 +181,7 @@ class ChannelWisePReLU(Layer):
         super(ChannelWisePReLU, self).__init__(**kwargs)
 
     def build(self, input_shape):
-        size = input_shape[self.axis] if self.channels_shared==False else 1
+        size = input_shape[self.axis] if not self.channels_shared else 1
         self.alphas = self.init([size],
                                 name='{}_alphas'.format(self.name))
         self.trainable_weights = [self.alphas]

@@ -45,6 +45,7 @@ def clip_norm(g, c, n):
         g = K.switch(K.greater_equal(n, c), g * c / n, g)
     return g
 
+
 def optimizer_from_config(config, custom_objects={}):
     all_classes = {
         'sgd': SGD,
@@ -156,6 +157,7 @@ class Optimizer(object):
     @classmethod
     def from_config(cls, config):
         return cls(**config)
+
 
 class PAS(Optimizer):
     """Soft Passive-Agressive online learning by subgradient techniques optimizer.
@@ -280,6 +282,7 @@ class PPAS(PAS):
         base_config = super(PPAS, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
+
 class SGD(Optimizer):
     """Stochastic gradient descent optimizer.
 
@@ -323,7 +326,7 @@ class SGD(Optimizer):
             self.updates.append(K.update(m, v))
 
             if self.nesterov:
-                new_p = p + self.momentum * v - (lr*lmul) * g
+                new_p = p + self.momentum * v - (lr * lmul) * g
             else:
                 new_p = p + v
 
@@ -685,7 +688,7 @@ class Adamax(Optimizer):
 
             m_t = (self.beta_1 * m) + (1. - self.beta_1) * g
             u_t = K.maximum(self.beta_2 * u, K.abs(g))
-            p_t = p - (lr_t*lmul) * m_t / (u_t + self.epsilon)
+            p_t = p - (lr_t * lmul) * m_t / (u_t + self.epsilon)
 
             self.updates.append(K.update(m, m_t))
             self.updates.append(K.update(u, u_t))
@@ -774,7 +777,7 @@ class Nadam(Optimizer):
             self.updates.append(K.update(m, m_t))
             self.updates.append(K.update(v, v_t))
 
-            p_t = p - (self.lr*lmul) * m_t_bar / (K.sqrt(v_t_prime) + self.epsilon)
+            p_t = p - (self.lr * lmul) * m_t_bar / (K.sqrt(v_t_prime) + self.epsilon)
             new_p = p_t
 
             # Apply constraints.

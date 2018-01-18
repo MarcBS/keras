@@ -522,6 +522,7 @@ class Dot(_Merge):
 # Alias
 Sum = Add
 
+
 def add(inputs, **kwargs):
     """Functional interface to the `Add` layer.
 

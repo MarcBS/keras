@@ -6,7 +6,7 @@ import numpy as np
 import copy
 
 if __name__ == "__main__":
-    
+
     model_path = '/media/HDD_3TB/CNN_MODELS/VGG_Face'
 
     print ("Preparing test image.")
@@ -15,16 +15,16 @@ if __name__ == "__main__":
 
     # Resize
     im = misc.imresize(im, (224, 224)).astype(np.float32)
-    
+
     # Change RGB to BGR
     aux = copy.copy(im)
-    im[:,:,0] = aux[:,:,2]
-    im[:,:,2] = aux[:,:,0]
+    im[:, :, 0] = aux[:, :, 2]
+    im[:, :, 2] = aux[:, :, 0]
 
     # Remove train image mean
-    im[:,:,0] -= 104.006
-    im[:,:,1] -= 116.669
-    im[:,:,2] -= 122.679
+    im[:, :, 0] -= 104.006
+    im[:, :, 1] -= 116.669
+    im[:, :, 2] -= 122.679
 
     # Transpose image dimensions (Keras' uses the channels as the 1st dimension)
     im = np.transpose(im, (2, 0, 1))
@@ -32,13 +32,12 @@ if __name__ == "__main__":
     # Insert a new dimension for the batch_size
     im = np.expand_dims(im, axis=0)
 
-
     # Load the converted model
     print ("Loading model.")
     # Load model structure
-    model = model_from_json(open(model_path+'/Keras_model_structure.json').read())
+    model = model_from_json(open(model_path + '/Keras_model_structure.json').read())
     # Load model weights
-    model.load_weights(model_path+'/Keras_model_weights.h5') 
+    model.load_weights(model_path + '/Keras_model_weights.h5')
 
     # Get output names
     out_layer_names = model.output_names
@@ -53,9 +52,9 @@ if __name__ == "__main__":
 
     # Load ImageNet classes file
     classes = []
-    with open(model_path+'/names.txt', 'r') as list_:
+    with open(model_path + '/names.txt', 'r') as list_:
         for line in list_:
             classes.append(line.rstrip('\n'))
 
     for i, o in enumerate(out_layer_names):
-        print ('Prediction on output layer "'+o+'": '+str(classes[np.argmax(out[i])]))
+        print ('Prediction on output layer "' + o + '": ' + str(classes[np.argmax(out[i])]))

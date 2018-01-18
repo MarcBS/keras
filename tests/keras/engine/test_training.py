@@ -293,6 +293,7 @@ def test_model_methods():
         def gen_data():
             while True:
                 yield (np.asarray([]), np.asarray([]))
+
         out = model.evaluate_generator(gen_data(), steps=1)
 
     # x is not a list of numpy arrays.
@@ -407,6 +408,7 @@ def test_model_methods():
         def gen_data():
             while True:
                 yield (np.asarray([]), np.asarray([]))
+
         out = model.fit_generator(generator=gen_data(), epochs=5,
                                   initial_epoch=0, validation_data=gen_data(),
                                   callbacks=[tracker_cb])
@@ -419,6 +421,7 @@ def test_model_methods():
             gen_counters[i] += 1
             yield ([np.random.random((1, 3)), np.random.random((1, 3))],
                    [np.random.random((1, 4)), np.random.random((1, 3))])
+
     out = model.fit_generator(generator=gen_data(0), epochs=3,
                               steps_per_epoch=2,
                               validation_data=gen_data(1),
@@ -468,7 +471,7 @@ def test_model_methods():
     sequence_length = 1
     shape_0, _ = expected_shape(batch_size, sequence_length)
     out = single_output_model.predict_generator(RandomSequence(batch_size,
-                                                sequence_length=sequence_length))
+                                                               sequence_length=sequence_length))
     assert np.shape(out) == shape_0
 
     # Single output and multiple steps.
@@ -476,7 +479,7 @@ def test_model_methods():
     sequence_length = 2
     shape_0, _ = expected_shape(batch_size, sequence_length)
     out = single_output_model.predict_generator(RandomSequence(batch_size,
-                                                sequence_length=sequence_length))
+                                                               sequence_length=sequence_length))
     assert np.shape(out) == shape_0
 
 

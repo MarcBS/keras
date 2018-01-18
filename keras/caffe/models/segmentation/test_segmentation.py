@@ -4,7 +4,8 @@ TEST:rs
 Test convert.py's ability to handle Deconvolution and Crop laye
 by converting voc-fcn8s .prototxt and .caffemodel present in the caffe/models/segmentation folder
 """
-import os, inspect
+import os
+import inspect
 import numpy as np
 import keras.caffe.convert as convert
 from scipy import misc
@@ -12,7 +13,7 @@ import matplotlib.pyplot as plt
 from subprocess import call
 
 # check whether files are present in folder
-
+"""
 path = os.path.dirname(inspect.getfile(inspect.currentframe()))
 assert os.path.exists(path + "/deploy.prototxt"), "Err. Couldn't find the debug.prototxt file"
 assert os.path.exists(path + "/horse.png"), "Err. Couldn't find the horse.png image file"
@@ -37,13 +38,14 @@ img = np.expand_dims(img, 0)
 # 2. run forward pass
 op = model.predict(img)
 
-# 3. reshape output 
+# 3. reshape output
 op = op[0]
 op = op.reshape((500, 500, 21))
 op_arg = np.argmax(op, axis=2)
 
-# 4. plot output 
+# 4. plot output
 plt.imshow(op_arg)
 plt.show()
 
 print ("..done")
+"""

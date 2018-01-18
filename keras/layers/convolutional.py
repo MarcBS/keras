@@ -26,8 +26,9 @@ from .pooling import MaxPooling3D
 from ..legacy.layers import AtrousConvolution1D
 from ..legacy.layers import AtrousConvolution2D
 
+
 class ClassActivationMapping(Layer):
-    #TODO: Test this layer
+    # TODO: Test this layer
     '''Class Activation Mapping computation used in GAP networks.
 
     # Arguments
@@ -39,6 +40,7 @@ class ClassActivationMapping(Layer):
             Learning Deep Features for Discriminative Localization.
             arXiv preprint arXiv:1512.04150. 2015 Dec 14.
     '''
+
     def __init__(self, weights_shape, weights=None, **kwargs):
         self.weights_shape = weights_shape
         self.initial_weights = [weights]
@@ -46,16 +48,14 @@ class ClassActivationMapping(Layer):
         self.input_spec = [InputSpec(ndim=4)]
         super(ClassActivationMapping, self).__init__(**kwargs)
 
-
     def build(self, input_shape):
         self.W = self.init(self.weights_shape,
                            name='{}_W'.format(self.name))
         self.trainable_weights = [self.W]
 
         # initialize weights
-        if(self.initial_weights[0] is not None):
+        if (self.initial_weights[0] is not None):
             self.set_weights(self.initial_weights)
-
 
     def call(self, x, mask=None):
         '''
@@ -70,9 +70,9 @@ class ClassActivationMapping(Layer):
             activation at pixel (x,y) produced by the deep convolution layers
             applied before the GAP layer.
         '''
-        x = K.permute_dimensions(x, (0,2,3,1))
+        x = K.permute_dimensions(x, (0, 2, 3, 1))
         x = K.dot(x, self.W)
-        x = K.permute_dimensions(x, (0,3,1,2)) # (batch_size, n_classes, x, y)
+        x = K.permute_dimensions(x, (0, 3, 1, 2))  # (batch_size, n_classes, x, y)
         return x
 
     def get_output_shape_for(self, input_shape):
@@ -158,7 +158,7 @@ class _Conv(Layer):
                  kernel_constraint=None,
                  bias_constraint=None,
                  **kwargs):
-        #TODO: Test this layer
+        # TODO: Test this layer
         super(_Conv, self).__init__(**kwargs)
         self.rank = rank
         self.filters = filters
@@ -177,7 +177,7 @@ class _Conv(Layer):
         self.kernel_constraint = constraints.get(kernel_constraint)
         self.bias_constraint = constraints.get(bias_constraint)
         self.input_spec = InputSpec(ndim=self.rank + 2)
-        #TODO: Test this layer. Old code:
+        # TODO: Test this layer. Old code:
         """
         self.W_constraint = constraints.get(W_constraint)
         self.b_constraint = constraints.get(b_constraint)
@@ -197,6 +197,7 @@ class _Conv(Layer):
             kwargs['input_shape'] = (self.input_length, self.input_dim)
         super(Convolution1D, self).__init__(**kwargs)
         """
+
     def build(self, input_shape):
         if self.data_format == 'channels_first':
             channel_axis = 1
@@ -315,6 +316,7 @@ class _Conv(Layer):
         self.b_learning_rate_multiplier = b_learning_rate_multiplier
         self.learning_rate_multipliers = [self.W_learning_rate_multiplier,
                                           self.b_learning_rate_multiplier]
+
 
 class Conv1D(_Conv):
     """1D convolution layer (e.g. temporal convolution).
@@ -2054,7 +2056,7 @@ class ZeroPadding3D(Layer):
 
 
 class CompactBilinearPooling(Layer):
-    #TODO: Test this layer
+    # TODO: Test this layer
     '''Compact Bilinear Pooling
     # Arguments:
         d: dimension of the compact bilinear feature
@@ -2091,11 +2093,11 @@ class CompactBilinearPooling(Layer):
         self.shape_in = input_shapes
         for i in range(self.nmodes):
             if self.h[i] is None:
-                self.h[i] = np.random.random_integers(0, self.d-1, size=(input_shapes[i][1],))
-                self.h[i] = K.variable(self.h[i], dtype='int64', name='h'+str(i))
+                self.h[i] = np.random.random_integers(0, self.d - 1, size=(input_shapes[i][1],))
+                self.h[i] = K.variable(self.h[i], dtype='int64', name='h' + str(i))
             if self.s[i] is None:
-                self.s[i] = (np.floor(np.random.uniform(0, 2, size=(input_shapes[i][1],)))*2-1).astype('int64')
-                self.s[i] = K.variable(self.s[i], dtype='int64', name='s'+str(i))
+                self.s[i] = (np.floor(np.random.uniform(0, 2, size=(input_shapes[i][1],))) * 2 - 1).astype('int64')
+                self.s[i] = K.variable(self.s[i], dtype='int64', name='s' + str(i))
         self.non_trainable_weights = [self.h[i] for i in range(self.nmodes)] + [self.s[i] for i in range(self.nmodes)]
 
         self.built = True
@@ -2109,7 +2111,7 @@ class CompactBilinearPooling(Layer):
         if self.return_extra:
             for i in range(self.nmodes):
                 to_return += [None, None, None, None]
-        return to_return # +[None]
+        return to_return  # +[None]
 
     def multimodal_compact_bilinear(self, x):
         v = [[]] * self.nmodes
@@ -2135,8 +2137,8 @@ class CompactBilinearPooling(Layer):
                                       v[i],
                                       zeros_pad], axis=1)
                 fft_v[i] = K.fft(v_in)
-                prev = K.cast(K.floor(self.d/2.), 'int16')
-                post = K.cast(K.ceil(self.d/2.), 'int16')
+                prev = K.cast(K.floor(self.d / 2.), 'int16')
+                post = K.cast(K.ceil(self.d / 2.), 'int16')
                 acum_fft *= K.concatenate((fft_v[i][:, -post:], fft_v[i][:, :prev]), axis=1)
 
             out = K.cast(K.ifft(acum_fft), dtype='float32')
@@ -2147,7 +2149,7 @@ class CompactBilinearPooling(Layer):
         if self.return_extra:
             # TODO: remove fft_v and acum_fft from all returns
             raise NotImplementedError("return_extra not implemented")
-            return [out]+v+fft_v+[acum_fft]
+            return [out] + v + fft_v + [acum_fft]
         else:
             return out
 
@@ -2158,14 +2160,14 @@ class CompactBilinearPooling(Layer):
         if len(self.shape_in[0]) > 2:
             x = [x[i].dimshuffle(tuple([0] + range(2, len(self.shape_in[0])) + [1])) for i in range(self.nmodes)]
             x = [K.reshape(x[i], tuple([-1] + [self.shape_in[0][1]])) for i in range(self.nmodes)]
-            ##x = [K.reshape(K.dimshuffle(x[i], tuple([0]+range(2,len(self.shape_in))+[1])), tuple([-1] + [self.shape_in[1]])) for i in range(self.nmodes)]
+            # x = [K.reshape(K.dimshuffle(x[i], tuple([0]+range(2,len(self.shape_in))+[1])), tuple([-1] + [self.shape_in[1]])) for i in range(self.nmodes)]
         y = self.multimodal_compact_bilinear(x)
         if len(self.shape_in[0]) > 2:
             y = K.reshape(y, tuple([-1] + self.shape_in[0][2:] + [self.d]))
             y.dimshuffle(tuple([0, -1] + range(1, len(self.shape_in[0]) - 1)))
-            ##y = K.dimshuffle(K.reshape(y, tuple([-1] + self.shape_in[0][2:] + [self.d])), tuple([0,-1]+range(1,len(self.shape_in)-1)))
+            # y = K.dimshuffle(K.reshape(y, tuple([-1] + self.shape_in[0][2:] + [self.d])), tuple([0,-1]+range(1,len(self.shape_in)-1)))
         if self.return_extra:
-            return y+self.h+self.s
+            return y + self.h + self.s
         return y
 
     def get_config(self):
@@ -2180,19 +2182,18 @@ class CompactBilinearPooling(Layer):
         shapes = []
         shapes.append(tuple([input_shape[0][0], self.d] + list(input_shape[0][2:])))
         if self.return_extra:
-            for s in input_shape: # v
-                shapes.append(tuple([np.prod(s[0]+list(s[2:])), self.d]))
-            for s in input_shape: # fft_v
-                shapes.append(tuple([np.prod(s[0]+list(s[2:])), self.d]))
-            shapes.append(tuple([np.prod(s[0]+list(s[2:])), self.d])) # acum_fft
-            for s in input_shape: # h
-                shapes.append(tuple([s[1],1]))
-            for s in input_shape: # s
-                shapes.append(tuple([s[1],1]))
+            for s in input_shape:  # v
+                shapes.append(tuple([np.prod(s[0] + list(s[2:])), self.d]))
+            for s in input_shape:  # fft_v
+                shapes.append(tuple([np.prod(s[0] + list(s[2:])), self.d]))
+            shapes.append(tuple([np.prod(s[0] + list(s[2:])), self.d]))  # acum_fft
+            for s in input_shape:  # h
+                shapes.append(tuple([s[1], 1]))
+            for s in input_shape:  # s
+                shapes.append(tuple([s[1], 1]))
             return shapes
         else:
             return shapes[0]
-
 
 
 class BilinearPooling(Layer):
@@ -2220,10 +2221,10 @@ class BilinearPooling(Layer):
     def build(self, input_shapes):
         self.trainable_weights = []
         self.nmodes = len(input_shapes)
-        for i,s in enumerate(input_shapes):
+        for i, s in enumerate(input_shapes):
             if s != input_shapes[0]:
                 raise Exception('The input size of all vectors must be the same: '
-                                'shape of vector on position '+str(i)+' (0-based) '+str(s)+' != shape of vector on position 0 '+str(input_shapes[0]))
+                                'shape of vector on position ' + str(i) + ' (0-based) ' + str(s) + ' != shape of vector on position 0 ' + str(input_shapes[0]))
         self.built = True
 
     def compute_mask(self, input, input_mask=None):
@@ -2286,11 +2287,11 @@ class CountSketch(Layer):
             self.nmodes = len(input_shapes)
             for i in range(self.nmodes):
                 if self.h[i] is None:
-                    self.h[i] = np.random.random_integers(0, self.d-1, size=(input_shapes[i][1],))
-                    self.h[i] = K.variable(self.h[i], dtype='int64', name='h'+str(i))
+                    self.h[i] = np.random.random_integers(0, self.d - 1, size=(input_shapes[i][1],))
+                    self.h[i] = K.variable(self.h[i], dtype='int64', name='h' + str(i))
                 if self.s[i] is None:
-                    self.s[i] =  (np.floor(np.random.uniform(0, 2, size=(input_shapes[i][1],)))*2-1).astype('int64')
-                    self.s[i] = K.variable(self.s[i], dtype='int64', name='s'+str(i))
+                    self.s[i] = (np.floor(np.random.uniform(0, 2, size=(input_shapes[i][1],))) * 2 - 1).astype('int64')
+                    self.s[i] = K.variable(self.s[i], dtype='int64', name='s' + str(i))
         self.built = True
 
     def compute_mask(self, input, input_mask=None):
@@ -2299,7 +2300,7 @@ class CountSketch(Layer):
             for i in range(len(input_mask)):
                 to_return.append(None)
         else:
-            to_return =  input_mask
+            to_return = input_mask
         if self.return_extra:
             for i in range(self.nmodes):
                 to_return += [None, None]
@@ -2316,7 +2317,7 @@ class CountSketch(Layer):
             raise Exception('CountSketch must be called on a list of tensors.')
         y = self.compact(x)
         if self.return_extra:
-            return y+self.h+self.s
+            return y + self.h + self.s
         return y
 
     def get_config(self):
@@ -2332,9 +2333,9 @@ class CountSketch(Layer):
             shapes.append(tuple([s[0], self.d]))
         if self.return_extra:
             for i in range(self.nmodes):
-                shapes.append(tuple([input_shape[i][1],1]))
+                shapes.append(tuple([input_shape[i][1], 1]))
             for i in range(self.nmodes):
-                shapes.append(tuple([input_shape[i][1],1]))
+                shapes.append(tuple([input_shape[i][1], 1]))
         return shapes
 
 

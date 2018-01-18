@@ -963,7 +963,7 @@ class Recurrent(Layer):
         # they should be the main input and `initial_state`
         # e.g. when loading model from file
         # TODO: This is disabled, accounting for multiple-inputs RNNs. More general way of doing this?
-        #if isinstance(inputs, (list, tuple)) and len(inputs) > 1 and initial_state is None:
+        # if isinstance(inputs, (list, tuple)) and len(inputs) > 1 and initial_state is None:
         #    initial_state = inputs[1:]
         #    inputs = inputs[0]
 
@@ -1127,4 +1127,3 @@ class Recurrent(Layer):
                   'implementation': self.implementation}
         base_config = super(Recurrent, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
-

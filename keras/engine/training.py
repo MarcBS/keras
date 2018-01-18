@@ -984,7 +984,6 @@ class Model(Container):
                                                  name='train_function',
                                                  **self._function_kwargs)
 
-
     def _make_test_function_only_metrics(self):
         if not hasattr(self, 'test_function'):
             raise RuntimeError('You must compile your model before using it.')
@@ -999,7 +998,6 @@ class Model(Container):
             # Does update the network states.
             self.test_function_only_metrics = K.function(inputs, self.metrics_tensors,
                                                          updates=self.state_updates, **self._function_kwargs)
-
 
     def _make_test_function(self):
         if not hasattr(self, 'test_function'):
@@ -1074,7 +1072,6 @@ class Model(Container):
                              'a defined shape, or ' + steps_name +
                              ' should be specified.')
         return num_samples
-
 
     def _check_num_samples(self, ins, batch_size=None, steps=None, steps_name='steps'):
         """Determine the number of samples provided for training and evaluation.
@@ -1808,11 +1805,9 @@ class Model(Container):
                                verbose=verbose,
                                steps=steps)
 
-
     def evaluate_on_metrics(self, x, y, batch_size=32, verbose=1, sample_weight=None):
         '''Returns the metrics values for the model
         in test mode. Computation is done in batches.
-
         # Arguments
             x: Numpy array of test data,
                 or list of Numpy arrays if the model has multiple inputs.

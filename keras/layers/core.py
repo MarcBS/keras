@@ -1581,8 +1581,7 @@ def autocrop(inputs, cropping):
         # the cropping
         cropping = list(cropping)
         if ndim > len(cropping):
-            cropping = list(cropping) + \
-                       [None] * (ndim - len(cropping))
+            cropping = list(cropping) + [None] * (ndim - len(cropping))
 
         # For each dimension
         for dim, cr in enumerate(cropping):
@@ -1644,9 +1643,7 @@ def autocrop_array_shapes(input_shapes, cropping):
         if not all(len(sh) == ndim for sh in input_shapes):
             raise ValueError("Not all inputs are of the same "
                              "dimensionality. Got {0} inputs of "
-                             "dimensionalities {1}.".format(
-                len(input_shapes),
-                [len(sh) for sh in input_shapes]))
+                             "dimensionalities {1}.".format(len(input_shapes), [len(sh) for sh in input_shapes]))
 
         result = []
 
@@ -1654,8 +1651,7 @@ def autocrop_array_shapes(input_shapes, cropping):
         # the cropping
         cropping = list(cropping)
         if ndim > len(cropping):
-            cropping = list(cropping) + \
-                       [None] * (ndim - len(cropping))
+            cropping = list(cropping) + [None] * (ndim - len(cropping))
 
         for sh, cr in zip(zip(*input_shapes), cropping):
             if cr is None:

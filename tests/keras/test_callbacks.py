@@ -17,11 +17,11 @@ from keras.utils.test_utils import get_test_data
 from keras.utils.test_utils import keras_test
 from keras import backend as K
 from keras.utils import np_utils
+
 try:
     from unittest.mock import patch
 except:
     from mock import patch
-
 
 input_dim = 2
 num_hidden = 4
@@ -68,6 +68,7 @@ def test_TerminateOnNaN():
                    y_train[i * batch_size: (i + 1) * batch_size])
             i += 1
             i = i % max_batch_index
+
     history = model.fit_generator(data_generator(),
                                   len(X_train),
                                   validation_data=(X_test, y_test),

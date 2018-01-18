@@ -56,15 +56,15 @@ print('Build model...')
 input1 = Input(name='Input_1', shape=tuple([None]), dtype='int32')
 # If we don't mask the emb, the error doesn't appear
 # If we mask it, it appears
-emb =  Embedding(max_features, 128, dropout=0.2, mask_zero=False)(input1)
-lstm  = AttLSTMCond(128, dropout_W=0.2, dropout_U=0.2)([emb, emb])
+emb = Embedding(max_features, 128, dropout=0.2, mask_zero=False)(input1)
+lstm = AttLSTMCond(128, dropout_W=0.2, dropout_U=0.2)([emb, emb])
 masked_lstm = RemoveMask()(lstm)
 out_lstm = Dense(1, activation='sigmoid')(masked_lstm)
 model = Model(input=input1, output=out_lstm)
 # try using different optimizers and different optimizer configs
 model.compile(loss='binary_crossentropy',
-              optimizer='adam')#,
-              #metrics=['accuracy'])
+              optimizer='adam')  # ,
+# metrics=['accuracy'])
 
 print('Train...')
 model.fit(X_train, y_train, batch_size=batch_size, nb_epoch=15,

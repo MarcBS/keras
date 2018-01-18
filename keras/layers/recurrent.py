@@ -694,7 +694,7 @@ class RNN(Layer):
             if len(states) != len(self.states):
                 raise ValueError('Layer ' + self.name + ' expects ' +
                                  str(len(self.states)) + ' states, '
-                                 'but it received ' + str(len(states)) +
+                                                         'but it received ' + str(len(states)) +
                                  ' state values. Input received: ' +
                                  str(states))
             for index, (value, state) in enumerate(zip(states, self.states)):
@@ -875,8 +875,7 @@ class SimpleRNNCell(Layer):
                 _generate_dropout_ones(inputs, K.shape(inputs)[-1]),
                 self.dropout,
                 training=training)
-        if (0 < self.recurrent_dropout < 1 and
-                self._recurrent_dropout_mask is None):
+        if (0 < self.recurrent_dropout < 1 and self._recurrent_dropout_mask is None):
             self._recurrent_dropout_mask = _generate_dropout_mask(
                 _generate_dropout_ones(inputs, self.units),
                 self.recurrent_dropout,
@@ -1224,8 +1223,8 @@ class GRUCell(Layer):
         self.recurrent_constraint = constraints.get(recurrent_constraint)
         self.bias_constraint = constraints.get(bias_constraint)
 
-        self.dropout = min(1., max(0., dropout))  if dropout is not None else 0.
-        self.recurrent_dropout = min(1., max(0., recurrent_dropout))  if recurrent_dropout is not None else 0.
+        self.dropout = min(1., max(0., dropout)) if dropout is not None else 0.
+        self.recurrent_dropout = min(1., max(0., recurrent_dropout)) if recurrent_dropout is not None else 0.
         self.implementation = implementation
         self.state_size = self.units
         self._dropout_mask = None
@@ -1257,9 +1256,7 @@ class GRUCell(Layer):
         self.kernel_z = self.kernel[:, :self.units]
         self.recurrent_kernel_z = self.recurrent_kernel[:, :self.units]
         self.kernel_r = self.kernel[:, self.units: self.units * 2]
-        self.recurrent_kernel_r = self.recurrent_kernel[:,
-                                                        self.units:
-                                                        self.units * 2]
+        self.recurrent_kernel_r = self.recurrent_kernel[:, self.units: self.units * 2]
         self.kernel_h = self.kernel[:, self.units * 2:]
         self.recurrent_kernel_h = self.recurrent_kernel[:, self.units * 2:]
 
@@ -1282,13 +1279,9 @@ class GRUCell(Layer):
                 self.dropout,
                 training=training,
                 count=3)
-        if (0 < self.recurrent_dropout < 1 and
-                self._recurrent_dropout_mask is None):
-            self._recurrent_dropout_mask = _generate_dropout_mask(
-                _generate_dropout_ones(inputs, self.units),
-                self.recurrent_dropout,
-                training=training,
-                count=3)
+        if (0 < self.recurrent_dropout < 1 and self._recurrent_dropout_mask is None):
+            self._recurrent_dropout_mask = _generate_dropout_mask(_generate_dropout_ones(inputs, self.units),
+                                                                  self.recurrent_dropout, training=training, count=3)
 
         # dropout matrices for input units
         dp_mask = self._dropout_mask
@@ -1684,7 +1677,6 @@ class GRUCond(Recurrent):
         - [On the Properties of Neural Machine Translation: Encoder-Decoder Approaches](https://arxiv.org/abs/1409.1259)
         - [Empirical Evaluation of Gated Recurrent Neural Networks on Sequence Modeling](http://arxiv.org/abs/1412.3555v1)
         - [A Theoretically Grounded Application of Dropout in Recurrent Neural Networks](http://arxiv.org/abs/1512.05287)
-    
     """
 
     @interfaces.legacy_recurrent_support
@@ -1864,8 +1856,7 @@ class GRUCond(Recurrent):
         if self.static_ctx:
             K.dot(inputs * cond_dp_mask, self.conditional_kernel)
         else:
-            return K.dot(inputs * cond_dp_mask, self.conditional_kernel) + \
-                   K.dot(self.context * dp_mask[0], self.kernel)
+            return K.dot(inputs * cond_dp_mask, self.conditional_kernel) + K.dot(self.context * dp_mask[0], self.kernel)
 
     def compute_output_shape(self, input_shape):
         if self.return_sequences:
@@ -2815,9 +2806,9 @@ class AttGRUCond(Recurrent):
         self.bias_ca_constraint = constraints.get(bias_ca_constraint)
 
         # Dropouts
-        self.dropout = min(1., max(0., dropout))  if dropout is not None else 0.
-        self.recurrent_dropout = min(1., max(0., recurrent_dropout))  if recurrent_dropout is not None else 0.
-        self.conditional_dropout = min(1., max(0., conditional_dropout))  if conditional_dropout is not None else 0.
+        self.dropout = min(1., max(0., dropout)) if dropout is not None else 0.
+        self.recurrent_dropout = min(1., max(0., recurrent_dropout)) if recurrent_dropout is not None else 0.
+        self.conditional_dropout = min(1., max(0., conditional_dropout)) if conditional_dropout is not None else 0.
         self.attention_dropout = min(1., max(0., attention_dropout)) if attention_dropout is not None else 0.
         self.num_inputs = num_inputs
         self.input_spec = [InputSpec(ndim=3), InputSpec(ndim=3)]
@@ -2884,8 +2875,6 @@ class AttGRUCond(Recurrent):
                                         initializer=self.bias_initializer,
                                         regularizer=self.bias_regularizer,
                                         constraint=self.bias_constraint)
-
-
         else:
             self.bias = None
 
@@ -2923,8 +2912,10 @@ class AttGRUCond(Recurrent):
 
         if 0 < self.conditional_dropout < 1:
             ones = K.ones_like(K.squeeze(inputs[:, 0:1, :], axis=1))
+
             def dropped_inputs():
                 return K.dropout(ones, self.conditional_dropout)
+
             cond_dp_mask = [K.in_train_phase(dropped_inputs,
                                              ones,
                                              training=training) for _ in range(3)]
@@ -3072,8 +3063,10 @@ class AttGRUCond(Recurrent):
         # States[4] - Dropout_W
         if 0 < self.dropout < 1:
             ones = K.ones_like(K.squeeze(self.context[:, 0:1, :], axis=1))
+
             def dropped_inputs():
                 return K.dropout(ones, self.dropout)
+
             dp_mask = [K.in_train_phase(dropped_inputs,
                                         ones,
                                         training=training) for _ in range(3)]
@@ -3541,8 +3534,10 @@ class AttConditionalGRUCond(Recurrent):
 
         if 0 < self.conditional_dropout < 1:
             ones = K.ones_like(K.squeeze(inputs[:, 0:1, :], axis=1))
+
             def dropped_inputs():
                 return K.dropout(ones, self.conditional_dropout)
+
             cond_dp_mask = [K.in_train_phase(dropped_inputs,
                                              ones,
                                              training=training) for _ in range(3)]
@@ -4000,8 +3995,7 @@ class LSTMCell(Layer):
                 self.dropout,
                 training=training,
                 count=4)
-        if (0 < self.recurrent_dropout < 1 and
-                self._recurrent_dropout_mask is None):
+        if (0 < self.recurrent_dropout < 1 and self._recurrent_dropout_mask is None):
             self._recurrent_dropout_mask = _generate_dropout_mask(
                 _generate_dropout_ones(inputs, self.units),
                 self.recurrent_dropout,
@@ -4526,9 +4520,9 @@ class LSTMCond(Recurrent):
         self.bias_ca_constraint = constraints.get(bias_ca_constraint)
 
         # Dropouts
-        self.dropout = min(1., max(0., dropout))if dropout is not None else 0.
-        self.recurrent_dropout = min(1., max(0., recurrent_dropout))if recurrent_dropout is not None else 0.
-        self.conditional_dropout = min(1., max(0., conditional_dropout))if conditional_dropout is not None else 0.
+        self.dropout = min(1., max(0., dropout)) if dropout is not None else 0.
+        self.recurrent_dropout = min(1., max(0., recurrent_dropout)) if recurrent_dropout is not None else 0.
+        self.conditional_dropout = min(1., max(0., conditional_dropout)) if conditional_dropout is not None else 0.
         self.num_inputs = num_inputs
         if static_ctx:
             self.input_spec = [InputSpec(ndim=3), InputSpec(ndim=2)]
@@ -4627,8 +4621,10 @@ class LSTMCond(Recurrent):
     def preprocess_input(self, inputs, training=None):
         if 0 < self.conditional_dropout < 1:
             ones = K.ones_like(K.squeeze(inputs[:, 0:1, :], axis=1))
+
             def dropped_inputs():
                 return K.dropout(ones, self.conditional_dropout)
+
             cond_dp_mask = [K.in_train_phase(dropped_inputs,
                                              ones,
                                              training=training) for _ in range(4)]
@@ -4642,10 +4638,12 @@ class LSTMCond(Recurrent):
         # Not Static ctx
         if 0 < self.dropout < 1:
             ones = K.ones_like(K.squeeze(self.context[:, 0:1, :], axis=1))
+
             def dropped_inputs():
                 return K.dropout(ones, self.dropout)
+
             dp_mask = [K.in_train_phase(dropped_inputs, ones,
-                                             training=training) for _ in range(4)]
+                                        training=training) for _ in range(4)]
             preprocessed_context = K.dot(self.context * dp_mask[0][:, None, :], self.kernel)
         else:
             preprocessed_context = K.dot(self.context, self.kernel)
@@ -4733,8 +4731,8 @@ class LSTMCond(Recurrent):
         z = x + K.dot(h_tm1 * rec_dp_mask[0], self.recurrent_kernel)
         if self.static_ctx:
             context = states[4]
-            #mask_context = states[5]  # Context mask
-            #if mask_context.ndim > 1:  # Mask the context (only if necessary)
+            # mask_context = states[5]  # Context mask
+            # if mask_context.ndim > 1:  # Mask the context (only if necessary)
             #    context = mask_context[:, :, None] * context
             z += K.dot(context * dp_mask[0], self.kernel)
         if self.use_bias:
@@ -4758,8 +4756,10 @@ class LSTMCond(Recurrent):
         # States[3] - Dropout_W
         if 0 < self.dropout < 1:
             ones = K.ones_like(K.squeeze(self.context[:, 0:1, :], axis=1))
+
             def dropped_inputs():
                 return K.dropout(ones, self.dropout)
+
             dp_mask = [K.in_train_phase(dropped_inputs,
                                         ones,
                                         training=training) for _ in range(4)]
@@ -4785,7 +4785,6 @@ class LSTMCond(Recurrent):
         # States[4] - context
         if self.static_ctx:
             constants.append(self.context)
-
 
         return constants
 
@@ -5033,9 +5032,9 @@ class AttLSTM(Recurrent):
         self.bias_ca_constraint = constraints.get(bias_ca_constraint)
 
         # Dropouts
-        self.dropout = min(1., max(0., dropout))if dropout is not None else 0.
-        self.recurrent_dropout = min(1., max(0., recurrent_dropout))if recurrent_dropout is not None else 0.
-        self.attention_dropout = min(1., max(0., attention_dropout))if attention_dropout is not None else 0.
+        self.dropout = min(1., max(0., dropout)) if dropout is not None else 0.
+        self.recurrent_dropout = min(1., max(0., recurrent_dropout)) if recurrent_dropout is not None else 0.
+        self.attention_dropout = min(1., max(0., attention_dropout)) if attention_dropout is not None else 0.
         self.num_inputs = num_inputs
         self.input_spec = [InputSpec(ndim=3)]
         for _ in range(len(self.input_spec), self.num_inputs):
@@ -5272,8 +5271,10 @@ class AttLSTM(Recurrent):
         # States[4] - Dropout W (input dropout)
         if 0 < self.dropout < 1:
             ones = K.ones_like(K.squeeze(self.context[:, 0:1, :], axis=1))
+
             def dropped_inputs():
                 return K.dropout(ones, self.dropout)
+
             dp_mask = [K.in_train_phase(dropped_inputs,
                                         ones,
                                         training=training) for _ in range(4)]
@@ -5723,8 +5724,10 @@ class AttLSTMCond(Recurrent):
 
         if 0 < self.conditional_dropout < 1:
             ones = K.ones_like(K.squeeze(inputs[:, 0:1, :], axis=1))
+
             def dropped_inputs():
                 return K.dropout(ones, self.conditional_dropout)
+
             cond_dp_mask = [K.in_train_phase(dropped_inputs,
                                              ones,
                                              training=training) for _ in range(4)]
@@ -5872,8 +5875,10 @@ class AttLSTMCond(Recurrent):
         # States[4] - Dropout_W
         if 0 < self.dropout < 1:
             ones = K.ones_like(K.squeeze(self.context[:, 0:1, :], axis=1))
+
             def dropped_inputs():
                 return K.dropout(ones, self.dropout)
+
             dp_mask = [K.in_train_phase(dropped_inputs,
                                         ones,
                                         training=training) for _ in range(4)]
@@ -6006,7 +6011,7 @@ class AttLSTMCond(Recurrent):
                   'conditional_dropout': self.conditional_dropout,
                   'attention_dropout': self.attention_dropout,
                   'num_inputs': self.num_inputs,
-                  #'input_spec': self.input_spec
+                  # 'input_spec': self.input_spec
                   }
         base_config = super(AttLSTMCond, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
@@ -6139,7 +6144,6 @@ class AttConditionalLSTMCond(Recurrent):
         - [Nematus: a Toolkit for Neural Machine Translation](http://arxiv.org/abs/1703.04357)
     """
 
-
     @interfaces.legacy_recurrent_support
     def __init__(self, units,
                  att_units=0,
@@ -6239,10 +6243,10 @@ class AttConditionalLSTMCond(Recurrent):
         self.bias_ca_constraint = constraints.get(bias_ca_constraint)
 
         # Dropouts
-        self.dropout = min(1., max(0., dropout))if dropout is not None else 0.
-        self.recurrent_dropout = min(1., max(0., recurrent_dropout))if recurrent_dropout is not None else 0.
-        self.conditional_dropout = min(1., max(0., conditional_dropout))if conditional_dropout is not None else 0.
-        self.attention_dropout = min(1., max(0., attention_dropout))if attention_dropout is not None else 0.
+        self.dropout = min(1., max(0., dropout)) if dropout is not None else 0.
+        self.recurrent_dropout = min(1., max(0., recurrent_dropout)) if recurrent_dropout is not None else 0.
+        self.conditional_dropout = min(1., max(0., conditional_dropout)) if conditional_dropout is not None else 0.
+        self.attention_dropout = min(1., max(0., attention_dropout)) if attention_dropout is not None else 0.
 
         # Inputs
         self.num_inputs = num_inputs
@@ -6381,8 +6385,10 @@ class AttConditionalLSTMCond(Recurrent):
 
         if 0 < self.conditional_dropout < 1:
             ones = K.ones_like(K.squeeze(inputs[:, 0:1, :], axis=1))
+
             def dropped_inputs():
                 return K.dropout(ones, self.conditional_dropout)
+
             cond_dp_mask = [K.in_train_phase(dropped_inputs,
                                              ones,
                                              training=training) for _ in range(4)]
@@ -6544,8 +6550,10 @@ class AttConditionalLSTMCond(Recurrent):
         # States[4] - Dropout W (input dropout)
         if 0 < self.dropout < 1:
             ones = K.ones_like(K.squeeze(self.context[:, 0:1, :], axis=1))
+
             def dropped_inputs():
                 return K.dropout(ones, self.dropout)
+
             dp_mask = [K.in_train_phase(dropped_inputs,
                                         ones,
                                         training=training) for _ in range(4)]
@@ -6892,11 +6900,11 @@ class AttLSTMCond2Inputs(Recurrent):
 
         if self.attend_on_both:
             assert K.ndim(self.input_spec[1]) == 3 and K.ndim(self.input_spec[2]), 'When using two attention models,' \
-                                                                             'you should pass two 3D tensors' \
-                                                                             'to AttLSTMCond2Inputs'
+                                                                                   'you should pass two 3D tensors' \
+                                                                                   'to AttLSTMCond2Inputs'
         else:
             assert K.ndim(self.input_spec[1]) == 3, 'When using an attention model, you should pass one 3D tensors' \
-                                                 'to AttLSTMCond2Inputs'
+                                                    'to AttLSTMCond2Inputs'
 
         if K.ndim(self.input_spec[1]) == 3:
             self.context1_steps = input_shape[1][1]
@@ -7590,8 +7598,8 @@ class AttLSTMCond3Inputs(Recurrent):
         if self.dropout_T or self.dropout_W or self.dropout_U or self.dropout_V or self.dropout_wa or \
                 self.dropout_Wa or self.dropout_Ua:
             self.uses_learning_phase = True
-        if self.attend_on_both and (self.dropout_wa2 or self.dropout_Wa2 or self.dropout_Ua2 or
-                                        self.dropout_wa3 or self.dropout_Wa3 or self.dropout_Ua3):
+        if self.attend_on_both and \
+                (self.dropout_wa2 or self.dropout_Wa2 or self.dropout_Ua2 or self.dropout_wa3 or self.dropout_Wa3 or self.dropout_Ua3):
             self.uses_learning_phase = True
 
         # Regularizers
@@ -7644,14 +7652,11 @@ class AttLSTMCond3Inputs(Recurrent):
         self.input_dim = input_shape[0][2]
 
         if self.attend_on_both:
-            assert K.ndim(self.input_spec[1]) == 3 and \
-                   K.ndim(self.input_spec[2]) == 3 and \
-                   K.ndim(self.input_spec[3]) == 3, 'When using two attention models,' \
-                                                 'you should pass two 3D tensors' \
-                                                 'to AttLSTMCond3Inputs'
+            assert K.ndim(self.input_spec[1]) == 3 and K.ndim(self.input_spec[2]) == 3 and K.ndim(self.input_spec[3]) == 3,\
+                'When using two attention models, you should pass two 3D tensors to AttLSTMCond3Inputs'
         else:
             assert K.ndim(self.input_spec[1]) == 3, 'When using an attention model, you should pass one 3D tensors' \
-                                                 'to AttLSTMCond3Inputs'
+                                                    'to AttLSTMCond3Inputs'
 
         if K.ndim(self.input_spec[1]) == 3:
             self.context1_steps = input_shape[1][1]

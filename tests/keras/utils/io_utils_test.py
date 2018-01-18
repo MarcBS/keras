@@ -10,6 +10,7 @@ from keras.utils.io_utils import ask_to_proceed_with_overwrite
 import numpy as np
 import warnings
 import h5py
+
 try:
     from unittest.mock import patch
 except:

@@ -54,6 +54,7 @@ _MANUAL_VAR_INIT = False
 # We assume our devices don't change during our lifetime.
 _LOCAL_DEVICES = None
 
+
 def printing(x, string=''):
     """Prints the value of a tensor variable
     :param x: Tensor variable
@@ -471,7 +472,7 @@ def is_keras_tensor(x):
                           tf_variables.Variable,
                           tf.SparseTensor)):
         raise ValueError('Unexpectedly found an instance of type `' + str(type(x)) + '`. '
-                         'Expected a symbolic tensor instance.')
+                                                                                     'Expected a symbolic tensor instance.')
     return hasattr(x, '_keras_history')
 
 
@@ -969,6 +970,7 @@ def floor(x, name=None):
     """
 
     return tf.floor(x, name=name)
+
 
 # UPDATES OPS
 
@@ -2111,15 +2113,16 @@ def equal_dimensions(x, y):
     x_shape = int_shape(x)
     fun_comp = x_shape[2] == y_shape[2] and x_shape[3] == y_shape[3]
 
-    return tf.cond(fun_comp, y, funequal(x,y))
+    return tf.cond(fun_comp, y, funequal(x, y))
 
 
-def funequal(x,y):
+def funequal(x, y):
     y_shape = int_shape(y)
     x_shape = int_shape(x)
-    new_y = zeros([1,1,1,1])
+    new_y = zeros([1, 1, 1, 1])
     new_y = set_subtensor(new_y[:, :, :-1, :-1], y)
     return new_y
+
 
 def arange(start, stop=None, step=1, dtype='int32'):
     """Creates a 1D tensor containing a sequence of integers.
@@ -2825,7 +2828,8 @@ def rnn(step_function, inputs, initial_states,
                     tiled_masks_t = [tf.tile(mask_t, tf.stack([1, tf.shape(states[i])[1]])) for i in range(len(states))]
                     new_states = [tf.where(tiled_masks_t[i], new_states[i], states[i]) for i in range(len(states))]
                     for i in pos_extra_outputs_states:
-                        states_ta_t[i - len(pos_extra_outputs_states)] = states_ta_t[i - len(pos_extra_outputs_states)].write(time, new_states[i])
+                        states_ta_t[i - len(pos_extra_outputs_states)] = states_ta_t[
+                            i - len(pos_extra_outputs_states)].write(time, new_states[i])
                     output_ta_t = output_ta_t.write(time, output)
                     return (time + 1, output_ta_t, states_ta_t) + tuple(new_states)
             else:
@@ -2879,7 +2883,7 @@ def rnn(step_function, inputs, initial_states,
                     new_state.set_shape(state.get_shape())
                 output_ta_t = output_ta_t.write(time, output)
                 return (time + 1, output_ta_t) + tuple(new_states)
-        loop_vars = (time, output_ta, states_ta) + states if pos_extra_outputs_states is not None\
+        loop_vars = (time, output_ta, states_ta) + states if pos_extra_outputs_states is not None \
             else (time, output_ta) + states
         final_outputs = control_flow_ops.while_loop(
             cond=lambda time, *_: time < time_steps,
@@ -2899,7 +2903,7 @@ def rnn(step_function, inputs, initial_states,
         if pos_extra_outputs_states is not None:
             new_states = []
             for i_s, state in enumerate(states):
-                if i_s in pos_extra_outputs_states: # This +1 accounts for the last_output
+                if i_s in pos_extra_outputs_states:  # This +1 accounts for the last_output
                     new_states.append(state.stack())
                 else:
                     new_states.append(state)
@@ -2908,7 +2912,6 @@ def rnn(step_function, inputs, initial_states,
         last_output = output_ta.read(last_time - 1)
     axes = [1, 0] + list(range(2, len(outputs.get_shape())))
     outputs = tf.transpose(outputs, axes)
-
 
     # if pos_extra_outputs_states is not None:
     #     for state_n in pos_extra_outputs_states:
@@ -2967,7 +2970,7 @@ def switch(condition, then_expression, else_expression):
                              ' equal to rank of `then_expression` and '
                              '`else_expression`. ndim(condition)=' +
                              str(cond_ndim) + ', ndim(then_expression)'
-                             '=' + str(expr_ndim))
+                                              '=' + str(expr_ndim))
         if cond_ndim > 1:
             ndim_diff = expr_ndim - cond_ndim
             cond_shape = tf.concat([tf.shape(condition), [1] * ndim_diff], axis=0)
@@ -3960,7 +3963,7 @@ def bias_add(x, bias, data_format=None):
             if len(bias_shape) == 1:
                 x += reshape(bias, (1, 1, bias_shape[0]))
             else:
-                x += reshape(bias, (1, ) + bias_shape)
+                x += reshape(bias, (1,) + bias_shape)
     else:
         x = tf.nn.bias_add(x, bias)
     return x
@@ -4069,26 +4072,29 @@ def random_multinomial(shape, p=0.0, dtype=None, seed=None):
     rng = RandomStreams(seed=seed)
     return rng.multinomial(shape, pvals=p, dtype=dtype)
 
+
 # COUNT SKETCH
 def count_sketch(h, s, x, d=16000):
-    print ('count_sketch is not implemented in the tensorflow backend')
+    print('count_sketch is not implemented in the tensorflow backend')
     pass
 
+
 def __count_sketch(h, s, v,  # Sequences
-                   y, # Outputs info
+                   y,  # Outputs info
                    ):
     pass
 
+
 # 1d Convolution
 def scan_conv1d(u, v):
-    '''1D convolution over a set of vectors. All inputs will be treated by pairs.
+    """1D convolution over a set of vectors. All inputs will be treated by pairs.
         #x must be equal to #kernel
 
     # Arguments
         u: first set of vectors
         v: second set of vectors
-    '''
-    print ('scan_conv1d is not implemented in the tensorflow backend')
+    """
+    print('scan_conv1d is not implemented in the tensorflow backend')
     pass
 
 
@@ -4385,4 +4391,3 @@ def conv_input_length(output_length, filter_size, border_mode, stride):
 
 def as_tensor_variable(x, name=None, ndim=None):
     return variable(x, name=name)
-

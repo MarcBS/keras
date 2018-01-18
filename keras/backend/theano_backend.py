@@ -12,6 +12,7 @@ from theano.tensor.fft import rfft, irfft
 from theano.printing import Print
 from theano.tensor.signal.conv import conv2d as vec_conv
 from theano.ifelse import ifelse
+
 try:
     import theano.sparse as th_sparse_module
 except ImportError:
@@ -30,11 +31,11 @@ from .common import set_image_dim_ordering, image_dim_ordering
 py_all = all
 py_sum = sum
 
-
 # INTERNAL UTILS
 theano.config.floatX = floatx()
 _LEARNING_PHASE = T.scalar(dtype='uint8', name='keras_learning_phase')  # 0 = test, 1 = train
 _UID_PREFIXES = defaultdict(int)
+
 
 def printing(x, string=''):
     """Prints the value of a tensor variable
@@ -307,7 +308,7 @@ def is_keras_tensor(x):
     if not isinstance(x, (T.TensorVariable,
                           T.sharedvar.TensorSharedVariable)):
         raise ValueError('Unexpectedly found an instance of type `' + str(type(x)) + '`. '
-                         'Expected a symbolic tensor instance.')
+                                                                                     'Expected a symbolic tensor instance.')
     return hasattr(x, '_keras_history')
 
 
@@ -758,6 +759,7 @@ def floor(x):
     """
     return T.floor(x)
 
+
 # UPDATES OPS
 
 
@@ -950,7 +952,7 @@ def batch_dot(x, y, axes=None):
             if axis != axes[1]:
                 shape.append(y._keras_shape[axis])
         if len(shape) == 1:
-            shape.append(1)     # Expand dims if ndim == 1
+            shape.append(1)  # Expand dims if ndim == 1
         out._keras_shape = tuple(shape)
     return out
 
@@ -1031,10 +1033,12 @@ def ifft(x, norm=None, is_odd=False):
     """
     return irfft(x, norm=norm, is_odd=is_odd)
 
+
 def real(x):
     """Gets the real part of a complex tensor
     """
     return T.real(x)
+
 
 # ELEMENT-WISE OPERATIONS
 
@@ -1302,10 +1306,12 @@ def log(x):
     """
     return T.log(x)
 
+
 def log2(x):
     """log in base 2
     """
     return T.log2(x)
+
 
 def logsumexp(x, axis=None, keepdims=False):
     """Computes log(sum(exp(elements across dimensions of a tensor))).
@@ -1734,7 +1740,7 @@ def repeat_elements(x, rep, axis):
         y._keras_shape = list(x._keras_shape)
         repeat_dim = x._keras_shape[axis]
         if repeat_dim is not None:
-                y._keras_shape[axis] = repeat_dim * rep
+            y._keras_shape[axis] = repeat_dim * rep
         y._keras_shape = tuple(y._keras_shape)
     return y
 
@@ -1826,7 +1832,7 @@ def repeatRdim(x, n, axis=1):
     If x has shape (samples, dim1, dim2) and n=2 and axis=1,
     the output will have shape (samples, 2, dim1, dim2).
     """
-    new_dim = range(axis) + ['x'] + range(axis,x.ndim)
+    new_dim = range(axis) + ['x'] + range(axis, x.ndim)
     x = x.dimshuffle(tuple(new_dim))
     return T.extra_ops.repeat(x, n, axis=axis)
 
@@ -1847,12 +1853,12 @@ def equal_dimensions(x, y):
     y_shape = int_shape(y)
     x_shape = int_shape(x)
     fun_comp = x_shape[2] == y_shape[2] and x_shape[3] == y_shape[3]
-    return ifelse(fun_comp, y, funequal(x,y))
+    return ifelse(fun_comp, y, funequal(x, y))
 
 
-def funequal(x,y):
+def funequal(x, y):
     """Returns a tensor with the last part as y"""
-    new_y = zeros([1,1,1,1])
+    new_y = zeros([1, 1, 1, 1])
     new_y = set_subtensor(new_y[:, :, :-1, :-1], y)
     return new_y
 
@@ -1935,7 +1941,7 @@ def flatten(x):
         if None in x._keras_shape:
             y._keras_shape = (None,)
         else:
-            y._keras_shape = (np.prod(x._keras_shape), )
+            y._keras_shape = (np.prod(x._keras_shape),)
     return y
 
 
@@ -2191,6 +2197,7 @@ def pattern_broadcast(x, broadcastable):
     """
     return T.patternbroadcast(x, broadcastable)
 
+
 # VALUE MANIPULATION
 
 
@@ -2285,6 +2292,7 @@ def print_tensor(x, message=''):
 class Function(object):
     """Wrapper around Theano Function
     """
+
     def __init__(self, inputs, outputs, updates=[], name=None, **kwargs):
         unique_variables_to_update = {}
         for v, nv in updates:
@@ -2410,7 +2418,7 @@ def rnn(step_function, inputs, initial_states,
     if mask is not None:
         if mask.ndim < ndim:
             mask = expand_dims(mask)
-        mask = mask.dimshuffle([1,0]+list(range(2,mask.ndim)))
+        mask = mask.dimshuffle([1, 0] + list(range(2, mask.ndim)))
 
         if unroll:
             indices = list(range(input_length))
@@ -2458,7 +2466,7 @@ def rnn(step_function, inputs, initial_states,
                 outputs = T.switch(mask, outputs, output_tm1)
                 return_states = []
                 for state, new_state in zip(states, new_states):
-                    #TODO: Theano cannot optimize this and therefore, it shows the InconsistencyError (new backend)
+                    # TODO: Theano cannot optimize this and therefore, it shows the InconsistencyError (new backend)
                     return_states.append(T.switch(mask, new_state, state))
                 return [outputs] + return_states
 
@@ -2529,7 +2537,7 @@ def rnn(step_function, inputs, initial_states,
         states = [T.squeeze(state[-1]) for state in states]
     else:
         states = [state if i_s in pos_extra_outputs_states
-                        else T.squeeze(state[-1]) for i_s, state in enumerate(states)]
+                  else T.squeeze(state[-1]) for i_s, state in enumerate(states)]
     last_output._uses_learning_phase = uses_learning_phase
     return last_output, outputs, states
 
@@ -3023,6 +3031,7 @@ def _preprocess_conv2d_image_shape(image_shape, data_format):
             return int(value)
         except TypeError:
             return None
+
     if data_format == 'channels_last':
         if image_shape:
             image_shape = (image_shape[0], image_shape[3],
@@ -3039,6 +3048,7 @@ def _preprocess_conv3d_volume_shape(volume_shape, data_format):
             return int(value)
         except TypeError:
             return None
+
     if data_format == 'channels_last':
         if volume_shape:
             volume_shape = (volume_shape[0], volume_shape[4],
@@ -3055,6 +3065,7 @@ def _preprocess_conv2d_filter_shape(filter_shape, data_format):
             return int(value)
         except TypeError:
             return None
+
     if filter_shape:
         filter_shape = (filter_shape[3], filter_shape[2],
                         filter_shape[0], filter_shape[1])
@@ -3070,6 +3081,7 @@ def _preprocess_conv3d_filter_shape(filter_shape, data_format):
             return int(value)
         except TypeError:
             return None
+
     if filter_shape:
         filter_shape = (filter_shape[4], filter_shape[3],
                         filter_shape[0], filter_shape[1], filter_shape[2])
@@ -3284,7 +3296,7 @@ def conv2d_transpose(x, kernel, output_shape, strides=(1, 1),
     conv_out = _postprocess_conv2d_output(conv_out, x, padding,
                                           kernel_shape, strides, data_format)
 
-    #TODO: Check this (from v1.2)
+    # TODO: Check this (from v1.2)
     """
     # Compute output width/height if None
     output_size = [None] * 2
@@ -3539,9 +3551,7 @@ def pool2d(x, pool_size, strides=(1, 1),
     if padding == 'same':
         expected_width = (x.shape[2] + strides[0] - 1) // strides[0]
         expected_height = (x.shape[3] + strides[1] - 1) // strides[1]
-        pool_out = pool_out[:, :,
-                            : expected_width,
-                            : expected_height]
+        pool_out = pool_out[:, :, :expected_width, :expected_height]
 
     if data_format == 'channels_last':
         pool_out = pool_out.dimshuffle((0, 2, 3, 1))
@@ -3603,10 +3613,7 @@ def pool3d(x, pool_size, strides=(1, 1, 1), padding='valid',
         expected_height = (x.shape[3] + strides[1] - 1) // strides[1]
         expected_depth = (x.shape[4] + strides[2] - 1) // strides[2]
 
-        pool_out = pool_out[:, :,
-                            : expected_width,
-                            : expected_height,
-                            : expected_depth]
+        pool_out = pool_out[:, :, :expected_width, :expected_height, :expected_depth]
 
     if data_format == 'channels_last':
         pool_out = pool_out.dimshuffle((0, 2, 3, 4, 1))
@@ -3789,17 +3796,19 @@ def count_sketch(h, s, x, d=16000):
     See https://arxiv.org/abs/1706.06706
     """
     rval, updates = theano.scan(fn=__count_sketch,
-                            sequences=[h, s, x.dimshuffle(1,0)],
-                            outputs_info = T.alloc(0., x.shape[0], d),
-                            non_sequences=[], n_steps=x.shape[1])
-    return rval[-1] # We are interested only in the last value
+                                sequences=[h, s, x.dimshuffle(1, 0)],
+                                outputs_info=T.alloc(0., x.shape[0], d),
+                                non_sequences=[], n_steps=x.shape[1])
+    return rval[-1]  # We are interested only in the last value
+
 
 def __count_sketch(h, s, v,  # Sequences
-                   y, # Outputs info
+                   y,  # Outputs info
                    ):
     """Count sketch utility
     """
     return T.cast(T.inc_subtensor(y[:, h], T.dot(s, v)), 'float32')
+
 
 # 1d Convolution
 def scan_conv1d(u, v):
@@ -3824,10 +3833,11 @@ def scan_conv1d(u, v):
         return conv_out[0, init_cut:end_cut]
 
     conv_out, updates = theano.scan(__vec_conv,
-                                sequences=[u, v],
-                                outputs_info=T.alloc(0., u.shape[1]),#, d),
-                                non_sequences=[], n_steps=u.shape[0])
+                                    sequences=[u, v],
+                                    outputs_info=T.alloc(0., u.shape[1]),  # , d),
+                                    non_sequences=[], n_steps=u.shape[0])
     return conv_out
+
 
 # Theano implementation of CTC
 # Used with permission from Shawn Tan

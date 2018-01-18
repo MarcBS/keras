@@ -142,7 +142,7 @@ class BaseWrapper(object):
         loss_name = self.model.loss
         if hasattr(loss_name, '__name__'):
             loss_name = loss_name.__name__
-        if 'categorical_crossentropy' in loss_name  and len(y.shape) != 2:
+        if 'categorical_crossentropy' in loss_name and len(y.shape) != 2:
             y = to_categorical(y)
 
         fit_args = copy.deepcopy(self.filter_sk_params(Sequential.fit))

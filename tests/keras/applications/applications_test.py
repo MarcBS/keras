@@ -11,11 +11,9 @@ from keras.models import Sequential
 from keras import applications
 from keras import backend as K
 
-
 pytestmark = pytest.mark.skipif(
     os.environ['CORE_CHANGED'] == 'False' and os.environ['APP_CHANGED'] == 'False',
     reason='runs only when the relevant files have been modified')
-
 
 DENSENET_LIST = [(applications.DenseNet121, 1024),
                  (applications.DenseNet169, 1664),
@@ -33,6 +31,7 @@ def clean_run(model_fn):
         def target(queue):
             model = model_fn()
             queue.put(model.output_shape)
+
         queue = Queue()
         p = Process(target=target, args=(queue,))
         p.start()
@@ -215,6 +214,7 @@ def test_inceptionv3_variable_input_channels():
 def test_inceptionresnetv2():
     def model_fn():
         return applications.InceptionResNetV2(weights=None)
+
     output_shape = clean_run(model_fn)
     assert output_shape == (None, 1000)
 
@@ -223,6 +223,7 @@ def test_inceptionresnetv2():
 def test_inceptionresnetv2_notop():
     def model_fn():
         return applications.InceptionResNetV2(weights=None, include_top=False)
+
     output_shape = clean_run(model_fn)
     if K.image_data_format() == 'channels_first':
         assert output_shape == (None, 1536, None, None)
@@ -234,6 +235,7 @@ def test_inceptionresnetv2_notop():
 def test_inceptionresnetv2_pooling():
     def model_fn():
         return applications.InceptionResNetV2(weights=None, include_top=False, pooling='avg')
+
     output_shape = clean_run(model_fn)
     assert output_shape == (None, 1536)
 
@@ -242,6 +244,7 @@ def test_inceptionresnetv2_pooling():
 def test_inceptionresnetv2_variable_input_channels():
     def model_fn(input_shape):
         return applications.InceptionResNetV2(weights=None, include_top=False, input_shape=input_shape)
+
     output_shape = clean_run(lambda: model_fn((None, None, 1)))
     assert output_shape == (None, None, None, 1536)
 
@@ -308,6 +311,7 @@ def test_densenet():
 
     def model_fn():
         return fun(weights=None)
+
     output_shape = clean_run(model_fn)
     assert output_shape == (None, 1000)
 
@@ -319,6 +323,7 @@ def test_densenet_no_top():
 
     def model_fn():
         return fun(weights=None, include_top=False)
+
     output_shape = clean_run(model_fn)
     assert output_shape == (None, None, None, dim)
 
@@ -330,6 +335,7 @@ def test_densenet_pooling():
 
     def model_fn():
         return fun(weights=None, include_top=False, pooling='avg')
+
     output_shape = clean_run(model_fn)
     assert output_shape == (None, None, None, dim)
 
@@ -341,6 +347,7 @@ def test_densenet_variable_input_channels():
 
     def model_fn(input_shape):
         return fun(weights=None, include_top=False, input_shape=input_shape)
+
     output_shape = clean_run(lambda: model_fn((None, None, 1)))
     assert output_shape == (None, None, None, dim)
 

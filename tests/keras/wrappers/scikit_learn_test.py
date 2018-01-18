@@ -48,7 +48,6 @@ def test_classify_build_fn():
 
 def test_classify_class_build_fn():
     class ClassBuildFnClf(object):
-
         def __call__(self, hidden_dims):
             return build_fn_clf(hidden_dims)
 
@@ -62,7 +61,6 @@ def test_classify_class_build_fn():
 
 def test_classify_inherit_class_build_fn():
     class InheritClassBuildFnClf(KerasClassifier):
-
         def __call__(self, hidden_dims):
             return build_fn_clf(hidden_dims)
 
@@ -81,7 +79,7 @@ def assert_classification_works(clf):
     assert np.isscalar(score) and np.isfinite(score)
 
     preds = clf.predict(X_test, batch_size=batch_size)
-    assert preds.shape == (num_test, )
+    assert preds.shape == (num_test,)
     for prediction in np.unique(preds):
         assert prediction in range(num_classes)
 
@@ -100,7 +98,7 @@ def assert_string_classification_works(clf):
     assert np.isscalar(score) and np.isfinite(score)
 
     preds = clf.predict(X_test, batch_size=batch_size)
-    assert preds.shape == (num_test, )
+    assert preds.shape == (num_test,)
     for prediction in np.unique(preds):
         assert prediction in string_classes
 
@@ -132,7 +130,6 @@ def test_regression_build_fn():
 
 def test_regression_class_build_fn():
     class ClassBuildFnReg(object):
-
         def __call__(self, hidden_dims):
             return build_fn_reg(hidden_dims)
 
@@ -145,7 +142,6 @@ def test_regression_class_build_fn():
 
 def test_regression_inherit_class_build_fn():
     class InheritClassBuildFnReg(KerasRegressor):
-
         def __call__(self, hidden_dims):
             return build_fn_reg(hidden_dims)
 
@@ -163,7 +159,7 @@ def assert_regression_works(reg):
     assert np.isscalar(score) and np.isfinite(score)
 
     preds = reg.predict(X_test, batch_size=batch_size)
-    assert preds.shape == (num_test, )
+    assert preds.shape == (num_test,)
 
 
 if __name__ == '__main__':

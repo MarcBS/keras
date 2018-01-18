@@ -89,8 +89,10 @@ def generate_legacy_interface(allowed_positional_args=None,
                 warnings.warn('Update your `' + object_name +
                               '` call to the Keras 2 API: ' + signature, stacklevel=2)
             return func(*args, **kwargs)
+
         wrapper._original_function = func
         return wrapper
+
     return legacy_support
 
 
@@ -100,10 +102,10 @@ generate_legacy_method_interface = functools.partial(generate_legacy_interface,
 
 def raise_duplicate_arg_error(old_arg, new_arg):
     raise TypeError('For the `' + new_arg + '` argument, '
-                    'the layer received both '
-                    'the legacy keyword argument '
-                    '`' + old_arg + '` and the Keras 2 keyword argument '
-                    '`' + new_arg + '`. Stick to the latter!')
+                                            'the layer received both '
+                                            'the legacy keyword argument '
+                                            '`' + old_arg + '` and the Keras 2 keyword argument '
+                                                            '`' + new_arg + '`. Stick to the latter!')
 
 
 legacy_dense_support = generate_legacy_interface(
@@ -130,6 +132,7 @@ def embedding_kwargs_preprocessor(args, kwargs):
                       'right after the `Embedding` layer to get the same behavior.', stacklevel=3)
     return args, kwargs, converted
 
+
 legacy_embedding_support = generate_legacy_interface(
     allowed_positional_args=['input_dim', 'output_dim'],
     conversions=[('init', 'embeddings_initializer'),
@@ -146,7 +149,6 @@ legacy_pooling1d_support = generate_legacy_interface(
 legacy_prelu_support = generate_legacy_interface(
     allowed_positional_args=['alpha_initializer'],
     conversions=[('init', 'alpha_initializer')])
-
 
 legacy_gaussiannoise_support = generate_legacy_interface(
     allowed_positional_args=['stddev'],
@@ -176,19 +178,20 @@ def recurrent_args_preprocessor(args, kwargs):
                       'Use `input_shape` instead.', stacklevel=3)
 
     if 'recurrent1_initializer' in kwargs:
-            kwargs.pop('recurrent1_initializer')
+        kwargs.pop('recurrent1_initializer')
     if 'recurrent1_regularizer' in kwargs:
-            kwargs.pop('recurrent1_regularizer')
+        kwargs.pop('recurrent1_regularizer')
     if 'recurrent1_constraint' in kwargs:
-            kwargs.pop('recurrent1_constraint')
+        kwargs.pop('recurrent1_constraint')
     if 'bias1_initializer' in kwargs:
-            kwargs.pop('bias1_initializer')
+        kwargs.pop('bias1_initializer')
     if 'bias1_regularizer' in kwargs:
-            kwargs.pop('bias1_regularizer')
+        kwargs.pop('bias1_regularizer')
     if 'bias1_constraint' in kwargs:
-            kwargs.pop('bias1_constraint')
+        kwargs.pop('bias1_constraint')
 
     return args, kwargs, converted
+
 
 legacy_recurrent_support = generate_legacy_interface(
     allowed_positional_args=['units'],
@@ -209,7 +212,7 @@ legacy_recurrent_support = generate_legacy_interface(
                  ('dropout_W', 'dropout'),
                  ('dropout_U', 'recurrent_dropout'),
                  ('dropout_V', 'conditional_dropout'),
-                 ('dropout_Wa','attention_dropout'),
+                 ('dropout_Wa', 'attention_dropout'),
                  ('consume_less', 'implementation')],
     value_conversions={'consume_less': {'cpu': 0,
                                         'mem': 1,
@@ -273,6 +276,7 @@ def conv1d_args_preprocessor(args, kwargs):
         converted.append(('input_shape', 'input_dim'))
     return args, kwargs, converted
 
+
 legacy_conv1d_support = generate_legacy_interface(
     allowed_positional_args=['filters', 'kernel_size'],
     conversions=[('nb_filter', 'filters'),
@@ -323,6 +327,7 @@ def conv2d_args_preprocessor(args, kwargs):
             converted.append(('kernel_size', 'nb_row/nb_col'))
     return args, kwargs, converted
 
+
 legacy_conv2d_support = generate_legacy_interface(
     allowed_positional_args=['filters', 'kernel_size'],
     conversions=[('nb_filter', 'filters'),
@@ -351,6 +356,7 @@ def separable_conv2d_args_preprocessor(args, kwargs):
     args, kwargs, _converted = conv2d_args_preprocessor(args, kwargs)
     return args, kwargs, converted + _converted
 
+
 legacy_separable_conv2d_support = generate_legacy_interface(
     allowed_positional_args=['filters', 'kernel_size'],
     conversions=[('nb_filter', 'filters'),
@@ -377,6 +383,7 @@ def deconv2d_args_preprocessor(args, kwargs):
         converted.append(('output_shape', None))
     args, kwargs, _converted = conv2d_args_preprocessor(args, kwargs)
     return args, kwargs, converted + _converted
+
 
 legacy_deconv2d_support = generate_legacy_interface(
     allowed_positional_args=['filters', 'kernel_size'],
@@ -443,6 +450,7 @@ def conv3d_args_preprocessor(args, kwargs):
             converted.append(('kernel_size', 'nb_row/nb_col'))
     return args, kwargs, converted
 
+
 legacy_conv3d_support = generate_legacy_interface(
     allowed_positional_args=['filters', 'kernel_size'],
     conversions=[('nb_filter', 'filters'),
@@ -467,7 +475,7 @@ def batchnorm_args_preprocessor(args, kwargs):
         raise TypeError('The `BatchNormalization` layer '
                         'does not accept positional arguments. '
                         'Use keyword arguments instead.')
-    #if 'mode' in kwargs:
+    # if 'mode' in kwargs:
     #    value = kwargs.pop('mode')
     #    if value != 0:
     #        raise TypeError('The `mode` argument of `BatchNormalization` '
@@ -490,6 +498,7 @@ def convlstm2d_args_preprocessor(args, kwargs):
                           'instead to initialize with ones.', stacklevel=3)
     args, kwargs, _converted = conv2d_args_preprocessor(args, kwargs)
     return args, kwargs, converted + _converted
+
 
 legacy_convlstm2d_support = generate_legacy_interface(
     allowed_positional_args=['filters', 'kernel_size'],
@@ -544,6 +553,7 @@ def zeropadding2d_args_preprocessor(args, kwargs):
                           '`padding=((top_pad, bottom_pad), (left_pad, right_pad))`', stacklevel=3)
     return args, kwargs, converted
 
+
 legacy_zeropadding2d_support = generate_legacy_interface(
     allowed_positional_args=['padding'],
     conversions=[('dim_ordering', 'data_format')],
@@ -587,7 +597,7 @@ legacy_spatialdropoutNd_support = generate_legacy_interface(
 
 legacy_lambda_support = generate_legacy_interface(
     allowed_positional_args=['function', 'output_shape'],
-    value_conversions = [('mask_function', 'mask')])
+    value_conversions=[('mask_function', 'mask')])
 
 
 # Model methods
@@ -632,7 +642,6 @@ legacy_generator_methods_support = generate_legacy_method_interface(
                  ('pickle_safe', 'use_multiprocessing'),
                  ('max_q_size', 'max_queue_size')],
     preprocessor=generator_methods_args_preprocessor)
-
 
 legacy_model_constructor_support = generate_legacy_interface(
     allowed_positional_args=None,
@@ -683,6 +692,7 @@ def get_updates_arg_preprocessing(args, kwargs):
             kwargs['learning_rate_multipliers'] = learning_rate_multipliers
             return [opt], kwargs, []
     return args, kwargs, []
+
 
 legacy_get_updates_support = generate_legacy_interface(
     allowed_positional_args=None,

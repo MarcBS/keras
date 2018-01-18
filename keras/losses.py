@@ -227,8 +227,7 @@ def noise_contrastive_loss(args):
     y_noise_pred = K.mean(K.categorical_crossentropy(y_true_noise_model, pred_true_model))
     y_noise_noise = K.mean(K.categorical_crossentropy(y_true_noise_model, pred_noise_model))
 
-    return K.mean(K.log(nce_correct_prob(y_distribution_pred, y_distribution_noise))) + \
-           K.mean(K.log(1 - nce_correct_prob(y_noise_pred, y_noise_noise)))
+    return K.mean(K.log(nce_correct_prob(y_distribution_pred, y_distribution_noise))) + K.mean(K.log(1 - nce_correct_prob(y_noise_pred, y_noise_noise)))
 
 
 # Aliases.

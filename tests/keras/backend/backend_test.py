@@ -13,6 +13,7 @@ BACKENDS = []  # Holds a list of all available back-ends
 
 try:
     from keras.backend import cntk_backend as KC
+
     BACKENDS.append(KC)
 except ImportError:
     KC = None
@@ -20,6 +21,7 @@ except ImportError:
 
 try:
     from keras.backend import tensorflow_backend as KTF
+
     BACKENDS.append(KTF)
 except ImportError:
     KTF = None
@@ -27,6 +29,7 @@ except ImportError:
 
 try:
     from keras.backend import theano_backend as KTH
+
     BACKENDS.append(KTH)
 except ImportError:
     KTH = None
@@ -172,7 +175,6 @@ def check_composed_tensor_operations(first_function_name, first_function_args,
 
 
 class TestBackend(object):
-
     def test_is_keras_tensor(self):
         for k in BACKENDS:
             np_var = np.array([1, 2])
@@ -289,7 +291,7 @@ class TestBackend(object):
 
             y = KTH.flatten(x)
             if hasattr(y, '_keras_shape'):
-                assert y._keras_shape == (None, )
+                assert y._keras_shape == (None,)
 
     def test_repeat_elements(self):
         reps = 3

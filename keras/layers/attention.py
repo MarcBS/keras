@@ -785,7 +785,7 @@ class AttentionComplex(Layer):
         return e
 
         # Attention spatial weights 'alpha'
-        ##e = e.dimshuffle((0, 2, 1))
+        # e = e.dimshuffle((0, 2, 1))
         e = K.permute_dimensions(e, (0, 2, 1))
         # alpha = K.softmax(e)
         # return alpha
@@ -794,14 +794,14 @@ class AttentionComplex(Layer):
 
         return alpha
 
-        ##alpha = alpha.dimshuffle((0,2,1))
+        # alpha = alpha.dimshuffle((0,2,1))
 
         # Attention class weights 'beta'
         beta = K.sigmoid(K.dot(alpha * B_Wa, self.Wa) + self.ba)
-        ##beta = K.softmax_3d(K.dot(alpha * B_Wa, self.Wa) + self.ba)
+        # beta = K.softmax_3d(K.dot(alpha * B_Wa, self.Wa) + self.ba)
 
         # Sum over the in_timesteps dimension resulting in [batch_size, input_dim]
-        ##x_att = (x * alpha[:,:,None]).sum(axis=1)
+        # x_att = (x * alpha[:,:,None]).sum(axis=1)
 
         # TODO: complete formulas in class description
 

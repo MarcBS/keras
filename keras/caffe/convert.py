@@ -196,7 +196,6 @@ def create_model(layers, phase, input_dim, debug=False):
                                                        strides=(stride_h, stride_w), name=name, padding='valid')(
                         input_layers)
 
-
                 net_node[layer_nb] = Convolution2D(nb_filter, (int(nb_row), int(nb_col)), use_bias=has_bias,
                                                    strides=(stride_h, stride_w), name=name, padding='valid')(
                     input_layers)
@@ -226,7 +225,7 @@ def create_model(layers, phase, input_dim, debug=False):
                 ip_shape = semi_model.layers[-1].output_shape
                 del semi_model
 
-                ##### FORMULA FOR O/P SHAPE OF DECONV ########
+                # FORMULA FOR O/P SHAPE OF DECONV
                 # o = s (i - 1) + a + k - 2p
                 # where:
                 # i - input size (rows or cols),
@@ -234,7 +233,6 @@ def create_model(layers, phase, input_dim, debug=False):
                 # s - stride (subsample for rows or cols respectively),
                 # p - padding size
                 # a - (not used)
-                ##############################################
 
                 i_h, i_w = ip_shape[2], ip_shape[3]
                 output_shape = [None,
@@ -247,7 +245,7 @@ def create_model(layers, phase, input_dim, debug=False):
                         input_layers)
                 net_node[layer_nb] = Deconvolution2D(nb_filter, (int(nb_row), int(nb_col)),
                                                      strides=(stride_h, stride_w),
-                                                     #output_shape=output_shape,
+                                                     # output_shape=output_shape,
                                                      name=name, use_bias=has_bias)(input_layers)
 
             elif type_of_layer == "crop":
@@ -305,7 +303,6 @@ def create_model(layers, phase, input_dim, debug=False):
 
                 pad_h = layer.pooling_param.pad or layer.pooling_param.pad_h
                 pad_w = layer.pooling_param.pad or layer.pooling_param.pad_w
-
 
                 if debug:
                     print("\t kernel: " + str(kernel_h) + 'x' + str(kernel_w))
@@ -521,10 +518,9 @@ def convert_weights(param_layers, v='V1', debug=False):
                 print (group)
 
             for i in range(group):
-                group_weights = weights_p[i * nb_filter_per_group: (i + 1) * nb_filter_per_group,
-                                i * stacks_size_per_group: (i + 1) * stacks_size_per_group, :, :]
-                group_weights[:] = np.array(blobs[0].data[i * group_data_size:
-                (i + 1) * group_data_size]).reshape(group_weights.shape)
+                group_weights = weights_p[i * nb_filter_per_group: (i + 1) * nb_filter_per_group, i * stacks_size_per_group: (i + 1) * stacks_size_per_group, :, :]
+                group_weights[:] = np.array(blobs[0].data[i * group_data_size: (i + 1) * group_data_size]).reshape(
+                    group_weights.shape)
 
             # caffe, unlike theano, does correlation not convolution. We need to flip the weights 180 deg
             weights_p = rot90(weights_p)
@@ -541,6 +537,6 @@ def convert_weights(param_layers, v='V1', debug=False):
 
 def load_weights(model, weights):
     for layer in model.layers:
-        if weights.has_key(layer.name):
+        if weights in layer.name:
             model.get_layer(layer.name).set_weights(weights[layer.name])
             print ("Copied wts for layer:", layer.name)

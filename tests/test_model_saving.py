@@ -200,7 +200,7 @@ def test_loading_weights_by_name():
     model.save_weights(fname)
 
     # delete and recreate model
-    del(model)
+    del (model)
     model = Sequential()
     model.add(Dense(2, input_shape=(3,), name='rick'))
     model.add(Dense(3, name='morty'))
@@ -247,7 +247,7 @@ def test_loading_weights_by_name_2():
     model.save_weights(fname)
 
     # delete and recreate model using Functional API
-    del(model)
+    del (model)
     data = Input(shape=(3,))
     rick = Dense(2, name='rick')(data)
     jerry = Dense(3, name='jerry')(rick)  # add 2 layers (but maintain shapes)
@@ -305,7 +305,7 @@ def test_loading_weights_by_name_skip_mismatch():
     model.save_weights(fname)
 
     # delete and recreate model
-    del(model)
+    del (model)
     model = Sequential()
     model.add(Dense(2, input_shape=(3,), name='rick'))
     model.add(Dense(4, name='morty'))  # different shape w.r.t. previous model

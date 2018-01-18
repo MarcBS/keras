@@ -294,11 +294,13 @@ def test_maxpooling3d_legacy_interface():
     assert json.dumps(old_layer.get_config()) == json.dumps(new_layer.get_config())
 
     old_layer = keras.layers.MaxPooling3D((2, 2, 2), padding='valid', dim_ordering='tf', name='maxpool3d')
-    new_layer = keras.layers.MaxPool3D(pool_size=(2, 2, 2), padding='valid', data_format='channels_last', name='maxpool3d')
+    new_layer = keras.layers.MaxPool3D(pool_size=(2, 2, 2), padding='valid', data_format='channels_last',
+                                       name='maxpool3d')
     assert json.dumps(old_layer.get_config()) == json.dumps(new_layer.get_config())
 
     old_layer = keras.layers.MaxPooling3D((2, 2, 2), padding='valid', dim_ordering='th', name='maxpool3d')
-    new_layer = keras.layers.MaxPool3D(pool_size=(2, 2, 2), padding='valid', data_format='channels_first', name='maxpool3d')
+    new_layer = keras.layers.MaxPool3D(pool_size=(2, 2, 2), padding='valid', data_format='channels_first',
+                                       name='maxpool3d')
     assert json.dumps(old_layer.get_config()) == json.dumps(new_layer.get_config())
 
     old_layer = keras.layers.MaxPooling3D((2, 2, 2), padding='valid', dim_ordering='default', name='maxpool3d')
@@ -317,11 +319,13 @@ def test_avgpooling3d_legacy_interface():
     assert json.dumps(old_layer.get_config()) == json.dumps(new_layer.get_config())
 
     old_layer = keras.layers.AveragePooling3D((2, 2, 2), padding='valid', dim_ordering='tf', name='avgpooling3d')
-    new_layer = keras.layers.AvgPool3D(pool_size=(2, 2, 2), padding='valid', data_format='channels_last', name='avgpooling3d')
+    new_layer = keras.layers.AvgPool3D(pool_size=(2, 2, 2), padding='valid', data_format='channels_last',
+                                       name='avgpooling3d')
     assert json.dumps(old_layer.get_config()) == json.dumps(new_layer.get_config())
 
     old_layer = keras.layers.AveragePooling3D((2, 2, 2), padding='valid', dim_ordering='th', name='avgpooling3d')
-    new_layer = keras.layers.AvgPool3D(pool_size=(2, 2, 2), padding='valid', data_format='channels_first', name='avgpooling3d')
+    new_layer = keras.layers.AvgPool3D(pool_size=(2, 2, 2), padding='valid', data_format='channels_first',
+                                       name='avgpooling3d')
     assert json.dumps(old_layer.get_config()) == json.dumps(new_layer.get_config())
 
     old_layer = keras.layers.AveragePooling3D((2, 2, 2), padding='valid', dim_ordering='default', name='avgpooling3d')
@@ -787,7 +791,7 @@ def test_generator_methods_interface():
         while True:
             yield x
 
-    x = keras.layers.Input(shape=(2, ))
+    x = keras.layers.Input(shape=(2,))
     y = keras.layers.Dense(2)(x)
 
     model = keras.models.Model(inputs=x, outputs=y)

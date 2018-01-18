@@ -84,13 +84,13 @@ def test_convolutional_recurrent():
             out2 = model.predict(np.ones_like(inputs))
 
             # if the state is not reset, output should be different
-            assert(out1.max() != out2.max())
+            assert (out1.max() != out2.max())
 
             # check that output changes after states are reset
             # (even though the model itself didn't change)
             layer.reset_states()
             out3 = model.predict(np.ones_like(inputs))
-            assert(out2.max() != out3.max())
+            assert (out2.max() != out3.max())
 
             # check that container-level reset_states() works
             model.reset_states()
@@ -99,7 +99,7 @@ def test_convolutional_recurrent():
 
             # check that the call to `predict` updated the states
             out5 = model.predict(np.ones_like(inputs))
-            assert(out4.max() != out5.max())
+            assert (out4.max() != out5.max())
 
             # cntk doesn't support eval convolution with static
             # variable, will enable it later
