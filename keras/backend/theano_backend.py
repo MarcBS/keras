@@ -744,7 +744,7 @@ def cast(x, dtype):
         Elemwise{ceil,no_inplace}.0
     ```
     """
-    return T.ceil(x)
+    return T.cast(x, dtype)
 
 
 def ceil(x, name=None):
@@ -1842,7 +1842,8 @@ def inc_subtensor(x, v):
 
 
 def equal_dimensions(x, y):
-    """Checks if x and y have the same dimensions"""
+    """Checks if x and y have the same dimensions
+    """
     y_shape = int_shape(y)
     x_shape = int_shape(x)
     fun_comp = x_shape[2] == y_shape[2] and x_shape[3] == y_shape[3]
@@ -2853,6 +2854,14 @@ def dropout(x, level, noise_shape=None, seed=None):
     # Returns
         A tensor.
     """
+    if level < 0. or level >= 1:
+        raise ValueError('Dropout level must be in interval [0, 1[.')
+    if seed is None:
+        seed = np.random.randint(1, 10e6)
+    if isinstance(noise_shape, list):
+        noise_shape = tuple(noise_shape)
+
+    rng = RandomStreams(seed=seed)
     retain_prob = 1. - level
     if noise_shape is None:
         random_tensor = rng.binomial(x.shape, p=retain_prob, dtype=x.dtype)
