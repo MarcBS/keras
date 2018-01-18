@@ -43,7 +43,7 @@ def signed_sqrt(x):
 
     # Arguments
         x: input tensor to normalize
-        
+
     # Returns
         signedSqrt-normalized input
     """
