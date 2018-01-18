@@ -1,5 +1,5 @@
 [report]
-fail_under = 68
+fail_under = 67
 show_missing = True
 omit =
     keras/applications/*
