@@ -1,5 +1,7 @@
 # MarcBS/keras Multimodal Learning fork
 
+[![Build Status](https://travis-ci.org/MarcBS/keras.svg?branch=master)](https://travis-ci.org/MarcBS/keras)
+
 This fork of Keras offers the following contributions:
 
 - Caffe to Keras conversion module
@@ -80,4 +82,4 @@ export PYTHONPATH=$PYTHONPATH:/path/to/keras
 
 ## Keras
 
-For additional information on the Deep Learning library, visit the official web page www.keras.io or the GitHub repository https://github.com/fchollet/keras.
+For additional information on the Deep Learning library, visit the official web page www.keras.io or the GitHub repository https://github.com/keras-team/keras.
