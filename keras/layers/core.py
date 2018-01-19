@@ -1513,8 +1513,7 @@ class Concat(Layer):
 
 
 def autocrop(inputs, cropping):
-    """
-    Crops the given input arrays.
+    """Crops the given input arrays.
 
     Cropping takes a sequence of inputs and crops them per-axis in order to
     ensure that their sizes are consistent so that they can be combined
@@ -1536,21 +1535,16 @@ def autocrop(inputs, cropping):
     (``a[offset:offset+crop_size, ...]`` where
     ``offset = (a.shape[0]-crop_size)//2)``
 
-    Parameters
-    ----------
-    inputs : list of Theano expressions
+    # Arguments
+    inputs: list of expressions
         The input arrays in the form of a list of Theano expressions
-
-    cropping : list of cropping modes
+    cropping: list of cropping modes
         Cropping modes, one for each axis. If length of `cropping` is less
         than the number of axes in the inputs, it is padded with `None`.
         If `cropping` is None, `input` is returned as is.
 
-    Returns
-    -------
-    list of Theano expressions
-
-        each expression is the cropped version of the corresponding input
+    # Returns
+        list of expressions. Each expression is the cropped version of the corresponding input
     """
     if cropping is None:
         # No cropping in any dimension
@@ -1569,7 +1563,7 @@ def autocrop(inputs, cropping):
         # Get the shape of each input
         shapes = [K.shape(input) for input in inputs]
         # Convert the shapes to a matrix expression
-        shapes_tensor = K.as_tensor_variable(shapes)
+        shapes_tensor = K.variable(shapes)
         # Min along axis 0 to get the minimum size in each dimension
         min_shape = K.min(shapes_tensor, axis=0)
 
@@ -1618,22 +1612,22 @@ def autocrop(inputs, cropping):
 
 
 def autocrop_array_shapes(input_shapes, cropping):
-    """
-    Computes the shapes of the given arrays after auto-cropping is applied.
+    """Computes the shapes of the given arrays after auto-cropping is applied.
 
     For more information on cropping, see the :func:`autocrop` function
     documentation.
 
-    Parameters
-    ----------
-    input_shapes : the shapes of input arrays prior to cropping in
-        the form of a list of tuples
+    # Arguments
+        input_shapes: the shapes of input arrays prior to cropping in
+            the form of a list of tuples
+        cropping: a list of cropping modes, one for each axis. If length of
+            `cropping` is less than the number of axes in the inputs, it is
+            padded with `None`. If `cropping` is None, `input_shapes` is returned
+            as is. For more information on their values and operation, see the
+            :func:`autocrop` documentation.
 
-    cropping : a list of cropping modes, one for each axis. If length of
-        `cropping` is less than the number of axes in the inputs, it is
-        padded with `None`. If `cropping` is None, `input_shapes` is returned
-        as is. For more information on their values and operation, see the
-        :func:`autocrop` documentation.
+    # Returns
+         shapes of the given arrays after auto-cropping is applied.
     """
     if cropping is None:
         return input_shapes

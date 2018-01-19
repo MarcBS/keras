@@ -56,10 +56,23 @@ _LOCAL_DEVICES = None
 
 
 def printing(x, string=''):
-    """Prints the value of a tensor variable
-    :param x: Tensor variable
-    :param string: Prefix to print
-    :return: The same tensor variable as x
+    """Prints `message` and the tensor value when evaluated.
+
+     Note that `printing` returns a new tensor identical to `x`
+     which should be used in the following code. Otherwise the
+     print operation is not taken into account during evaluation.
+
+     # Example
+     ```python
+         >>> x = K.printing(x, string="x is: ")
+     ```
+
+    # Arguments
+        x: Tensor to print.
+        string: Message to print jointly with the tensor.
+
+    # Returns
+        The same tensor `x`, unchanged.
     """
     return tf.Print(x, [x], message=string)
 
@@ -472,7 +485,7 @@ def is_keras_tensor(x):
                           tf_variables.Variable,
                           tf.SparseTensor)):
         raise ValueError('Unexpectedly found an instance of type `' + str(type(x)) + '`. '
-                                                                                     'Expected a symbolic tensor instance.')
+                         'Expected a symbolic tensor instance.')
     return hasattr(x, '_keras_history')
 
 
@@ -701,10 +714,8 @@ def zeros(shape, dtype=None, name=None):
     return v
 
 
-def zeros_symbolic(shape, dtype=floatx(), name=None):
-    """Instantiate an all-zeros symbolic variable.
-    """
-    return tf.zeros(shape, dtype=dtype, name=name)
+# Aliases
+zeros_symbolic = zeros
 
 
 def ones(shape, dtype=None, name=None):
@@ -960,13 +971,27 @@ def cast(x, dtype):
 
 
 def ceil(x, name=None):
-    """Ceil the tensor x.
+    """Ceils the value of `x`.
+
+    # Arguments
+        x: A `Variable`.
+        name: Name of the new (ceiled) `Variable`.
+
+    # Returns
+         `Variable` `x` ceiled.
     """
     return tf.ceil(x, name=name)
 
 
 def floor(x, name=None):
-    """Floor the tensor x.
+    """Floors the value of `x`.
+
+    # Arguments
+        x: A `Variable`.
+        name: Name of the new (floored) `Variable`.
+
+    # Returns
+         `Variable` `x` floored.
     """
 
     return tf.floor(x, name=name)
@@ -1189,13 +1214,14 @@ def batch_dot(x, y, axes=None):
 
 
 def dot_product(x, kernel):
-    """
-    Wrapper for dot product operation, in order to be compatible with both
-    Theano and Tensorflow
-    Args:
-        x (): input
-        kernel (): weights
-    Returns:
+    """Wrapper for dot product operation, in order to be compatible with both Theano and Tensorflow.
+
+    # Arguments:
+        x: input
+        kernel: weights
+
+    # Returns
+        A tensor.
     """
     return squeeze(dot(x, expand_dims(kernel)), axis=-1)
 
@@ -1524,7 +1550,13 @@ def log(x):
 
 
 def log2(x):
-    """log in base 2
+    """Element-wise log in base 2.
+
+    # Arguments
+        x: Tensor or variable.
+
+    # Returns
+        A tensor.
     """
     numerator = tf.log(x)
     denominator = tf.log(tf.constant(2, dtype=numerator.dtype))
@@ -2090,10 +2122,18 @@ def repeat(x, n):
 
 
 def repeatRdim(x, n, axis=1):
-    """Repeats an RD tensor.
+    """Repeats a R-Dimensional tensor.
 
-    If x has shape (samples, dim1, dim2) and n=2 and axis=1,
-    the output will have shape (samples, 2, dim1, dim2).
+    if `x` has shape (samples, dim) and `n` is `2`,
+    the output will have shape `(samples, 2, dim)`.
+
+    # Arguments
+        x: Tensor or variable.
+        n: Python integer, number of times to repeat.
+        axis: Axis of the repetition
+
+    # Returns
+        A tensor.
     """
     new_dim = range(axis) + ['x'] + range(axis, ndim(x))
     x = permute_dimensions(x, tuple(new_dim))
@@ -2101,14 +2141,41 @@ def repeatRdim(x, n, axis=1):
 
 
 def set_subtensor(x, v):
+    """Returns x with the given subtensor overwritten by v.
+
+    # Arguments
+        x: Tensor or variable.
+        v: Tensor or variable.
+
+    # Returns
+        The tensor `x` overwritten by `v`.
+    """
     return tf.assign(x, v)
 
 
 def inc_subtensor(x, v):
+    """Returns x with the given subtensor incremented by v.
+
+    # Arguments
+        x: Tensor or variable.
+        v: Tensor or variable.
+
+    # Returns
+        The tensor `x` incremented by `v`.
+    """
     return tf.add(x, v)
 
 
 def equal_dimensions(x, y):
+    """Checks if `x` has the same dimensions than `y`.
+
+    # Arguments
+        x: Tensor or variable.
+        y: Tensor or variable.
+
+    # Returns
+        True if `x` has the same dimensions than `y`, False otherwise.
+    """
     y_shape = int_shape(y)
     x_shape = int_shape(x)
     fun_comp = x_shape[2] == y_shape[2] and x_shape[3] == y_shape[3]
@@ -2117,6 +2184,15 @@ def equal_dimensions(x, y):
 
 
 def funequal(x, y):
+    """Utility for `equal_dimensions`.
+
+    # Arguments
+        x: Tensor or variable.
+        y: Tensor or variable.
+
+    # Returns
+        A tensor
+    """
     y_shape = int_shape(y)
     x_shape = int_shape(x)
     new_y = zeros([1, 1, 1, 1])
@@ -2387,8 +2463,6 @@ def get_value(x):
     # Returns
         A Numpy array.
     """
-    if isinstance(x, np.ndarray):
-        return x
     return x.eval(session=get_session())
 
 
@@ -2629,14 +2703,14 @@ def rnn(step_function, inputs, initial_states,
                     time step.
                 states: list of tensors.
             Returns:
-                outputs: tensor with shape `(samples, units)`
+                outputs: tensor with shape `(samples, output_dim)`
                     (no time dimension).
                 new_states: list of tensors, same length and shapes
                     as 'states'. The first state in the list must be the
                     output tensor at the previous timestep.
         inputs: tensor of temporal data of shape `(samples, time, ...)`
             (at least 3D).
-        initial_states: tensor with shape (samples, units)
+        initial_states: tensor with shape (samples, output_dim)
             (no time dimension),
             containing the initial values for the states used in
             the step function.
@@ -2648,6 +2722,7 @@ def rnn(step_function, inputs, initial_states,
         unroll: whether to unroll the RNN or to use a symbolic loop (`while_loop` or `scan` depending on backend).
         input_length: not relevant in the TensorFlow implementation.
             Must be specified if using unrolling with Theano.
+        pos_extra_outputs_states: Positions that extra_output_states will have.
 
     # Returns
         A tuple, `(last_output, outputs, new_states)`.
@@ -2806,10 +2881,11 @@ def rnn(step_function, inputs, initial_states,
                     # Arguments
                         time: Current timestep value.
                         output_ta_t: TensorArray.
+                        states_ta_t: TensorArray.
                         *states: List of states.
 
                     # Returns
-                        Tuple: `(time + 1,output_ta_t) + tuple(new_states)`
+                        Tuple: `(time + 1,output_ta_t, states_ta_t) + tuple(new_states)`
                     """
                     current_input = input_ta.read(time)
                     mask_t = mask_ta.read(time)
@@ -2912,12 +2988,6 @@ def rnn(step_function, inputs, initial_states,
         last_output = output_ta.read(last_time - 1)
     axes = [1, 0] + list(range(2, len(outputs.get_shape())))
     outputs = tf.transpose(outputs, axes)
-
-    # if pos_extra_outputs_states is not None:
-    #     for state_n in pos_extra_outputs_states:
-    #         axes = [1, 0] + list(range(2, len(new_states[state_n].get_shape())))
-    #         new_states[state_n] = tf.transpose(new_states[state_n], axes)
-
     last_output._uses_learning_phase = uses_learning_phase
     return last_output, outputs, new_states
 
@@ -2970,7 +3040,7 @@ def switch(condition, then_expression, else_expression):
                              ' equal to rank of `then_expression` and '
                              '`else_expression`. ndim(condition)=' +
                              str(cond_ndim) + ', ndim(then_expression)'
-                                              '=' + str(expr_ndim))
+                             '=' + str(expr_ndim))
         if cond_ndim > 1:
             ndim_diff = expr_ndim - cond_ndim
             cond_shape = tf.concat([tf.shape(condition), [1] * ndim_diff], axis=0)
@@ -3102,7 +3172,16 @@ def softmax(x):
 
 
 def softmax_3d(x):
-    """Softmax on the last axis of a 2d or 3d tensor.
+    """"Softmax on the last axis of a 2d or 3d tensor.
+
+    # Arguments
+        x: A tensor or variable.
+
+    # Returns
+        A tensor.
+
+    # Raises
+        Exception: If the input tensor is not 2D or 3D.
     """
     nd = ndim(x)
     if nd == 2:
@@ -3232,7 +3311,19 @@ def binary_crossentropy(target, output, from_logits=False):
 
 
 def weighted_binary_crossentropy(target, output, from_logits=False, lambda_w_rec=1.0, lambda_w_pre=1.0):
-    """Compute the weighted crossentropy of binary random variables.
+    """Weighted crossentropy of binary random variables.
+
+    # Arguments
+        target: A tensor with the same shape as `output`.
+        output: A tensor.
+        from_logits: Whether `output` is expected to be a logits tensor.
+            By default, we consider that `output`
+            encodes a probability distribution.
+        lambda_w_rec: Float. First weight.
+        lambda_w_pre: Float. Second weight.
+
+    # Returns
+        A tensor.
     """
     if from_logits:
         output = tf.nn.sigmoid(output)
@@ -3963,7 +4054,7 @@ def bias_add(x, bias, data_format=None):
             if len(bias_shape) == 1:
                 x += reshape(bias, (1, 1, bias_shape[0]))
             else:
-                x += reshape(bias, (1,) + bias_shape)
+                x += reshape(bias, (1, ) + bias_shape)
     else:
         x = tf.nn.bias_add(x, bias)
     return x
@@ -4063,7 +4154,16 @@ def truncated_normal(shape, mean=0.0, stddev=1.0, dtype=None, seed=None):
 
 
 def random_multinomial(shape, p=0.0, dtype=None, seed=None):
-    """Instantiates a random multinomial tensor of a given shape
+    """Returns a tensor with random multinomial distribution of values.
+
+    # Arguments
+        shape: A tuple of integers, the shape of tensor to create.
+        p: A float, `0. <= p <= 1`, probability of multinomial distribution.
+        dtype: String, dtype of returned tensor.
+        seed: Integer, random seed.
+
+    # Returns
+        A tensor.
     """
     if dtype is None:
         dtype = floatx()
@@ -4075,6 +4175,15 @@ def random_multinomial(shape, p=0.0, dtype=None, seed=None):
 
 # COUNT SKETCH
 def count_sketch(h, s, x, d=16000):
+    """Count sketch operator.
+    See https://arxiv.org/abs/1606.01847.
+
+    # Arguments
+        h: Count sketch vector h \in \{1, d\} ^n
+        s: Count sketch vector s \in \{-1, 1\} ^n
+        x: Count sketch input vector
+        d: Compact Bilinear dimension
+    """
     print('count_sketch is not implemented in the tensorflow backend')
     pass
 
@@ -4082,6 +4191,15 @@ def count_sketch(h, s, x, d=16000):
 def __count_sketch(h, s, v,  # Sequences
                    y,  # Outputs info
                    ):
+    """Count sketch utility.
+    See https://arxiv.org/abs/1606.01847.
+
+    # Arguments
+        h: Count sketch vector h \in \{1, d\} ^n
+        s: Count sketch vector s \in \{-1, 1\} ^n
+        v: Count sketch input vector
+        y: Projected output vector
+    """
     pass
 
 
@@ -4374,20 +4492,27 @@ def local_conv2d(inputs, kernel, kernel_size, strides, output_shape, data_format
 
 
 # modified from the one included in np_utils.py
-def conv_input_length(output_length, filter_size, border_mode, stride):
+def conv_input_length(output_length, filter_size, padding, stride):
+    """Determines input length of a convolution given output length. ,odified from the one included in np_utils.py.
+
+    # Arguments
+        output_length: integer.
+        filter_size: integer.
+        padding: one of "same", "valid", "full".
+        stride: integer.
+
+    # Returns
+        The input length (integer).
+    """
     if output_length is None:
         return None
-    assert border_mode in {'same', 'valid', 'full'}
+    assert padding in {'same', 'valid', 'full'}
     add_extra = 0
-    if border_mode == 'same':
+    if padding == 'same':
         pad = filter_size // 2
         add_extra = +1
-    elif border_mode == 'valid':
+    elif padding == 'valid':
         pad = 0
-    elif border_mode == 'full':
+    elif padding == 'full':
         pad = filter_size - 1
     return (output_length - 1) * stride - 2 * pad + filter_size + add_extra
-
-
-def as_tensor_variable(x, name=None, ndim=None):
-    return variable(x, name=name)

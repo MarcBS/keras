@@ -2,6 +2,23 @@ from keras.layers.core import Layer
 
 
 class LRN(Layer):
+    """Local Response Normalization (LRN).
+    The local response normalization layer performs a kind of "lateral inhibition"
+    by normalizing over local input regions.
+    In ACROSS_CHANNELS mode, the local regions extend across nearby channels,
+    but have no spatial extent (i.e., they have shape local_size x 1 x 1).
+    In WITHIN_CHANNEL mode, the local regions extend spatially, but are in separate channels
+    (i.e., they have shape 1 x local_size x local_size). Each input value is divided by (1+(\alpha /n)\sum_i{x_i^2)}^\beta,
+    where n is the size of each local region, and the sum is taken over the region centered at
+    that value (zero padding is added where necessary).
+
+    # Arguments
+        alpha: scaling parameter.
+        beta: the exponent.
+        n: local_size
+        k: offset for the scale
+    """
+
     def __init__(self, alpha=0.0001, k=1, beta=0.75, n=5, **kwargs):
         self.alpha = alpha
         self.k = k
@@ -36,6 +53,9 @@ class LRN(Layer):
 
 
 class PoolHelper(Layer):
+    """PoolHelper.
+    Pooling utility.
+    """
     def __init__(self, **kwargs):
         super(PoolHelper, self).__init__(**kwargs)
 

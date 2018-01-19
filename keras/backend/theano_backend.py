@@ -38,10 +38,23 @@ _UID_PREFIXES = defaultdict(int)
 
 
 def printing(x, string=''):
-    """Prints the value of a tensor variable
-    :param x: Tensor variable
-    :param string: Prefix to print
-    :return: The same tensor variable as x
+    """Prints `message` and the tensor value when evaluated.
+
+     Note that `printing` returns a new tensor identical to `x`
+     which should be used in the following code. Otherwise the
+     print operation is not taken into account during evaluation.
+
+     # Example
+     ```python
+         >>> x = K.printing(x, string="x is: ")
+     ```
+
+    # Arguments
+        x: Tensor to print.
+        string: Message to print jointly with the tensor.
+
+    # Returns
+        The same tensor `x`, unchanged.
     """
     return theano.printing.Print(string)(x)
 
@@ -528,10 +541,8 @@ def zeros(shape, dtype=None, name=None):
     return variable(np.zeros(shape), dtype, name)
 
 
-def zeros_symbolic(shape, dtype=floatx()):
-    """Instantiate an all-zeros symbolic variable.
-    """
-    return T.zeros(shape, dtype=dtype)
+# Aliases
+zeros_symbolic = zeros
 
 
 def ones(shape, dtype=None, name=None):
@@ -749,13 +760,27 @@ def cast(x, dtype):
 
 
 def ceil(x, name=None):
-    """Ceil the tensor x.
+    """Ceils the value of `x`.
+
+    # Arguments
+        x: A `Variable`.
+        name: Name of the new (ceiled) `Variable`.
+
+    # Returns
+         `Variable` `x` ceiled.
     """
     return T.ceil(x)
 
 
 def floor(x):
-    """Floor the tensor x.
+    """Floors the value of `x`.
+
+    # Arguments
+        x: A `Variable`.
+        name: Name of the new (floored) `Variable`.
+
+    # Returns
+         `Variable` `x` floored.
     """
     return T.floor(x)
 
@@ -958,13 +983,14 @@ def batch_dot(x, y, axes=None):
 
 
 def dot_product(x, kernel):
-    """
-    Wrapper for dot product operation, in order to be compatible with both
-    Theano and Tensorflow
-    Args:
-        x (): input
-        kernel (): weights
-    Returns:
+    """Wrapper for dot product operation, in order to be compatible with both Theano and Tensorflow.
+
+    # Arguments:
+        x: input
+        kernel: weights
+
+    # Returns
+        A tensor.
     """
     return dot(x, kernel)
 
@@ -1838,17 +1864,40 @@ def repeatRdim(x, n, axis=1):
 
 
 def set_subtensor(x, v):
-    """Return x with the given subtensor overwritten by v."""
+    """Returns x with the given subtensor overwritten by v.
+
+    # Arguments
+        x: Tensor or variable.
+        v: Tensor or variable.
+
+    # Returns
+        The tensor `x` overwritten by `v`.
+    """
     return T.set_subtensor(x, v)
 
 
 def inc_subtensor(x, v):
-    """Return x with the given subtensor incremented by v."""
+    """Returns x with the given subtensor incremented by v.
+
+    # Arguments
+        x: Tensor or variable.
+        v: Tensor or variable.
+
+    # Returns
+        The tensor `x` incremented by `v`.
+    """
     return T.inc_subtensor(x, v)
 
 
 def equal_dimensions(x, y):
-    """Checks if x and y have the same dimensions
+    """Checks if `x` has the same dimensions than `y`.
+
+    # Arguments
+        x: Tensor or variable.
+        y: Tensor or variable.
+
+    # Returns
+        True if `x` has the same dimensions than `y`, False otherwise.
     """
     y_shape = int_shape(y)
     x_shape = int_shape(x)
@@ -1857,7 +1906,15 @@ def equal_dimensions(x, y):
 
 
 def funequal(x, y):
-    """Returns a tensor with the last part as y"""
+    """Utility for `equal_dimensions`.
+
+    # Arguments
+        x: Tensor or variable.
+        y: Tensor or variable.
+
+    # Returns
+        A tensor
+    """
     new_y = zeros([1, 1, 1, 1])
     new_y = set_subtensor(new_y[:, :, :-1, :-1], y)
     return new_y
@@ -2380,6 +2437,7 @@ def rnn(step_function, inputs, initial_states,
         unroll: whether to unroll the RNN or to use a symbolic loop (`while_loop` or `scan` depending on backend).
         input_length: not relevant in the TensorFlow implementation.
             Must be specified if using unrolling with Theano.
+        pos_extra_outputs_states: Positions that extra_output_states will have.
 
     # Returns
         A tuple, `(last_output, outputs, new_states)`.
@@ -2696,7 +2754,16 @@ def softmax(x):
 
 
 def softmax_3d(x):
-    """Softmax on the last axis of a 2d or 3d tensor.
+    """"Softmax on the last axis of a 2d or 3d tensor.
+
+    # Arguments
+        x: A tensor or variable.
+
+    # Returns
+        A tensor.
+
+    # Raises
+        Exception: If the input tensor is not 2D or 3D.
     """
     nd = ndim(x)
     if nd == 2:
@@ -2799,7 +2866,19 @@ def binary_crossentropy(target, output, from_logits=False):
 
 
 def weighted_binary_crossentropy(target, output, from_logits=False, lambda_w_rec=1.0, lambda_w_pre=1.0):
-    """Compute the weighted crossentropy of binary random variables.
+    """Weighted crossentropy of binary random variables.
+
+    # Arguments
+        target: A tensor with the same shape as `output`.
+        output: A tensor.
+        from_logits: Whether `output` is expected to be a logits tensor.
+            By default, we consider that `output`
+            encodes a probability distribution.
+        lambda_w_rec: Float. First weight.
+        lambda_w_pre: Float. Second weight.
+
+    # Returns
+        A tensor.
     """
     if from_logits:
         output = T.nnet.sigmoid(output)
@@ -3780,7 +3859,16 @@ def truncated_normal(shape, mean=0.0, stddev=1.0, dtype=None, seed=None):
 
 
 def random_multinomial(shape, p=0.0, dtype=None, seed=None):
-    """Instantiates a random multinomial tensor of a given shape
+    """Returns a tensor with random multinomial distribution of values.
+
+    # Arguments
+        shape: A tuple of integers, the shape of tensor to create.
+        p: A float, `0. <= p <= 1`, probability of multinomial distribution.
+        dtype: String, dtype of returned tensor.
+        seed: Integer, random seed.
+
+    # Returns
+        A tensor.
     """
     if dtype is None:
         dtype = floatx()
@@ -3793,7 +3881,13 @@ def random_multinomial(shape, p=0.0, dtype=None, seed=None):
 # COUNT SKETCH
 def count_sketch(h, s, x, d=16000):
     """Count sketch operator.
-    See https://arxiv.org/abs/1706.06706
+    See https://arxiv.org/abs/1606.01847.
+
+    # Arguments
+        h: Count sketch vector h \in \{1, d\} ^n
+        s: Count sketch vector s \in \{-1, 1\} ^n
+        x: Count sketch input vector
+        d: Compact Bilinear dimension
     """
     rval, updates = theano.scan(fn=__count_sketch,
                                 sequences=[h, s, x.dimshuffle(1, 0)],
@@ -3805,20 +3899,27 @@ def count_sketch(h, s, x, d=16000):
 def __count_sketch(h, s, v,  # Sequences
                    y,  # Outputs info
                    ):
-    """Count sketch utility
+    """Count sketch utility.
+    See https://arxiv.org/abs/1606.01847.
+
+    # Arguments
+        h: Count sketch vector h \in \{1, d\} ^n
+        s: Count sketch vector s \in \{-1, 1\} ^n
+        v: Count sketch input vector
+        y: Projected output vector
     """
     return T.cast(T.inc_subtensor(y[:, h], T.dot(s, v)), 'float32')
 
 
 # 1d Convolution
 def scan_conv1d(u, v):
-    '''1D convolution over a set of vectors. All inputs will be treated by pairs.
+    """1D convolution over a set of vectors. All inputs will be treated by pairs.
         #x must be equal to #kernel
 
     # Arguments
         u: first set of vectors
         v: second set of vectors
-    '''
+    """
 
     def __vec_conv(u, v,  # Sequences
                    w,  # Outputs info
