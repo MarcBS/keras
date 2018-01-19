@@ -60,7 +60,8 @@ class AlphaRegularizer(Regularizer):
     def __call__(self, x):
         regularization = 0.
         if self.alpha_factor:
-            regularization = self.alpha_factor * ((1. - x.sum(0)) ** 2).sum(0).mean()
+            regularization = self.alpha_factor * K.mean(K.sum((1. - K.sum(x, axis=0)) ** 2, axis=0), axis=0)
+
         return regularization
 
     def get_config(self):

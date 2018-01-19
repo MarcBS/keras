@@ -1841,7 +1841,7 @@ class GRUCond(Recurrent):
 
         if 0 < self.dropout < 1:
             input_dim = self.input_dim
-            ones = K.ones_like(K.reshape(self.context[:, :, 0], (-1, self.context.shape[1], 1)))  # (bs, timesteps, 1)
+            ones = K.ones_like(K.reshape(self.context[:, :, 0], (-1, K.shape(self.context)[1], 1)))  # (bs, timesteps, 1)
             ones = K.concatenate([ones] * input_dim, axis=2)
 
             def dropped_inputs():
@@ -3049,13 +3049,11 @@ class AttGRUCond(Recurrent):
         r = self.recurrent_activation(x_r + recurrent_r)
 
         x_h = matrix_x[:, 2 * self.units:]
-        recurrent_h = K.dot(r * h_tm1 * rec_dp_mask[0],
-                            self.recurrent_kernel[:, 2 * self.units:])
+        recurrent_h = K.dot(r * h_tm1 * rec_dp_mask[0], self.recurrent_kernel[:, 2 * self.units:])
         hh = self.activation(x_h + recurrent_h)
         h = z * h_tm1 + (1 - z) * hh
         if 0 < self.dropout + self.recurrent_dropout:
             h._uses_learning_phase = True
-
         return h, [h, ctx_, alphas]
 
     def get_constants(self, inputs, mask_context, training=None):
@@ -3107,7 +3105,7 @@ class AttGRUCond(Recurrent):
 
         if 0 < self.attention_dropout < 1:
             input_dim = self.context_dim
-            ones = K.ones_like(K.reshape(self.context[:, :, 0], (-1, self.context.shape[1], 1)))
+            ones = K.ones_like(K.reshape(self.context[:, :, 0], (-1, K.shape(self.context)[1], 1)))
             ones = K.concatenate([ones] * input_dim, axis=2)
             B_Ua = [K.in_train_phase(K.dropout(ones, self.attention_dropout), ones)]
             pctx = K.dot(self.context * B_Ua[0], self.attention_context_kernel)
@@ -3747,7 +3745,7 @@ class AttConditionalGRUCond(Recurrent):
 
         if 0 < self.attention_dropout < 1:
             input_dim = self.context_dim
-            ones = K.ones_like(K.reshape(self.context[:, :, 0], (-1, self.context.shape[1], 1)))
+            ones = K.ones_like(K.reshape(self.context[:, :, 0], (-1, K.shape(self.context)[1], 1)))
             ones = K.concatenate([ones] * input_dim, axis=2)
             B_Ua = [K.in_train_phase(K.dropout(ones, self.attention_dropout), ones)]
             pctx = K.dot(self.context * B_Ua[0], self.attention_context_kernel)
@@ -5809,7 +5807,6 @@ class AttLSTMCond(Recurrent):
             if not isinstance(ret, list):
                 ret = [ret]
             ret += [states[0], states[1]]
-
         return ret
 
     def compute_mask(self, input, mask):
@@ -5919,7 +5916,7 @@ class AttLSTMCond(Recurrent):
 
         if 0 < self.attention_dropout < 1:
             input_dim = self.context_dim
-            ones = K.ones_like(K.reshape(self.context[:, :, 0], (-1, self.context.shape[1], 1)))
+            ones = K.ones_like(K.reshape(self.context[:, :, 0], (-1, K.shape(self.context)[1], 1)))
             ones = K.concatenate([ones] * input_dim, axis=2)
             B_Ua = [K.in_train_phase(K.dropout(ones, self.attention_dropout), ones)]
             pctx = K.dot(self.context * B_Ua[0], self.attention_context_kernel)
@@ -6594,7 +6591,7 @@ class AttConditionalLSTMCond(Recurrent):
 
         if 0 < self.attention_dropout < 1:
             input_dim = self.context_dim
-            ones = K.ones_like(K.reshape(self.context[:, :, 0], (-1, self.context.shape[1], 1)))
+            ones = K.ones_like(K.reshape(self.context[:, :, 0], (-1, K.shape(self.context)[1], 1)))
             ones = K.concatenate([ones] * input_dim, axis=2)
             B_Ua = [K.in_train_phase(K.dropout(ones, self.attention_dropout), ones)]
             pctx = K.dot(self.context * B_Ua[0], self.attention_context_kernel)
