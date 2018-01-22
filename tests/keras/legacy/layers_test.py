@@ -173,7 +173,8 @@ def test_merge():
 
     input_a = layers.Input(shape=input_shapes[0][1:])
     input_b = layers.Input(shape=input_shapes[1][1:])
-    merged = legacy_layers.merge([input_a, input_b], mode=fn_mode, output_shape=lambda s: s[0], arguments={'a': 0.7, 'b': 0.3})
+    merged = legacy_layers.merge([input_a, input_b], mode=fn_mode, output_shape=lambda s: s[0],
+                                 arguments={'a': 0.7, 'b': 0.3})
     model = models.Model([input_a, input_b], merged)
     output = model.predict(inputs)
 

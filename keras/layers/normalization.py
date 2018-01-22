@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
+"""Normalization layers.
+"""
 from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
 
 from ..engine import Layer, InputSpec
 from .. import initializers
@@ -10,29 +14,50 @@ from ..legacy import interfaces
 
 
 def L1_norm(x):
-    '''Computes the L1 norm of the input
-    '''
+    """Computes the L1 norm of the input.
+
+    # Arguments
+        x: input tensor to normalize.
+
+    # Returns
+        L1-normalized input.
+    """
     return K.l1_normalize(x, axis=1)
 
+
 def L2_norm(x, axis=1):
-    '''Computes the L2 norm of the input
-    '''
+    """Computes the L2 norm of the input.
+
+    # Arguments
+        x: input tensor to normalize.
+        axis: integer, normalization axis.
+
+    # Returns
+        L2-normalized input.
+    """
     return K.l2_normalize(x, axis=axis)
 
+
 def signed_sqrt(x):
-    '''Signed square root of the input
-    '''
+    """Signed square root of the input.
+
+    # Arguments
+        x: input tensor to normalize.
+
+    # Returns
+        signedSqrt-normalized input.
+    """
     return K.switch(x >= 0, K.sqrt(x), -K.sqrt(-x))
 
 
 class Scale(Layer):
-    '''Learns a set of weights and biases used for scaling the input data.
+    """Learns a set of weights and biases used for scaling the input data.
     the output consists simply in an element-wise multiplication of the input
     and a sum of a set of constants:
 
         out = in * gamma + beta,
 
-    where 'gamma' and 'beta' are the weights and biases larned.
+    where 'gamma' and 'beta' are the weights and biases learned.
 
     # Arguments
         axis: integer, axis along which to normalize in mode 0. For instance,
@@ -52,8 +77,9 @@ class Scale(Layer):
             [initializations](../initializations.md)), or alternatively,
             Theano/TensorFlow function to use for weights initialization.
             This parameter is only relevant if you don't pass a `weights` argument.
-    '''
-    def __init__(self, weights=None, axis=-1, momentum = 0.9, beta_init='zero', gamma_init='one', **kwargs):
+    """
+
+    def __init__(self, weights=None, axis=-1, momentum=0.9, beta_init='zero', gamma_init='one', **kwargs):
         self.momentum = momentum
         self.axis = axis
         self.beta_init = initializations.get(beta_init)
@@ -100,7 +126,7 @@ class BatchNormalization(Layer):
             For instance, after a `Conv2D` layer with
             `data_format="channels_first"`,
             set `axis=1` in `BatchNormalization`.
-        momentum: Momentum for the moving average.
+        momentum: Momentum for the moving mean and the moving variance.
         epsilon: Small float added to variance to avoid dividing by zero.
         center: If True, add offset of `beta` to normalized tensor.
             If False, `beta` is ignored.
@@ -173,8 +199,8 @@ class BatchNormalization(Layer):
             dim = input_shape[self.axis]
             if dim is None:
                 raise ValueError('Axis ' + str(self.axis) + ' of '
-                                 'input tensor should have a defined dimension '
-                                 'but the layer received an input with shape ' +
+                                                            'input tensor should have a defined dimension '
+                                                            'but the layer received an input with shape ' +
                                  str(input_shape) + '.')
             self.input_spec = InputSpec(ndim=len(input_shape),
                                         axes={self.axis: dim})
@@ -198,13 +224,13 @@ class BatchNormalization(Layer):
         else:
             self.beta = None
         self.moving_mean = self.add_weight(shape=shape,
-            name='moving_mean',
-            initializer=self.moving_mean_initializer,
-            trainable=False)
+                                           name='moving_mean',
+                                           initializer=self.moving_mean_initializer,
+                                           trainable=False)
         self.moving_variance = self.add_weight(shape=shape,
-            name='moving_variance',
-            initializer=self.moving_variance_initializer,
-            trainable=False)
+                                               name='moving_variance',
+                                               initializer=self.moving_variance_initializer,
+                                               trainable=False)
         self.built = True
 
     def call(self, inputs, training=None):
@@ -281,7 +307,6 @@ class BatchNormalization(Layer):
             x_normed = self.gamma * x_normed + self.beta
             return x_normed
 
-
     def get_config(self):
         config = {
             'axis': self.axis,
@@ -300,3 +325,6 @@ class BatchNormalization(Layer):
             'moving_variance_initializer': initializers.serialize(self.moving_variance_initializer)}
         base_config = super(BatchNormalization, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
+
+    def compute_output_shape(self, input_shape):
+        return input_shape

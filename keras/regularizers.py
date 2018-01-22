@@ -1,4 +1,9 @@
+"""Built-in regularizers.
+"""
 from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
 import six
 from . import backend as K
 from .utils.generic_utils import serialize_keras_object
@@ -55,17 +60,15 @@ class AlphaRegularizer(Regularizer):
     def __call__(self, x):
         regularization = 0.
         if self.alpha_factor:
-            regularization = self.alpha_factor * ((1.-x.sum(0))**2).sum(0).mean()
+            regularization = self.alpha_factor * K.mean(K.sum((1. - K.sum(x, axis=0)) ** 2, axis=0), axis=0)
+
         return regularization
 
     def get_config(self):
         return {'alpha_factor': float(self.alpha_factor)}
 
 
-
 # Aliases.
-
-
 def l1(l=0.01):
     return L1L2(l1=l)
 

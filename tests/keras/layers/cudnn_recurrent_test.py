@@ -176,8 +176,8 @@ def test_cudnn_rnn_basics():
     for layer_class in [keras.layers.CuDNNGRU, keras.layers.CuDNNLSTM]:
         for return_sequences in [True, False]:
             with keras.utils.CustomObjectScope(
-                {'keras.layers.CuDNNGRU': keras.layers.CuDNNGRU,
-                 'keras.layers.CuDNNLSTM': keras.layers.CuDNNLSTM}):
+                    {'keras.layers.CuDNNGRU': keras.layers.CuDNNGRU,
+                     'keras.layers.CuDNNLSTM': keras.layers.CuDNNLSTM}):
                 layer_test(
                     layer_class,
                     kwargs={'units': units,
@@ -185,8 +185,8 @@ def test_cudnn_rnn_basics():
                     input_shape=(num_samples, timesteps, input_size))
         for go_backwards in [True, False]:
             with keras.utils.CustomObjectScope(
-                {'keras.layers.CuDNNGRU': keras.layers.CuDNNGRU,
-                 'keras.layers.CuDNNLSTM': keras.layers.CuDNNLSTM}):
+                    {'keras.layers.CuDNNGRU': keras.layers.CuDNNGRU,
+                     'keras.layers.CuDNNLSTM': keras.layers.CuDNNLSTM}):
                 layer_test(
                     layer_class,
                     kwargs={'units': units,
@@ -331,7 +331,7 @@ def test_statefulness():
         model.add(layer)
         model.compile(optimizer='sgd', loss='mse')
         out1 = model.predict(np.ones((num_samples, timesteps)))
-        assert(out1.shape == (num_samples, units))
+        assert (out1.shape == (num_samples, units))
 
         # train once so that the states change
         model.train_on_batch(np.ones((num_samples, timesteps)),
@@ -339,13 +339,13 @@ def test_statefulness():
         out2 = model.predict(np.ones((num_samples, timesteps)))
 
         # if the state is not reset, output should be different
-        assert(out1.max() != out2.max())
+        assert (out1.max() != out2.max())
 
         # check that output changes after states are reset
         # (even though the model itself didn't change)
         layer.reset_states()
         out3 = model.predict(np.ones((num_samples, timesteps)))
-        assert(out2.max() != out3.max())
+        assert (out2.max() != out3.max())
 
         # check that container-level reset_states() works
         model.reset_states()
@@ -354,7 +354,7 @@ def test_statefulness():
 
         # check that the call to `predict` updated the states
         out5 = model.predict(np.ones((num_samples, timesteps)))
-        assert(out4.max() != out5.max())
+        assert (out4.max() != out5.max())
 
 
 @keras_test
@@ -368,10 +368,30 @@ def test_load_weights_into_noncudnn_lstm():
     units = 2
     num_samples = 32
 
+    # basic case
     input_shape = (timesteps, input_size)
     rnn_layer = keras.layers.LSTM(units, input_shape=input_shape,
                                   recurrent_activation='sigmoid')
     cudnn_rnn_layer = keras.layers.CuDNNLSTM(units, input_shape=input_shape)
+
+    model = keras.models.Sequential([rnn_layer])
+    cudnn_model = keras.models.Sequential([cudnn_rnn_layer])
+
+    weights = cudnn_rnn_layer.get_weights()
+    weights = keras.engine.topology.preprocess_weights_for_loading(rnn_layer, weights)
+    rnn_layer.set_weights(weights)
+
+    inputs = np.random.random((num_samples, timesteps, input_size))
+    out = model.predict(inputs)
+    cudnn_out = cudnn_model.predict(inputs)
+    assert_allclose(out, cudnn_out, atol=1e-4)
+
+    # bidirectional case
+    input_shape = (timesteps, input_size)
+    rnn_layer = keras.layers.LSTM(units, recurrent_activation='sigmoid')
+    rnn_layer = keras.layers.Bidirectional(rnn_layer, input_shape=input_shape)
+    cudnn_rnn_layer = keras.layers.CuDNNLSTM(units)
+    cudnn_rnn_layer = keras.layers.Bidirectional(cudnn_rnn_layer, input_shape=input_shape)
 
     model = keras.models.Sequential([rnn_layer])
     cudnn_model = keras.models.Sequential([cudnn_rnn_layer])

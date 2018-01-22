@@ -11,7 +11,6 @@ from keras.utils import np_utils
 from keras.utils.test_utils import get_test_data, keras_test
 from keras.models import model_from_json, model_from_yaml
 
-
 input_dim = 16
 num_hidden = 8
 num_classes = 4
@@ -63,7 +62,8 @@ def test_merge_sum(in_tmpdir):
     model.add(Activation('softmax'))
     model.compile(loss='categorical_crossentropy', optimizer='rmsprop')
 
-    model.fit([x_train, x_train], y_train, batch_size=batch_size, epochs=epochs, verbose=0, validation_data=([x_test, x_test], y_test))
+    model.fit([x_train, x_train], y_train, batch_size=batch_size, epochs=epochs, verbose=0,
+              validation_data=([x_test, x_test], y_test))
     model.fit([x_train, x_train], y_train, batch_size=batch_size, epochs=epochs, verbose=0, validation_split=0.1)
     model.fit([x_train, x_train], y_train, batch_size=batch_size, epochs=epochs, verbose=0)
     model.fit([x_train, x_train], y_train, batch_size=batch_size, epochs=epochs, verbose=0, shuffle=False)
@@ -92,7 +92,7 @@ def test_merge_sum(in_tmpdir):
     model.compile(loss='categorical_crossentropy', optimizer='rmsprop')
 
     nloss = model.evaluate([x_test, x_test], y_test, verbose=0)
-    assert(loss == nloss)
+    assert (loss == nloss)
 
     # test serialization
     config = model.get_config()
@@ -159,7 +159,8 @@ def test_merge_concat(in_tmpdir):
     model.add(Activation('softmax', name='softmax'))
     model.compile(loss='categorical_crossentropy', optimizer='rmsprop')
 
-    model.fit([x_train, x_train], y_train, batch_size=batch_size, epochs=epochs, verbose=0, validation_data=([x_test, x_test], y_test))
+    model.fit([x_train, x_train], y_train, batch_size=batch_size, epochs=epochs, verbose=0,
+              validation_data=([x_test, x_test], y_test))
     model.fit([x_train, x_train], y_train, batch_size=batch_size, epochs=epochs, verbose=0, validation_split=0.1)
     model.fit([x_train, x_train], y_train, batch_size=batch_size, epochs=epochs, verbose=0)
     model.fit([x_train, x_train], y_train, batch_size=batch_size, epochs=epochs, verbose=0, shuffle=False)
@@ -178,7 +179,7 @@ def test_merge_concat(in_tmpdir):
     os.remove(fname)
 
     nloss = model.evaluate([x_test, x_test], y_test, verbose=0)
-    assert(loss == nloss)
+    assert (loss == nloss)
 
 
 @keras_test
@@ -207,8 +208,10 @@ def test_merge_recursivity(in_tmpdir):
     model.add(Activation('softmax'))
     model.compile(loss='categorical_crossentropy', optimizer='rmsprop')
 
-    model.fit([x_train, x_train, x_train], y_train, batch_size=batch_size, epochs=epochs, verbose=0, validation_data=([x_test, x_test, x_test], y_test))
-    model.fit([x_train, x_train, x_train], y_train, batch_size=batch_size, epochs=epochs, verbose=0, validation_split=0.1)
+    model.fit([x_train, x_train, x_train], y_train, batch_size=batch_size, epochs=epochs, verbose=0,
+              validation_data=([x_test, x_test, x_test], y_test))
+    model.fit([x_train, x_train, x_train], y_train, batch_size=batch_size, epochs=epochs, verbose=0,
+              validation_split=0.1)
     model.fit([x_train, x_train, x_train], y_train, batch_size=batch_size, epochs=epochs, verbose=0)
     model.fit([x_train, x_train, x_train], y_train, batch_size=batch_size, epochs=epochs, verbose=0, shuffle=False)
 
@@ -224,7 +227,7 @@ def test_merge_recursivity(in_tmpdir):
     os.remove(fname)
 
     nloss = model.evaluate([x_test, x_test, x_test], y_test, verbose=0)
-    assert(loss == nloss)
+    assert (loss == nloss)
 
     # test serialization
     config = model.get_config()
@@ -272,7 +275,7 @@ def test_merge_overlap(in_tmpdir):
     os.remove(fname)
 
     nloss = model.evaluate(x_test, y_test, verbose=0)
-    assert(loss == nloss)
+    assert (loss == nloss)
 
     # test serialization
     config = model.get_config()

@@ -1,5 +1,7 @@
 # MarcBS/keras Multimodal Learning fork
 
+[![Build Status](https://travis-ci.org/MarcBS/keras.svg?branch=master)](https://travis-ci.org/MarcBS/keras)
+
 This fork of Keras offers the following contributions:
 
 - Caffe to Keras conversion module
@@ -12,7 +14,7 @@ Contact email: marc.bolanos@ub.edu
 GitHub page: https://github.com/MarcBS
 
 
-MarcBS/keras is compatible with: __Python 2.7__ and __Theano__ only.
+MarcBS/keras is compatible with: __Python 2.7__ only and __Theano__ and __Tensorflow__ backends.
 
 ## Caffe to Keras conversion module
 
@@ -80,4 +82,4 @@ export PYTHONPATH=$PYTHONPATH:/path/to/keras
 
 ## Keras
 
-For additional information on the Deep Learning library, visit the official web page www.keras.io or the GitHub repository https://github.com/fchollet/keras.
+For additional information on the Deep Learning library, visit the official web page www.keras.io or the GitHub repository https://github.com/keras-team/keras.

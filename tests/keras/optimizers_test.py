@@ -50,7 +50,7 @@ def _test_optimizer(optimizer, target=0.75):
     dense = Dense(10,
                   input_shape=(x_train.shape[1],),
                   kernel_constraint=lambda x: 0. * x + 1.,
-                  bias_constraint=lambda x: 0. * x + 2.,)
+                  bias_constraint=lambda x: 0. * x + 2., )
     model.add(dense)
     model.add(Activation('relu'))
     model.add(Dense(y_train.shape[1]))
@@ -103,6 +103,12 @@ def test_adamax():
 @keras_test
 def test_nadam():
     _test_optimizer(optimizers.Nadam())
+
+
+@keras_test
+def test_adam_amsgrad():
+    _test_optimizer(optimizers.Adam(amsgrad=True))
+    _test_optimizer(optimizers.Adam(amsgrad=True, decay=1e-3))
 
 
 @keras_test

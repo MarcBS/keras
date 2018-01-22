@@ -16,7 +16,7 @@ class LRN2D(Layer):
         self.n = n
         if n % 2 == 0:
             raise NotImplementedError("Only works with odd n")
-      
+
     def call(self, x, mask=None):
         import theano.tensor as T
         X = x
@@ -24,15 +24,15 @@ class LRN2D(Layer):
         half_n = self.n // 2
         input_sqr = K.sqr(X)
         b, ch, r, c = input_dim
-        extra_channels = T.alloc(0., b, ch + 2*half_n, r, c)
-        input_sqr = K.set_subtensor(extra_channels[:, half_n:half_n+ch, :, :],input_sqr)
+        extra_channels = T.alloc(0., b, ch + 2 * half_n, r, c)
+        input_sqr = K.set_subtensor(extra_channels[:, half_n:half_n + ch, :, :], input_sqr)
         scale = self.k
         norm_alpha = self.alpha / self.n
         for i in range(self.n):
-            scale += norm_alpha * input_sqr[:, i:i+ch, :, :]
+            scale += norm_alpha * input_sqr[:, i:i + ch, :, :]
         scale = scale ** self.beta
         return X / scale
-        
+
     def get_output(self, train):
         import theano.tensor as T
         X = self.get_input(train)
@@ -40,18 +40,18 @@ class LRN2D(Layer):
         half_n = self.n // 2
         input_sqr = K.sqr(X)
         b, ch, r, c = input_dim
-        extra_channels = T.alloc(0., b, ch + 2*half_n, r, c)
-        input_sqr = K.set_subtensor(extra_channels[:, half_n:half_n+ch, :, :],input_sqr)
+        extra_channels = T.alloc(0., b, ch + 2 * half_n, r, c)
+        input_sqr = K.set_subtensor(extra_channels[:, half_n:half_n + ch, :, :], input_sqr)
         scale = self.k
         norm_alpha = self.alpha / self.n
         for i in range(self.n):
-            scale += norm_alpha * input_sqr[:, i:i+ch, :, :]
+            scale += norm_alpha * input_sqr[:, i:i + ch, :, :]
         scale = scale ** self.beta
         return X / scale
 
     def get_config(self):
         return {
-            "alpha":self.alpha,
-            "k":self.k,
-            "beta":self.beta,
+            "alpha": self.alpha,
+            "k": self.k,
+            "beta": self.beta,
             "n": self.n}
