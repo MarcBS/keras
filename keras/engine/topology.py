@@ -275,6 +275,8 @@ class Layer(object):
                           'updatable',
                           'weights',
                           'input_dtype',  # legacy
+                          'unit_forget_bias',
+                          'recurrent_activation'
                           }
         for kwarg in kwargs:
             if kwarg not in allowed_kwargs:
@@ -1497,6 +1499,8 @@ class Container(Layer):
 
         self.supports_masking = False
         self.trainable = True
+        self._per_input_losses = {}
+        self._per_input_updates = {}
 
         # Container-specific properties.
         if isinstance(inputs, (list, tuple)):
