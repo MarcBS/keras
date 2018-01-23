@@ -1,6 +1,11 @@
 # -*- coding: utf-8 -*-
+"""Layers that act as activation functions.
+"""
 from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
 
+from .. import activations
 from .. import initializers
 from .. import regularizers
 from .. import constraints
@@ -44,6 +49,9 @@ class LeakyReLU(Layer):
         config = {'alpha': float(self.alpha)}
         base_config = super(LeakyReLU, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
 
 
 class PReLU(Layer):
@@ -137,9 +145,12 @@ class PReLU(Layer):
         base_config = super(PReLU, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
 
 class ChannelWisePReLU(Layer):
-    '''Channel-wise Parametric Rectified Linear Unit:
+    """Channel-wise Parametric Rectified Linear Unit:
     `f(x) = alphas * x for x < 0`,
     `f(x) = x for x >= 0`,
     where `alphas` is a learned vector with the same number of elments as channels has x (or features).
@@ -159,7 +170,8 @@ class ChannelWisePReLU(Layer):
         axis: Channels axis.
     # References
         - [Delving Deep into Rectifiers: Surpassing Human-Level Performance on ImageNet Classification](http://arxiv.org/pdf/1502.01852v1.pdf)
-    '''
+    """
+
     def __init__(self, init='zero', weights=None, channels_shared=False, axis=1, **kwargs):
         self.supports_masking = True
         self.init = initializations.get(init)
@@ -169,7 +181,7 @@ class ChannelWisePReLU(Layer):
         super(ChannelWisePReLU, self).__init__(**kwargs)
 
     def build(self, input_shape):
-        size = input_shape[self.axis] if self.channels_shared==False else 1
+        size = input_shape[self.axis] if not self.channels_shared else 1
         self.alphas = self.init([size],
                                 name='{}_alphas'.format(self.name))
         self.trainable_weights = [self.alphas]
@@ -224,6 +236,9 @@ class ELU(Layer):
         base_config = super(ELU, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
 
 class ThresholdedReLU(Layer):
     """Thresholded Rectified Linear Unit.
@@ -259,3 +274,38 @@ class ThresholdedReLU(Layer):
         config = {'theta': float(self.theta)}
         base_config = super(ThresholdedReLU, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+
+class Softmax(Layer):
+    """Softmax activation function.
+
+    # Input shape
+        Arbitrary. Use the keyword argument `input_shape`
+        (tuple of integers, does not include the samples axis)
+        when using this layer as the first layer in a model.
+
+    # Output shape
+        Same shape as the input.
+
+    # Arguments
+        axis: Integer, axis along which the softmax normalization is applied.
+    """
+
+    def __init__(self, axis=-1, **kwargs):
+        super(Softmax, self).__init__(**kwargs)
+        self.supports_masking = True
+        self.axis = axis
+
+    def call(self, inputs):
+        return activations.softmax(inputs, axis=self.axis)
+
+    def get_config(self):
+        config = {'axis': self.axis}
+        base_config = super(Softmax, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+    def compute_output_shape(self, input_shape):
+        return input_shape

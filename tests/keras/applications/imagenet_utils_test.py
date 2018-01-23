@@ -93,7 +93,6 @@ def test_obtain_input_shape():
 
     # Test invalid use cases
     for data_format in ['channels_last', 'channels_first']:
-
         # test warning
         shape = (139, 139)
         input_shape = shape + (99,) if data_format == 'channels_last' else (99,) + shape

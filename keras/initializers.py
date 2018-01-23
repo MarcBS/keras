@@ -1,4 +1,9 @@
+"""Built-in weight initializers.
+"""
 from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
 import numpy as np
 import six
 from . import backend as K
@@ -421,7 +426,8 @@ def he_uniform(seed=None):
                            distribution='uniform',
                            seed=seed)
 
- # Layer normalization
+
+# Layer normalization
 def gamma_init_func(shape, c=1, **kwargs):
     if c == 1.:
         return ones()(shape, kwargs)

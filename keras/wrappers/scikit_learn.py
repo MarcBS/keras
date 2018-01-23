@@ -1,4 +1,8 @@
+"""Wrapper for using the Scikit-Learn API with Keras models.
+"""
 from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
 
 import copy
 import types
@@ -138,7 +142,7 @@ class BaseWrapper(object):
         loss_name = self.model.loss
         if hasattr(loss_name, '__name__'):
             loss_name = loss_name.__name__
-        if 'categorical_crossentropy' in loss_name  and len(y.shape) != 2:
+        if 'categorical_crossentropy' in loss_name and len(y.shape) != 2:
             y = to_categorical(y)
 
         fit_args = copy.deepcopy(self.filter_sk_params(Sequential.fit))

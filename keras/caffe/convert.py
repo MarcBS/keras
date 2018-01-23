@@ -9,15 +9,14 @@ from ..models import Model
 
 
 def caffe_to_keras(prototext, caffemodel, phase='train', debug=False):
-    '''
-        Converts a Caffe Graph into a Keras Graph
+    """Converts a Caffe Graph into a Keras Graph
         prototext: model description file in caffe
         caffemodel: stored weights file
         phase: train or test
 
         Usage:
             model = caffe_to_keras('VGG16.prototxt', 'VGG16_700iter.caffemodel')
-    '''
+    """
     config = caffe.NetParameter()
     prototext = preprocessPrototxt(prototext, debug)
     text_format.Merge(prototext, config)
@@ -38,7 +37,7 @@ def caffe_to_keras(prototext, caffemodel, phase='train', debug=False):
         input_dim.append(int(layers[0].input_param.shape[0].dim[3]))
     else:
         input_dim = tuple(config.input_dim[:])
-    print layers
+    print (layers)
     print("CREATING MODEL")
     model = create_model(layers,
                          0 if phase == 'train' else 1,
@@ -55,7 +54,6 @@ def caffe_to_keras(prototext, caffemodel, phase='train', debug=False):
     else:
         raise Exception('could not load any layers from caffemodel')
 
-    print "Printing the converted model:"
     model.summary()
 
     print('')
@@ -90,7 +88,7 @@ def preprocessPrototxt(prototxt, debug=False):
 
     p = '\n'.join(p)
     if debug:
-        print 'Writing preprocessed prototxt to debug.prototxt'
+        print ('Writing preprocessed prototxt to debug.prototxt')
         f = open('debug.prototxt', 'w')
         f.write(p)
         f.close()
@@ -160,8 +158,8 @@ def create_model(layers, phase, input_dim, debug=False):
                 input_layer_names.append(layers[input_layer].name)
 
             if debug:
-                print "Layer", str(n_layer) + ":", name
-                print '\t input shape: ' + str(input_layers[0]._keras_shape)
+                print ("Layer", str(n_layer) + ":", name)
+                print ('\t input shape: ' + str(input_layers[0]._keras_shape))
 
             if type(input_layers) is list and len(input_layers) == 1:
                 input_layers = input_layers[0]
@@ -198,7 +196,6 @@ def create_model(layers, phase, input_dim, debug=False):
                                                        strides=(stride_h, stride_w), name=name, padding='valid')(
                         input_layers)
 
-
                 net_node[layer_nb] = Convolution2D(nb_filter, (int(nb_row), int(nb_col)), use_bias=has_bias,
                                                    strides=(stride_h, stride_w), name=name, padding='valid')(
                     input_layers)
@@ -228,7 +225,7 @@ def create_model(layers, phase, input_dim, debug=False):
                 ip_shape = semi_model.layers[-1].output_shape
                 del semi_model
 
-                ##### FORMULA FOR O/P SHAPE OF DECONV ########
+                # FORMULA FOR O/P SHAPE OF DECONV
                 # o = s (i - 1) + a + k - 2p
                 # where:
                 # i - input size (rows or cols),
@@ -236,7 +233,6 @@ def create_model(layers, phase, input_dim, debug=False):
                 # s - stride (subsample for rows or cols respectively),
                 # p - padding size
                 # a - (not used)
-                ##############################################
 
                 i_h, i_w = ip_shape[2], ip_shape[3]
                 output_shape = [None,
@@ -249,7 +245,7 @@ def create_model(layers, phase, input_dim, debug=False):
                         input_layers)
                 net_node[layer_nb] = Deconvolution2D(nb_filter, (int(nb_row), int(nb_col)),
                                                      strides=(stride_h, stride_w),
-                                                     #output_shape=output_shape,
+                                                     # output_shape=output_shape,
                                                      name=name, use_bias=has_bias)(input_layers)
 
             elif type_of_layer == "crop":
@@ -308,7 +304,6 @@ def create_model(layers, phase, input_dim, debug=False):
                 pad_h = layer.pooling_param.pad or layer.pooling_param.pad_h
                 pad_w = layer.pooling_param.pad or layer.pooling_param.pad_w
 
-
                 if debug:
                     print("\t kernel: " + str(kernel_h) + 'x' + str(kernel_w))
                     print("\t stride: " + str(stride_h))
@@ -363,8 +358,8 @@ def create_model(layers, phase, input_dim, debug=False):
                 moving_average = layer.batch_norm_param.moving_average_fraction  # unused
 
                 if debug:
-                    print '\t -- BatchNormalization'
-                    print '\t axis: ' + str(axis)
+                    print ('\t -- BatchNormalization')
+                    print ('\t axis: ' + str(axis))
 
                 net_node[layer_nb] = BatchNormalization(epsilon=epsilon, axis=axis, name=name)(input_layers)
 
@@ -372,8 +367,8 @@ def create_model(layers, phase, input_dim, debug=False):
                 axis = layer.scale_param.axis
 
                 if debug:
-                    print '\t -- Scale'
-                    print '\t axis: ' + str(axis)
+                    print ('\t -- Scale')
+                    print ('\t axis: ' + str(axis))
 
                 net_node[layer_nb] = Scale(axis=axis, name=name)(input_layers)
 
@@ -523,10 +518,9 @@ def convert_weights(param_layers, v='V1', debug=False):
                 print (group)
 
             for i in range(group):
-                group_weights = weights_p[i * nb_filter_per_group: (i + 1) * nb_filter_per_group,
-                                i * stacks_size_per_group: (i + 1) * stacks_size_per_group, :, :]
-                group_weights[:] = np.array(blobs[0].data[i * group_data_size:
-                (i + 1) * group_data_size]).reshape(group_weights.shape)
+                group_weights = weights_p[i * nb_filter_per_group: (i + 1) * nb_filter_per_group, i * stacks_size_per_group: (i + 1) * stacks_size_per_group, :, :]
+                group_weights[:] = np.array(blobs[0].data[i * group_data_size: (i + 1) * group_data_size]).reshape(
+                    group_weights.shape)
 
             # caffe, unlike theano, does correlation not convolution. We need to flip the weights 180 deg
             weights_p = rot90(weights_p)
@@ -543,6 +537,6 @@ def convert_weights(param_layers, v='V1', debug=False):
 
 def load_weights(model, weights):
     for layer in model.layers:
-        if weights.has_key(layer.name):
+        if weights in layer.name:
             model.get_layer(layer.name).set_weights(weights[layer.name])
-            print "Copied wts for layer:", layer.name
+            print ("Copied wts for layer:", layer.name)

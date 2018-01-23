@@ -60,7 +60,6 @@ def test_serialize():
 
 
 def test_invalid_get():
-
     with pytest.raises(ValueError):
         metrics.get(5)
 

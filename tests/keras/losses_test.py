@@ -6,7 +6,6 @@ from keras import losses
 from keras import backend as K
 from keras.utils.generic_utils import custom_object_scope
 
-
 allobj = [losses.mean_squared_error,
           losses.mean_absolute_error,
           losses.mean_absolute_percentage_error,
@@ -90,6 +89,7 @@ def test_sparse_categorical_crossentropy_4d():
 
 class MSE_MAE_loss:
     """Loss function with internal state, for testing serialization code."""
+
     def __init__(self, mse_fraction):
         self.mse_fraction = mse_fraction
 

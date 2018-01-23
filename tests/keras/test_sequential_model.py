@@ -15,7 +15,6 @@ from keras.models import model_from_json, model_from_yaml
 from keras import losses
 from keras.engine.training import _make_batches
 
-
 input_dim = 16
 num_hidden = 8
 num_classes = 4
@@ -139,8 +138,8 @@ def test_sequential(in_tmpdir):
     gen_loss = model.evaluate_generator(data_generator(x_test, y_test, 50), 1, max_queue_size=2)
     pred_loss = K.eval(K.mean(losses.get(model.loss)(K.variable(y_test), K.variable(prediction))))
 
-    assert(np.isclose(pred_loss, loss))
-    assert(np.isclose(gen_loss, loss))
+    assert (np.isclose(pred_loss, loss))
+    assert (np.isclose(gen_loss, loss))
 
     model.predict(x_test, verbose=0)
     model.predict_classes(x_test, verbose=0)
@@ -158,7 +157,7 @@ def test_sequential(in_tmpdir):
     os.remove(fname)
 
     nloss = model.evaluate(x_test, y_test, verbose=0)
-    assert(loss == nloss)
+    assert (loss == nloss)
 
     # test serialization
     config = model.get_config()
@@ -221,7 +220,7 @@ def test_nested_sequential(in_tmpdir):
     os.remove(fname)
 
     nloss = model.evaluate(x_test, y_test, verbose=0)
-    assert(loss == nloss)
+    assert (loss == nloss)
 
     # test serialization
     config = model.get_config()
@@ -252,10 +251,10 @@ def test_sequential_count_params():
     model.add(Activation('softmax'))
     model.build()
 
-    assert(n == model.count_params())
+    assert (n == model.count_params())
 
     model.compile('sgd', 'binary_crossentropy')
-    assert(n == model.count_params())
+    assert (n == model.count_params())
 
 
 @keras_test
@@ -283,10 +282,10 @@ def test_rebuild_model():
     model = Sequential()
     model.add(Dense(128, input_shape=(784,)))
     model.add(Dense(64))
-    assert(model.get_layer(index=-1).output_shape == (None, 64))
+    assert (model.get_layer(index=-1).output_shape == (None, 64))
 
     model.add(Dense(32))
-    assert(model.get_layer(index=-1).output_shape == (None, 32))
+    assert (model.get_layer(index=-1).output_shape == (None, 32))
 
 
 @keras_test
@@ -368,7 +367,7 @@ def test_clone_sequential_model():
 
 
 @keras_test
-def test_sequential_updatable_attribute():
+def test_sequential_update_disabling():
     val_a = np.random.random((10, 4))
     val_out = np.random.random((10, 4))
 
@@ -376,9 +375,6 @@ def test_sequential_updatable_attribute():
     model.add(keras.layers.BatchNormalization(input_shape=(4,)))
 
     model.trainable = False
-    model.updatable = False
-
-    assert not model.updatable
     assert not model.updates
 
     model.compile('sgd', 'mse')
@@ -390,7 +386,7 @@ def test_sequential_updatable_attribute():
     x2 = model.predict(val_a)
     assert_allclose(x1, x2, atol=1e-7)
 
-    model.updatable = True
+    model.trainable = True
     model.compile('sgd', 'mse')
     assert model.updates
     assert model.model.updates

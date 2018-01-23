@@ -54,6 +54,7 @@ def test_get_fn():
 def test_softmax_valid():
     """Test using a reference implementation of softmax.
     """
+
     def softmax(values):
         m = np.max(values)
         e = np.exp(values - m)
@@ -90,6 +91,7 @@ def test_time_distributed_softmax():
 def test_softplus():
     """Test using a reference softplus implementation.
     """
+
     def softplus(x):
         return np.log(np.ones_like(x) + np.exp(x))
 
@@ -105,6 +107,7 @@ def test_softplus():
 def test_softsign():
     """Test using a reference softsign implementation.
     """
+
     def softsign(x):
         return np.divide(x, np.ones_like(x) + np.absolute(x))
 
@@ -120,12 +123,14 @@ def test_softsign():
 def test_sigmoid():
     """Test using a numerically stable reference sigmoid implementation.
     """
+
     def ref_sigmoid(x):
         if x >= 0:
             return 1 / (1 + np.exp(-x))
         else:
             z = np.exp(x)
             return z / (1 + z)
+
     sigmoid = np.vectorize(ref_sigmoid)
 
     x = K.placeholder(ndim=2)
@@ -140,10 +145,12 @@ def test_sigmoid():
 def test_hard_sigmoid():
     """Test using a reference hard sigmoid implementation.
     """
+
     def ref_hard_sigmoid(x):
         x = (x * 0.2) + 0.5
         z = 0.0 if x <= 0 else (1.0 if x >= 1 else x)
         return z
+
     hard_sigmoid = np.vectorize(ref_hard_sigmoid)
 
     x = K.placeholder(ndim=2)
@@ -212,7 +219,7 @@ def test_tanh():
 def test_linear():
     xs = [1, 5, True, None]
     for x in xs:
-        assert(x == activations.linear(x))
+        assert (x == activations.linear(x))
 
 
 if __name__ == '__main__':

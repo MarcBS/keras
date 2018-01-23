@@ -94,7 +94,7 @@ def test_sequential_class_weights():
     model.train_on_batch(x_train[:32], y_train[:32],
                          class_weight=class_weight)
     score = model.evaluate(x_test[test_ids, :], y_test[test_ids, :], verbose=0)
-    assert(score < standard_score_sequential)
+    assert (score < standard_score_sequential)
 
 
 @keras_test
@@ -117,7 +117,7 @@ def test_sequential_sample_weights():
     model.test_on_batch(x_train[:32], y_train[:32],
                         sample_weight=sample_weight[:32])
     score = model.evaluate(x_test[test_ids, :], y_test[test_ids, :], verbose=0)
-    assert(score < standard_score_sequential)
+    assert (score < standard_score_sequential)
 
 
 @keras_test
@@ -154,7 +154,7 @@ def test_sequential_temporal_sample_weights():
     model.test_on_batch(temporal_x_train[:32], temporal_y_train[:32],
                         sample_weight=temporal_sample_weight[:32])
     score = model.evaluate(temporal_x_test[test_ids], temporal_y_test[test_ids], verbose=0)
-    assert(score < standard_score_sequential)
+    assert (score < standard_score_sequential)
 
 
 @keras_test

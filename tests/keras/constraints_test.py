@@ -36,7 +36,7 @@ def test_max_norm():
     for m in get_test_values():
         norm_instance = constraints.max_norm(m)
         normed = norm_instance(K.variable(array))
-        assert(np.all(K.eval(normed) < m))
+        assert (np.all(K.eval(normed) < m))
 
     # a more explicit example
     norm_instance = constraints.max_norm(2.0)
@@ -54,7 +54,7 @@ def test_max_norm():
 def test_non_neg():
     non_neg_instance = constraints.non_neg()
     normed = non_neg_instance(K.variable(get_example_array()))
-    assert(np.all(np.min(K.eval(normed), axis=1) == 0.))
+    assert (np.all(np.min(K.eval(normed), axis=1) == 0.))
 
 
 @keras_test
@@ -65,7 +65,7 @@ def test_unit_norm():
     # In the unit norm constraint, it should be equal to 1.
     difference = norm_of_normalized - 1.
     largest_difference = np.max(np.abs(difference))
-    assert(np.abs(largest_difference) < 10e-5)
+    assert (np.abs(largest_difference) < 10e-5)
 
 
 @keras_test

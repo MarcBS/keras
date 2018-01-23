@@ -1,4 +1,9 @@
+"""Built-in optimizer classes.
+"""
 from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
 import six
 import copy
 from six.moves import zip
@@ -39,6 +44,7 @@ def clip_norm(g, c, n):
     else:
         g = K.switch(K.greater_equal(n, c), g * c / n, g)
     return g
+
 
 def optimizer_from_config(config, custom_objects={}):
     all_classes = {
@@ -151,6 +157,7 @@ class Optimizer(object):
     @classmethod
     def from_config(cls, config):
         return cls(**config)
+
 
 class PAS(Optimizer):
     """Soft Passive-Agressive online learning by subgradient techniques optimizer.
@@ -275,6 +282,7 @@ class PPAS(PAS):
         base_config = super(PPAS, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
+
 class SGD(Optimizer):
     """Stochastic gradient descent optimizer.
 
@@ -318,7 +326,7 @@ class SGD(Optimizer):
             self.updates.append(K.update(m, v))
 
             if self.nesterov:
-                new_p = p + self.momentum * v - (lr*lmul) * g
+                new_p = p + self.momentum * v - (lr * lmul) * g
             else:
                 new_p = p + v
 
@@ -548,7 +556,7 @@ class Adam(Optimizer):
         beta_2: float, 0 < beta < 1. Generally close to 1.
         epsilon: float >= 0. Fuzz factor. If `None`, defaults to `K.epsilon()`.
         decay: float >= 0. Learning rate decay over each update.
-        amsgrad: boolean. Weather to apply the AMSGrad variant of this
+        amsgrad: boolean. Whether to apply the AMSGrad variant of this
             algorithm from the paper "On the Convergence of Adam and
             Beyond".
 
@@ -591,7 +599,7 @@ class Adam(Optimizer):
         if self.amsgrad:
             vhats = [K.zeros(K.int_shape(p), dtype=K.dtype(p)) for p in params]
         else:
-            vhats = [None for p in params]
+            vhats = [K.zeros(1) for _ in params]
         self.weights = [self.iterations] + ms + vs + vhats
 
         for p, g, m, v, vhat, lmul in zip(params, grads, ms, vs, vhats, learning_rate_multipliers):
@@ -657,7 +665,7 @@ class Adamax(Optimizer):
         self.initial_decay = decay
 
     @interfaces.legacy_get_updates_support
-    def get_updates(self, loss, params):
+    def get_updates(self, loss, params, learning_rate_multipliers):
         grads = self.get_gradients(loss, params)
         self.updates = [K.update_add(self.iterations, 1)]
 
@@ -680,7 +688,7 @@ class Adamax(Optimizer):
 
             m_t = (self.beta_1 * m) + (1. - self.beta_1) * g
             u_t = K.maximum(self.beta_2 * u, K.abs(g))
-            p_t = p - (lr_t*lmul) * m_t / (u_t + self.epsilon)
+            p_t = p - (lr_t * lmul) * m_t / (u_t + self.epsilon)
 
             self.updates.append(K.update(m, m_t))
             self.updates.append(K.update(u, u_t))
@@ -769,7 +777,7 @@ class Nadam(Optimizer):
             self.updates.append(K.update(m, m_t))
             self.updates.append(K.update(v, v_t))
 
-            p_t = p - (self.lr*lmul) * m_t_bar / (K.sqrt(v_t_prime) + self.epsilon)
+            p_t = p - (self.lr * lmul) * m_t_bar / (K.sqrt(v_t_prime) + self.epsilon)
             new_p = p_t
 
             # Apply constraints.

@@ -1,5 +1,10 @@
 # -*- coding: utf-8 -*-
+"""Recurrent layers and their base classes.
+"""
 from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
 import numpy as np
 import warnings
 
@@ -101,7 +106,7 @@ class StackedRNNCells(Layer):
                 output_dim = cell.state_size[0]
             else:
                 output_dim = cell.state_size
-            input_shape = (input_shape[0], input_shape[1], output_dim)
+            input_shape = (input_shape[0], output_dim)
         self.built = True
 
     def get_config(self):
@@ -395,9 +400,10 @@ class RNN(Layer):
             input_shape = input_shape[0]
 
         if hasattr(self.cell.state_size, '__len__'):
-            output_dim = self.cell.state_size[0]
+            state_size = self.cell.state_size
         else:
-            output_dim = self.cell.state_size
+            state_size = [self.cell.state_size]
+        output_dim = state_size[0]
 
         if self.return_sequences:
             output_shape = (input_shape[0], input_shape[1], output_dim)
@@ -405,7 +411,7 @@ class RNN(Layer):
             output_shape = (input_shape[0], output_dim)
 
         if self.return_state:
-            state_shape = [(input_shape[0], output_dim) for _ in self.states]
+            state_shape = [(input_shape[0], dim) for dim in state_size]
             return [output_shape] + state_shape
         else:
             return output_shape
@@ -451,11 +457,11 @@ class RNN(Layer):
 
         if self.state_spec is not None:
             # initial_state was passed in call, check compatibility
-            if not [spec.shape[-1] for spec in self.state_spec] == state_size:
+            if [spec.shape[-1] for spec in self.state_spec] != state_size:
                 raise ValueError(
-                    'An initial_state was passed that is not compatible with '
+                    'An `initial_state` was passed that is not compatible with '
                     '`cell.state_size`. Received `state_spec`={}; '
-                    'However `cell.state_size` is '
+                    'however `cell.state_size` is '
                     '{}'.format(self.state_spec, self.cell.state_size))
         else:
             self.state_spec = [InputSpec(shape=(None, dim))
@@ -601,6 +607,8 @@ class RNN(Layer):
         # Properly set learning phase
         if getattr(last_output, '_uses_learning_phase', False):
             output._uses_learning_phase = True
+            for state in states:
+                state._uses_learning_phase = True
 
         if self.return_state:
             if not isinstance(states, (list, tuple)):
@@ -612,8 +620,7 @@ class RNN(Layer):
             return output
 
     def _standardize_args(self, inputs, initial_state, constants):
-        """Brings the arguments of `__call__` that can contain input tensors to
-        standard format.
+        """Standardize `__call__` to a single list of tensor inputs.
 
         When running a model loaded from file, the input tensors
         `initial_state` and `constants` can be passed to `RNN.__call__` as part
@@ -665,7 +672,7 @@ class RNN(Layer):
                              'a `batch_input_shape` '
                              'argument to your first layer.\n'
                              '- If using the functional API, specify '
-                             'the time dimension by passing a '
+                             'the batch size by passing a '
                              '`batch_shape` argument to your Input layer.')
         # initialize state if None
         if self.states[0] is None:
@@ -687,7 +694,7 @@ class RNN(Layer):
             if len(states) != len(self.states):
                 raise ValueError('Layer ' + self.name + ' expects ' +
                                  str(len(self.states)) + ' states, '
-                                 'but it received ' + str(len(states)) +
+                                                         'but it received ' + str(len(states)) +
                                  ' state values. Input received: ' +
                                  str(states))
             for index, (value, state) in enumerate(zip(states, self.states)):
@@ -769,11 +776,11 @@ class SimpleRNNCell(Layer):
             (ie. "linear" activation: `a(x) = x`).
         use_bias: Boolean, whether the layer uses a bias vector.
         kernel_initializer: Initializer for the `kernel` weights matrix,
-            used for the linear transformation of the inputs.
+            used for the linear transformation of the inputs
             (see [initializers](../initializers.md)).
         recurrent_initializer: Initializer for the `recurrent_kernel`
             weights matrix,
-            used for the linear transformation of the recurrent state.
+            used for the linear transformation of the recurrent state
             (see [initializers](../initializers.md)).
         bias_initializer: Initializer for the bias vector
             (see [initializers](../initializers.md)).
@@ -833,8 +840,8 @@ class SimpleRNNCell(Layer):
         self.recurrent_constraint = constraints.get(recurrent_constraint)
         self.bias_constraint = constraints.get(bias_constraint)
 
-        self.dropout = min(1., max(0., dropout))
-        self.recurrent_dropout = min(1., max(0., recurrent_dropout))
+        self.dropout = min(1., max(0., dropout)) if dropout is not None else 0.
+        self.recurrent_dropout = min(1., max(0., recurrent_dropout)) if recurrent_dropout is not None else 0.
         self.state_size = self.units
         self._dropout_mask = None
         self._recurrent_dropout_mask = None
@@ -868,8 +875,7 @@ class SimpleRNNCell(Layer):
                 _generate_dropout_ones(inputs, K.shape(inputs)[-1]),
                 self.dropout,
                 training=training)
-        if (0 < self.recurrent_dropout < 1 and
-                self._recurrent_dropout_mask is None):
+        if (0 < self.recurrent_dropout < 1 and self._recurrent_dropout_mask is None):
             self._recurrent_dropout_mask = _generate_dropout_mask(
                 _generate_dropout_ones(inputs, self.units),
                 self.recurrent_dropout,
@@ -897,6 +903,24 @@ class SimpleRNNCell(Layer):
                 output._uses_learning_phase = True
         return output, [output]
 
+    def get_config(self):
+        config = {'units': self.units,
+                  'activation': activations.serialize(self.activation),
+                  'use_bias': self.use_bias,
+                  'kernel_initializer': initializers.serialize(self.kernel_initializer),
+                  'recurrent_initializer': initializers.serialize(self.recurrent_initializer),
+                  'bias_initializer': initializers.serialize(self.bias_initializer),
+                  'kernel_regularizer': regularizers.serialize(self.kernel_regularizer),
+                  'recurrent_regularizer': regularizers.serialize(self.recurrent_regularizer),
+                  'bias_regularizer': regularizers.serialize(self.bias_regularizer),
+                  'kernel_constraint': constraints.serialize(self.kernel_constraint),
+                  'recurrent_constraint': constraints.serialize(self.recurrent_constraint),
+                  'bias_constraint': constraints.serialize(self.bias_constraint),
+                  'dropout': self.dropout,
+                  'recurrent_dropout': self.recurrent_dropout}
+        base_config = super(SimpleRNNCell, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
 
 class SimpleRNN(RNN):
     """Fully-connected RNN where the output is to be fed back to input.
@@ -909,11 +933,11 @@ class SimpleRNN(RNN):
             (ie. "linear" activation: `a(x) = x`).
         use_bias: Boolean, whether the layer uses a bias vector.
         kernel_initializer: Initializer for the `kernel` weights matrix,
-            used for the linear transformation of the inputs.
+            used for the linear transformation of the inputs
             (see [initializers](../initializers.md)).
         recurrent_initializer: Initializer for the `recurrent_kernel`
             weights matrix,
-            used for the linear transformation of the recurrent state.
+            used for the linear transformation of the recurrent state
             (see [initializers](../initializers.md)).
         bias_initializer: Initializer for the bias vector
             (see [initializers](../initializers.md)).
@@ -987,6 +1011,8 @@ class SimpleRNN(RNN):
             warnings.warn('The `implementation` argument '
                           'in `SimpleRNN` has been deprecated. '
                           'Please remove it from your layer call.')
+        dropout = 0. if dropout is None else dropout
+        recurrent_dropout = 0. if recurrent_dropout is None else recurrent_dropout
         if K.backend() == 'theano' and dropout + recurrent_dropout > 0.:
             warnings.warn(
                 'RNN dropout is no longer supported with the Theano backend '
@@ -1020,6 +1046,8 @@ class SimpleRNN(RNN):
         self.activity_regularizer = regularizers.get(activity_regularizer)
 
     def call(self, inputs, mask=None, training=None, initial_state=None):
+        self.cell._dropout_mask = None
+        self.cell._recurrent_dropout_mask = None
         return super(SimpleRNN, self).call(inputs,
                                            mask=mask,
                                            training=training,
@@ -1122,11 +1150,11 @@ class GRUCell(Layer):
             (see [activations](../activations.md)).
         use_bias: Boolean, whether the layer uses a bias vector.
         kernel_initializer: Initializer for the `kernel` weights matrix,
-            used for the linear transformation of the inputs.
+            used for the linear transformation of the inputs
             (see [initializers](../initializers.md)).
         recurrent_initializer: Initializer for the `recurrent_kernel`
             weights matrix,
-            used for the linear transformation of the recurrent state.
+            used for the linear transformation of the recurrent state
             (see [initializers](../initializers.md)).
         bias_initializer: Initializer for the bias vector
             (see [initializers](../initializers.md)).
@@ -1195,8 +1223,8 @@ class GRUCell(Layer):
         self.recurrent_constraint = constraints.get(recurrent_constraint)
         self.bias_constraint = constraints.get(bias_constraint)
 
-        self.dropout = min(1., max(0., dropout))
-        self.recurrent_dropout = min(1., max(0., recurrent_dropout))
+        self.dropout = min(1., max(0., dropout)) if dropout is not None else 0.
+        self.recurrent_dropout = min(1., max(0., recurrent_dropout)) if recurrent_dropout is not None else 0.
         self.implementation = implementation
         self.state_size = self.units
         self._dropout_mask = None
@@ -1228,9 +1256,7 @@ class GRUCell(Layer):
         self.kernel_z = self.kernel[:, :self.units]
         self.recurrent_kernel_z = self.recurrent_kernel[:, :self.units]
         self.kernel_r = self.kernel[:, self.units: self.units * 2]
-        self.recurrent_kernel_r = self.recurrent_kernel[:,
-                                                        self.units:
-                                                        self.units * 2]
+        self.recurrent_kernel_r = self.recurrent_kernel[:, self.units: self.units * 2]
         self.kernel_h = self.kernel[:, self.units * 2:]
         self.recurrent_kernel_h = self.recurrent_kernel[:, self.units * 2:]
 
@@ -1253,13 +1279,9 @@ class GRUCell(Layer):
                 self.dropout,
                 training=training,
                 count=3)
-        if (0 < self.recurrent_dropout < 1 and
-                self._recurrent_dropout_mask is None):
-            self._recurrent_dropout_mask = _generate_dropout_mask(
-                _generate_dropout_ones(inputs, self.units),
-                self.recurrent_dropout,
-                training=training,
-                count=3)
+        if (0 < self.recurrent_dropout < 1 and self._recurrent_dropout_mask is None):
+            self._recurrent_dropout_mask = _generate_dropout_mask(_generate_dropout_ones(inputs, self.units),
+                                                                  self.recurrent_dropout, training=training, count=3)
 
         # dropout matrices for input units
         dp_mask = self._dropout_mask
@@ -1327,6 +1349,26 @@ class GRUCell(Layer):
                 h._uses_learning_phase = True
         return h, [h]
 
+    def get_config(self):
+        config = {'units': self.units,
+                  'activation': activations.serialize(self.activation),
+                  'recurrent_activation': activations.serialize(self.recurrent_activation),
+                  'use_bias': self.use_bias,
+                  'kernel_initializer': initializers.serialize(self.kernel_initializer),
+                  'recurrent_initializer': initializers.serialize(self.recurrent_initializer),
+                  'bias_initializer': initializers.serialize(self.bias_initializer),
+                  'kernel_regularizer': regularizers.serialize(self.kernel_regularizer),
+                  'recurrent_regularizer': regularizers.serialize(self.recurrent_regularizer),
+                  'bias_regularizer': regularizers.serialize(self.bias_regularizer),
+                  'kernel_constraint': constraints.serialize(self.kernel_constraint),
+                  'recurrent_constraint': constraints.serialize(self.recurrent_constraint),
+                  'bias_constraint': constraints.serialize(self.bias_constraint),
+                  'dropout': self.dropout,
+                  'recurrent_dropout': self.recurrent_dropout,
+                  'implementation': self.implementation}
+        base_config = super(GRUCell, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
 
 class GRU(RNN):
     """Gated Recurrent Unit - Cho et al. 2014.
@@ -1342,11 +1384,11 @@ class GRU(RNN):
             (see [activations](../activations.md)).
         use_bias: Boolean, whether the layer uses a bias vector.
         kernel_initializer: Initializer for the `kernel` weights matrix,
-            used for the linear transformation of the inputs.
+            used for the linear transformation of the inputs
             (see [initializers](../initializers.md)).
         recurrent_initializer: Initializer for the `recurrent_kernel`
             weights matrix,
-            used for the linear transformation of the recurrent state.
+            used for the linear transformation of the recurrent state
             (see [initializers](../initializers.md)).
         bias_initializer: Initializer for the bias vector
             (see [initializers](../initializers.md)).
@@ -1432,6 +1474,8 @@ class GRU(RNN):
             warnings.warn('`implementation=0` has been deprecated, '
                           'and now defaults to `implementation=2`.'
                           'Please update your layer call.')
+        dropout = 0. if dropout is None else dropout
+        recurrent_dropout = 0. if recurrent_dropout is None else recurrent_dropout
         if K.backend() == 'theano' and dropout + recurrent_dropout > 0.:
             warnings.warn(
                 'RNN dropout is no longer supported with the Theano backend '
@@ -1467,6 +1511,8 @@ class GRU(RNN):
         self.activity_regularizer = regularizers.get(activity_regularizer)
 
     def call(self, inputs, mask=None, training=None, initial_state=None):
+        self.cell._dropout_mask = None
+        self.cell._recurrent_dropout_mask = None
         return super(GRU, self).call(inputs,
                                      mask=mask,
                                      training=training,
@@ -1566,78 +1612,72 @@ class GRU(RNN):
 
 
 class GRUCond(Recurrent):
-    '''Gated Recurrent Unit - Cho et al. 2014. with the previously generated word fed to the current timestep.
+    """Gated Recurrent Unit - Cho et al. 2014. with the previously generated word fed to the current timestep.
     You should give two inputs to this layer:
-        1. The shifted sequence of words (shape: (mini_batch_size, output_timesteps, embedding_size))
+        1. The shifted sequence of words (shape: (batch_size, output_timesteps, embedding_size))
+        2. The input context  (shape: (batch_size, context_size))
 
     # Arguments
-        units: dimension of the internal projections and the final output.
-        kernel_initializer: weight initialization function.
-            Can be the name of an existing function (str),
-            or a Theano function (see: [initializations](../initializations.md)).
-        recurrent_initializer: initialization function of the inner cells.
-        return_states: boolean indicating if we want the intermediate states (hidden_state and memory) as additional outputs
-        activation: activation function.
-            Can be the name of an existing function (str),
-            or a Theano function (see: [activations](../activations.md)).
-        recurrent_activation: activation function for the inner cells.
-        W_regularizer: instance of [WeightRegularizer](../regularizers.md)
-            (eg. L1 or L2 regularization), applied to the input weights matrices.
-        U_regularizer: instance of [WeightRegularizer](../regularizers.md)
-            (eg. L1 or L2 regularization), applied to the recurrent weights matrices.
-        b_regularizer: instance of [WeightRegularizer](../regularizers.md),
-            applied to the bias.
-        dropout_W: float between 0 and 1. Fraction of the input units to drop for input gates.
-        dropout_U: float between 0 and 1. Fraction of the input units to drop for recurrent connections.
-        w_a_regularizer: instance of [WeightRegularizer](../regularizers.md)
-            (eg. L1 or L2 regularization), applied to the input weights matrices.
-        W_a_regularizer: instance of [WeightRegularizer](../regularizers.md)
-            (eg. L1 or L2 regularization), applied to the input weights matrices.
-        U_a_regularizer: instance of [WeightRegularizer](../regularizers.md)
-            (eg. L1 or L2 regularization), applied to the recurrent weights matrices.
-        b_a_regularizer: instance of [WeightRegularizer](../regularizers.md),
-            applied to the bias.
-        dropout_w_a: float between 0 and 1.
-        dropout_W_a: float between 0 and 1.
-        dropout_U_a: float between 0 and 1.
-
-
-    # Formulation
-
-        The resulting attention vector 'phi' at time 't' is formed by applying a weighted sum over
-        the set of inputs 'x_i' contained in 'X':
-
-            phi(X, t) = ∑_i alpha_i(t) * x_i,
-
-        where each 'alpha_i' at time 't' is a weighting vector over all the input dimension that
-        accomplishes the following condition:
-
-            ∑_i alpha_i = 1
-
-        and is dynamically adapted at each timestep w.r.t. the following formula:
-
-            alpha_i(t) = exp{e_i(t)} /  ∑_j exp{e_j(t)}
-
-        where each 'e_i' at time 't' is calculated as:
-
-            e_i(t) = wa' * tanh( Wa * x_i  +  Ua * h(t-1)  +  ba ),
-
-        where the following are learnable with the respectively named sizes:
-                wa                Wa                     Ua                 ba
-            [input_dim] [input_dim, input_dim] [units, input_dim] [input_dim]
-
-        The names of 'Ua' and 'Wa' are exchanged w.r.t. the provided reference as well as 'v' being renamed
-        to 'x' for matching Keras LSTM's nomenclature.
-
-
+        units: Positive integer, dimensionality of the output space.
+        return_states: Whether it should return the internal RNN states.
+        activation: Activation function to use
+            (see [activations](../activations.md)).
+            If you pass None, no activation is applied
+            (ie. "linear" activation: `a(x) = x`).
+        recurrent_activation: Activation function to use
+            for the recurrent step
+            (see [activations](../activations.md)).
+        use_bias: Boolean, whether the layer uses a bias vector.
+        kernel_initializer: Initializer for the `kernel` weights matrix,
+            used for the linear transformation of the inputs
+            (see [initializers](../initializers.md)).
+        recurrent_initializer: Initializer for the `recurrent_kernel`
+            weights matrix,
+            used for the linear transformation of the recurrent state
+            (see [initializers](../initializers.md)).
+        bias_initializer: Initializer for the bias vector
+            (see [initializers](../initializers.md)).
+        kernel_regularizer: Regularizer function applied to
+            the `kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        recurrent_regularizer: Regularizer function applied to
+            the `recurrent_kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        bias_regularizer: Regularizer function applied to the bias vector
+            (see [regularizer](../regularizers.md)).
+        kernel_constraint: Constraint function applied to
+            the `kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        recurrent_constraint: Constraint function applied to
+            the `recurrent_kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        bias_constraint: Constraint function applied to the bias vector
+            (see [constraints](../constraints.md)).
+        dropout: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the context.
+        recurrent_dropout: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the recurrent state.
+        conditional_dropout: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the input.
+        implementation: Implementation mode, either 1 or 2.
+            Mode 1 will structure its operations as a larger number of
+            smaller dot products and additions, whereas mode 2 will
+            batch them into fewer, larger operations. These modes will
+            have different performance profiles on different hardware and
+            for different applications.
+        num_inputs: Number of inputs of the layer.
+        static_ctx: If static_ctx, it should have 2 dimensions and it will
+                    be fed to each timestep of the RNN. Otherwise, it should
+                    have 3 dimensions and should have the same number of
+                    timesteps than the input.
     # References
-        - [On the Properties of Neural Machine Translation: Encoder–Decoder Approaches](http://www.aclweb.org/anthology/W14-4012)
-        - [Empirical Evaluation of Gated Recurrent Neural Networks on Sequence Modeling:(http://arxiv.org/pdf/1412.3555v1.pdf)
-        - [Long short-term memory](http://deeplearning.cs.cmu.edu/pdfs/Hochreiter97_lstm.pdf) (original 1997 paper)
-        - [Learning to forget: Continual prediction with LSTM](http://www.mitpressjournals.org/doi/pdf/10.1162/089976600300015015)
-        - [Supervised sequence labeling with recurrent neural networks](http://www.cs.toronto.edu/~graves/preprint.pdf)
+        - [On the Properties of Neural Machine Translation: Encoder-Decoder Approaches](https://arxiv.org/abs/1409.1259)
+        - [Empirical Evaluation of Gated Recurrent Neural Networks on Sequence Modeling](http://arxiv.org/abs/1412.3555v1)
         - [A Theoretically Grounded Application of Dropout in Recurrent Neural Networks](http://arxiv.org/abs/1512.05287)
-    '''
+    """
 
     @interfaces.legacy_recurrent_support
     def __init__(self, units,
@@ -1663,6 +1703,7 @@ class GRUCond(Recurrent):
                  recurrent_dropout=0.,
                  conditional_dropout=0.,
                  num_inputs=4,
+                 static_ctx=False,
                  **kwargs):
 
         super(GRUCond, self).__init__(**kwargs)
@@ -1696,11 +1737,15 @@ class GRUCond(Recurrent):
         self.bias_constraint = constraints.get(bias_constraint)
 
         # Dropouts
-        self.dropout = min(1., max(0., dropout))
-        self.recurrent_dropout = min(1., max(0., recurrent_dropout))
-        self.conditional_dropout = min(1., max(0., conditional_dropout))
+        self.dropout = min(1., max(0., dropout)) if dropout is not None else 0.
+        self.recurrent_dropout = min(1., max(0., recurrent_dropout)) if recurrent_dropout is not None else 0.
+        self.conditional_dropout = min(1., max(0., conditional_dropout)) if conditional_dropout is not None else 0.
         self.num_inputs = num_inputs
         self.input_spec = [InputSpec(ndim=3), InputSpec(ndim=3)]
+        if static_ctx:
+            self.input_spec = [InputSpec(ndim=3), InputSpec(ndim=2)]
+        else:
+            self.input_spec = [InputSpec(ndim=3), InputSpec(ndim=3)]
         for _ in range(len(self.input_spec), self.num_inputs):
             self.input_spec.append(InputSpec(ndim=2))
 
@@ -1796,7 +1841,7 @@ class GRUCond(Recurrent):
 
         if 0 < self.dropout < 1:
             input_dim = self.input_dim
-            ones = K.ones_like(K.reshape(self.context[:, :, 0], (-1, self.context.shape[1], 1)))  # (bs, timesteps, 1)
+            ones = K.ones_like(K.reshape(self.context[:, :, 0], (-1, K.shape(self.context)[1], 1)))  # (bs, timesteps, 1)
             ones = K.concatenate([ones] * input_dim, axis=2)
 
             def dropped_inputs():
@@ -1811,8 +1856,7 @@ class GRUCond(Recurrent):
         if self.static_ctx:
             K.dot(inputs * cond_dp_mask, self.conditional_kernel)
         else:
-            return K.dot(inputs * cond_dp_mask, self.conditional_kernel) + \
-                   K.dot(self.context * dp_mask[0], self.kernel)
+            return K.dot(inputs * cond_dp_mask, self.conditional_kernel) + K.dot(self.context * dp_mask[0], self.kernel)
 
     def compute_output_shape(self, input_shape):
         if self.return_sequences:
@@ -1996,46 +2040,72 @@ class GRUCond(Recurrent):
 
 
 class AttGRU(Recurrent):
-    '''Gated Recurrent Unit with Attention + the previously generated word fed to the current timestep.
+    """Gated Recurrent Unit with Attention
     You should give two inputs to this layer:
-        1. The shifted sequence of words (shape: (mini_batch_size, output_timesteps, embedding_size))
-        2. The complete input sequence (shape: (mini_batch_size, input_timesteps, input_dim))
+        1. The shifted sequence of words (shape: (batch_size, output_timesteps, embedding_size))
+        2. The complete input sequence (shape: (batch_size, input_timesteps, input_dim))
     # Arguments
-        units: dimension of the internal projections and the final output.
-        embedding_size: dimension of the word embedding module used for the enconding of the generated words.
-        return_extra_variables: indicates if we only need the LSTM hidden state (False) or we want
-            additional internal variables as outputs (True). The additional variables provided are:
-            - x_att (None, out_timesteps, dim_encoder): feature vector computed after the Att.Model at each timestep
-            - alphas (None, out_timesteps, in_timesteps): weights computed by the Att.Model at each timestep
-        return_states: boolean indicating if we want the intermediate states (hidden_state and memory) as additional outputs
-        output_timesteps: number of output timesteps (# of output vectors generated)
-        kernel_initializer: weight initialization function.
-            Can be the name of an existing function (str),
-            or a Theano function (see: [initializations](../initializations.md)).
-        recurrent_initializer: initialization function of the inner cells.
-        activation: activation function.
-            Can be the name of an existing function (str),
-            or a Theano function (see: [activations](../activations.md)).
-        recurrent_activation: activation function for the inner cells.
-        W_regularizer: instance of [WeightRegularizer](../regularizers.md)
-            (eg. L1 or L2 regularization), applied to the input weights matrices.
-        U_regularizer: instance of [WeightRegularizer](../regularizers.md)
-            (eg. L1 or L2 regularization), applied to the recurrent weights matrices.
-        b_regularizer: instance of [WeightRegularizer](../regularizers.md),
-            applied to the bias.
-        dropout_W: float between 0 and 1. Fraction of the input units to drop for input gates.
-        dropout_U: float between 0 and 1. Fraction of the input units to drop for recurrent connections.
-        w_a_regularizer: instance of [WeightRegularizer](../regularizers.md)
-            (eg. L1 or L2 regularization), applied to the input weights matrices.
-        W_a_regularizer: instance of [WeightRegularizer](../regularizers.md)
-            (eg. L1 or L2 regularization), applied to the input weights matrices.
-        U_a_regularizer: instance of [WeightRegularizer](../regularizers.md)
-            (eg. L1 or L2 regularization), applied to the recurrent weights matrices.
-        b_a_regularizer: instance of [WeightRegularizer](../regularizers.md),
-            applied to the bias.
-        dropout_w_a: float between 0 and 1.
-        dropout_W_a: float between 0 and 1.
-        dropout_U_a: float between 0 and 1.
+        units: Positive integer, dimensionality of the output space.
+        return_states: Whether it should return the internal RNN states.
+        activation: Activation function to use
+            (see [activations](../activations.md)).
+            If you pass None, no activation is applied
+            (ie. "linear" activation: `a(x) = x`).
+        recurrent_activation: Activation function to use
+            for the recurrent step
+            (see [activations](../activations.md)).
+        use_bias: Boolean, whether the layer uses a bias vector.
+        kernel_initializer: Initializer for the `kernel` weights matrix,
+            used for the linear transformation of the inputs
+            (see [initializers](../initializers.md)).
+        recurrent_initializer: Initializer for the `recurrent_kernel`
+            weights matrix,
+            used for the linear transformation of the recurrent state
+            (see [initializers](../initializers.md)).
+        bias_initializer: Initializer for the bias vector
+            (see [initializers](../initializers.md)).
+        kernel_regularizer: Regularizer function applied to
+            the `kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        recurrent_regularizer: Regularizer function applied to
+            the `recurrent_kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        bias_regularizer: Regularizer function applied to the bias vector
+            (see [regularizer](../regularizers.md)).
+        kernel_constraint: Constraint function applied to
+            the `kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        recurrent_constraint: Constraint function applied to
+            the `recurrent_kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        bias_constraint: Constraint function applied to the bias vector
+            (see [constraints](../constraints.md)).
+        dropout: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the context.
+        recurrent_dropout: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the recurrent state.
+        conditional_dropout: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the input.
+        dropout_w_a: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation in the attended context.
+        dropout_W_a: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the recurrent state in the attention mechanism.
+        dropout_U_a: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the input in the attention mechanism.
+        implementation: Implementation mode, either 1 or 2.
+            Mode 1 will structure its operations as a larger number of
+            smaller dot products and additions, whereas mode 2 will
+            batch them into fewer, larger operations. These modes will
+            have different performance profiles on different hardware and
+            for different applications.
+        num_inputs: Number of inputs of the layer.
+
 
     # Formulation
 
@@ -2068,7 +2138,7 @@ class AttGRU(Recurrent):
         -   Yao L, Torabi A, Cho K, Ballas N, Pal C, Larochelle H, Courville A.
             Describing videos by exploiting temporal structure.
             InProceedings of the IEEE International Conference on Computer Vision 2015 (pp. 4507-4515).
-    '''
+    """
 
     @interfaces.legacy_recurrent_support
     def __init__(self, units,
@@ -2153,9 +2223,9 @@ class AttGRU(Recurrent):
         self.bias_ca_constraint = constraints.get(bias_ca_constraint)
 
         # Dropouts
-        self.dropout = min(1., max(0., dropout))
-        self.recurrent_dropout = min(1., max(0., recurrent_dropout))
-        self.attention_dropout = min(1., max(0., attention_dropout))
+        self.dropout = min(1., max(0., dropout)) if dropout is not None else 0.
+        self.recurrent_dropout = min(1., max(0., recurrent_dropout)) if recurrent_dropout is not None else 0.
+        self.attention_dropout = min(1., max(0., attention_dropout)) if attention_dropout is not None else 0.
         self.num_inputs = num_inputs
         self.input_spec = [InputSpec(ndim=3)]
         for _ in range(len(self.input_spec), self.num_inputs):
@@ -2494,45 +2564,123 @@ class AttGRU(Recurrent):
 
 
 class AttGRUCond(Recurrent):
-    '''Gated Recurrent Unit - Cho et al. 2014. with Attention + the previously generated word fed to the current timestep.
+    """Gated Recurrent Unit with Attention
     You should give two inputs to this layer:
-        1. The shifted sequence of words (shape: (mini_batch_size, output_timesteps, embedding_size))
-        2. The complete input sequence (shape: (mini_batch_size, input_timesteps, input_dim))
+        1. The shifted sequence of words (shape: (batch_size, output_timesteps, embedding_size))
+        2. The complete input sequence (shape: (batch_size, input_timesteps, input_dim))
+    Optionally, you can set the initial hidden state, with a tensor of shape: (batch_size, units)
 
     # Arguments
-        units: dimension of the internal projections and the final output.
-        kernel_initializer: weight initialization function.
-            Can be the name of an existing function (str),
-            or a Theano function (see: [initializations](../initializations.md)).
-        return_extra_variables: indicates if we only need the LSTM hidden state (False) or we want
-            additional internal variables as outputs (True). The additional variables provided are:
-            - x_att (None, out_timesteps, dim_encoder): feature vector computed after the Att.Model at each timestep
-            - alphas (None, out_timesteps, in_timesteps): weights computed by the Att.Model at each timestep
-        return_states: boolean indicating if we want the intermediate states (hidden_state and memory) as additional outputs
-        recurrent_initializer: initialization function of the inner cells.
-        activation: activation function.
-            Can be the name of an existing function (str),
-            or a Theano function (see: [activations](../activations.md)).
-        recurrent_activation: activation function for the inner cells.
-        W_regularizer: instance of [WeightRegularizer](../regularizers.md)
-            (eg. L1 or L2 regularization), applied to the input weights matrices.
-        U_regularizer: instance of [WeightRegularizer](../regularizers.md)
-            (eg. L1 or L2 regularization), applied to the recurrent weights matrices.
-        b_regularizer: instance of [WeightRegularizer](../regularizers.md),
-            applied to the bias.
-        dropout_W: float between 0 and 1. Fraction of the input units to drop for input gates.
-        dropout_U: float between 0 and 1. Fraction of the input units to drop for recurrent connections.
-        w_a_regularizer: instance of [WeightRegularizer](../regularizers.md)
-            (eg. L1 or L2 regularization), applied to the input weights matrices.
-        W_a_regularizer: instance of [WeightRegularizer](../regularizers.md)
-            (eg. L1 or L2 regularization), applied to the input weights matrices.
-        U_a_regularizer: instance of [WeightRegularizer](../regularizers.md)
-            (eg. L1 or L2 regularization), applied to the recurrent weights matrices.
-        b_a_regularizer: instance of [WeightRegularizer](../regularizers.md),
-            applied to the bias.
-        dropout_w_a: float between 0 and 1.
-        dropout_W_a: float between 0 and 1.
-        dropout_U_a: float between 0 and 1.
+        units: Positive integer, dimensionality of the output space.
+        att_units:  Positive integer, dimensionality of the attention space.
+        return_extra_variables: Return the attended context vectors and the attention weights (alphas)
+        return_states: Whether it should return the internal RNN states.
+        activation: Activation function to use
+            (see [activations](../activations.md)).
+            If you pass None, no activation is applied
+            (ie. "linear" activation: `a(x) = x`).
+        recurrent_activation: Activation function to use
+            for the recurrent step
+            (see [activations](../activations.md)).
+        use_bias: Boolean, whether the layer uses a bias vector.
+        kernel_initializer: Initializer for the `kernel` weights matrix,
+            used for the linear transformation of the inputs
+            (see [initializers](../initializers.md)).
+        conditional_initializer: Initializer for the `conditional_kernel`
+            weights matrix,
+            used for the linear transformation of the conditional inputs
+            (see [initializers](../initializers.md)).
+        recurrent_initializer: Initializer for the `recurrent_kernel`
+            weights matrix,
+            used for the linear transformation of the recurrent state
+            (see [initializers](../initializers.md)).
+        attention_recurrent_initializer:  Initializer for the `attention_recurrent_kernel`
+            weights matrix, used for the linear transformation of the conditional inputs
+            (see [initializers](../initializers.md)).
+        attention_context_initializer:  Initializer for the `attention_context_kernel`
+            weights matrix,
+            used for the linear transformation of the attention context inputs
+            (see [initializers](../initializers.md)).
+        attention_context_wa_initializer:  Initializer for the `attention_wa_kernel`
+            weights matrix,
+            used for the linear transformation of the attention context
+            (see [initializers](../initializers.md)).
+        bias_initializer: Initializer for the bias vector
+            (see [initializers](../initializers.md)).
+        bias_ba_initializer: Initializer for the bias_ba vector from the attention mechanism
+            (see [initializers](../initializers.md)).
+        bias_ca_initializer: Initializer for the bias_ca vector from the attention mechanism
+            (see [initializers](../initializers.md)).
+        mask_value: Value of the mask of the context (0. by default)
+        kernel_regularizer: Regularizer function applied to
+            the `kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        recurrent_regularizer: Regularizer function applied to
+            the `recurrent_kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        conditional_regularizer: Regularizer function applied to
+            the `conditional_kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        attention_recurrent_regularizer:  Regularizer function applied to
+            the `attention_recurrent__kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        attention_context_regularizer:  Regularizer function applied to
+            the `attention_context_kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        attention_context_wa_regularizer:  Regularizer function applied to
+            the `attention_context_wa_kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        bias_regularizer: Regularizer function applied to the bias vector
+            (see [regularizer](../regularizers.md)).
+        bias_ba_regularizer:  Regularizer function applied to the bias_ba vector
+            (see [regularizer](../regularizers.md)).
+        bias_ca_regularizer:  Regularizer function applied to the bias_ca vector
+            (see [regularizer](../regularizers.md)).
+        activity_regularizer: Regularizer function applied to
+            the output of the layer (its "activation").
+            (see [regularizer](../regularizers.md)).
+        kernel_constraint: Constraint function applied to
+            the `kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        recurrent_constraint: Constraint function applied to
+            the `recurrent_kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        conditional_constraint: Constraint function applied to
+            the `conditional_kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        attention_recurrent_constraint: Constraint function applied to
+            the `attention_recurrent_kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        attention_context_constraint: Constraint function applied to
+            the `attention_context_kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        attention_context_wa_constraint: Constraint function applied to
+            the `attention_context_wa_kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        bias_constraint: Constraint function applied to the bias vector
+            (see [constraints](../constraints.md)).
+        bias_ba_constraint: Constraint function applied to
+            the `bias_ba` weights matrix
+            (see [constraints](../constraints.md)).
+        bias_ca_constraint: Constraint function applied to
+            the `bias_ca` weights matrix
+            (see [constraints](../constraints.md)).
+        dropout: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the context.
+        recurrent_dropout: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the recurrent state.
+        conditional_dropout: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the input.
+        conditional_dropout: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the input.
+        attention_dropout: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the attention mechanism.
+        num_inputs: Number of inputs of the layer.
 
 
     # Formulation
@@ -2562,15 +2710,11 @@ class AttGRUCond(Recurrent):
         The names of 'Ua' and 'Wa' are exchanged w.r.t. the provided reference as well as 'v' being renamed
         to 'x' for matching Keras LSTM's nomenclature.
 
-
     # References
-        - [On the Properties of Neural Machine Translation:
-            Encoder–Decoder Approaches](http://www.aclweb.org/anthology/W14-4012)
-        - [Empirical Evaluation of Gated Recurrent Neural Networks on
-            Sequence Modeling](http://arxiv.org/pdf/1412.3555v1.pdf)
-        - [A Theoretically Grounded Application of Dropout in
-            Recurrent Neural Networks](http://arxiv.org/abs/1512.05287)
-    '''
+        -   Yao L, Torabi A, Cho K, Ballas N, Pal C, Larochelle H, Courville A.
+            Describing videos by exploiting temporal structure.
+            InProceedings of the IEEE International Conference on Computer Vision 2015 (pp. 4507-4515).
+    """
 
     @interfaces.legacy_recurrent_support
     def __init__(self, units,
@@ -2662,10 +2806,10 @@ class AttGRUCond(Recurrent):
         self.bias_ca_constraint = constraints.get(bias_ca_constraint)
 
         # Dropouts
-        self.dropout = min(1., max(0., dropout))
-        self.recurrent_dropout = min(1., max(0., recurrent_dropout))
-        self.conditional_dropout = min(1., max(0., conditional_dropout))
-        self.attention_dropout = min(1., max(0., attention_dropout))
+        self.dropout = min(1., max(0., dropout)) if dropout is not None else 0.
+        self.recurrent_dropout = min(1., max(0., recurrent_dropout)) if recurrent_dropout is not None else 0.
+        self.conditional_dropout = min(1., max(0., conditional_dropout)) if conditional_dropout is not None else 0.
+        self.attention_dropout = min(1., max(0., attention_dropout)) if attention_dropout is not None else 0.
         self.num_inputs = num_inputs
         self.input_spec = [InputSpec(ndim=3), InputSpec(ndim=3)]
         for _ in range(len(self.input_spec), self.num_inputs):
@@ -2731,8 +2875,6 @@ class AttGRUCond(Recurrent):
                                         initializer=self.bias_initializer,
                                         regularizer=self.bias_regularizer,
                                         constraint=self.bias_constraint)
-
-
         else:
             self.bias = None
 
@@ -2770,8 +2912,10 @@ class AttGRUCond(Recurrent):
 
         if 0 < self.conditional_dropout < 1:
             ones = K.ones_like(K.squeeze(inputs[:, 0:1, :], axis=1))
+
             def dropped_inputs():
                 return K.dropout(ones, self.conditional_dropout)
+
             cond_dp_mask = [K.in_train_phase(dropped_inputs,
                                              ones,
                                              training=training) for _ in range(3)]
@@ -2905,13 +3049,11 @@ class AttGRUCond(Recurrent):
         r = self.recurrent_activation(x_r + recurrent_r)
 
         x_h = matrix_x[:, 2 * self.units:]
-        recurrent_h = K.dot(r * h_tm1 * rec_dp_mask[0],
-                            self.recurrent_kernel[:, 2 * self.units:])
+        recurrent_h = K.dot(r * h_tm1 * rec_dp_mask[0], self.recurrent_kernel[:, 2 * self.units:])
         hh = self.activation(x_h + recurrent_h)
         h = z * h_tm1 + (1 - z) * hh
         if 0 < self.dropout + self.recurrent_dropout:
             h._uses_learning_phase = True
-
         return h, [h, ctx_, alphas]
 
     def get_constants(self, inputs, mask_context, training=None):
@@ -2919,8 +3061,10 @@ class AttGRUCond(Recurrent):
         # States[4] - Dropout_W
         if 0 < self.dropout < 1:
             ones = K.ones_like(K.squeeze(self.context[:, 0:1, :], axis=1))
+
             def dropped_inputs():
                 return K.dropout(ones, self.dropout)
+
             dp_mask = [K.in_train_phase(dropped_inputs,
                                         ones,
                                         training=training) for _ in range(3)]
@@ -2961,7 +3105,7 @@ class AttGRUCond(Recurrent):
 
         if 0 < self.attention_dropout < 1:
             input_dim = self.context_dim
-            ones = K.ones_like(K.reshape(self.context[:, :, 0], (-1, self.context.shape[1], 1)))
+            ones = K.ones_like(K.reshape(self.context[:, :, 0], (-1, K.shape(self.context)[1], 1)))
             ones = K.concatenate([ones] * input_dim, axis=2)
             B_Ua = [K.in_train_phase(K.dropout(ones, self.attention_dropout), ones)]
             pctx = K.dot(self.context * B_Ua[0], self.attention_context_kernel)
@@ -3047,83 +3191,131 @@ class AttGRUCond(Recurrent):
 
 
 class AttConditionalGRUCond(Recurrent):
-    '''Gated Recurrent Unit - Cho et al. 2014. with Attention + the previously generated word fed to the current timestep.
+    """Conditional Gated Recurrent Unit - Cho et al. 2014. with Attention + the previously generated word fed to the current timestep.
+
     You should give two inputs to this layer:
-        1. The shifted sequence of words (shape: (mini_batch_size, output_timesteps, embedding_size))
-        2. The complete input sequence (shape: (mini_batch_size, input_timesteps, input_dim))
+        1. The shifted sequence of words (shape: (batch_size, output_timesteps, embedding_size))
+        2. The complete input sequence (shape: (batch_size, input_timesteps, input_dim))
+    Optionally, you can set the initial hidden state, with a tensor of shape: (batch_size, units)
 
     # Arguments
-        units: dimension of the internal projections and the final output.
-        kernel_initializer: weight initialization function.
-            Can be the name of an existing function (str),
-            or a Theano function (see: [initializations](../initializations.md)).
-        return_extra_variables: indicates if we only need the LSTM hidden state (False) or we want
-            additional internal variables as outputs (True). The additional variables provided are:
-            - x_att (None, out_timesteps, dim_encoder): feature vector computed after the Att.Model at each timestep
-            - alphas (None, out_timesteps, in_timesteps): weights computed by the Att.Model at each timestep
-        return_states: boolean indicating if we want the intermediate states (hidden_state and memory) as additional outputs
-        recurrent_initializer: initialization function of the inner cells.
-        activation: activation function.
-            Can be the name of an existing function (str),
-            or a Theano function (see: [activations](../activations.md)).
-        recurrent_activation: activation function for the inner cells.
-        W_regularizer: instance of [WeightRegularizer](../regularizers.md)
-            (eg. L1 or L2 regularization), applied to the input weights matrices.
-        U_regularizer: instance of [WeightRegularizer](../regularizers.md)
-            (eg. L1 or L2 regularization), applied to the recurrent weights matrices.
-        b_regularizer: instance of [WeightRegularizer](../regularizers.md),
-            applied to the bias.
-        dropout_W: float between 0 and 1. Fraction of the input units to drop for input gates.
-        dropout_U: float between 0 and 1. Fraction of the input units to drop for recurrent connections.
-        w_a_regularizer: instance of [WeightRegularizer](../regularizers.md)
-            (eg. L1 or L2 regularization), applied to the input weights matrices.
-        W_a_regularizer: instance of [WeightRegularizer](../regularizers.md)
-            (eg. L1 or L2 regularization), applied to the input weights matrices.
-        U_a_regularizer: instance of [WeightRegularizer](../regularizers.md)
-            (eg. L1 or L2 regularization), applied to the recurrent weights matrices.
-        b_a_regularizer: instance of [WeightRegularizer](../regularizers.md),
-            applied to the bias.
-        dropout_w_a: float between 0 and 1.
-        dropout_W_a: float between 0 and 1.
-        dropout_U_a: float between 0 and 1.
-
-
-    # Formulation
-
-        The resulting attention vector 'phi' at time 't' is formed by applying a weighted sum over
-        the set of inputs 'x_i' contained in 'X':
-
-            phi(X, t) = ∑_i alpha_i(t) * x_i,
-
-        where each 'alpha_i' at time 't' is a weighting vector over all the input dimension that
-        accomplishes the following condition:
-
-            ∑_i alpha_i = 1
-
-        and is dynamically adapted at each timestep w.r.t. the following formula:
-
-            alpha_i(t) = exp{e_i(t)} /  ∑_j exp{e_j(t)}
-
-        where each 'e_i' at time 't' is calculated as:
-
-            e_i(t) = wa' * tanh( Wa * x_i  +  Ua * h(t-1)  +  ba ),
-
-        where the following are learnable with the respectively named sizes:
-                wa                Wa                     Ua                 ba
-            [input_dim] [input_dim, input_dim] [units, input_dim] [input_dim]
-
-        The names of 'Ua' and 'Wa' are exchanged w.r.t. the provided reference as well as 'v' being renamed
-        to 'x' for matching Keras LSTM's nomenclature.
-
+        units: Positive integer, dimensionality of the output space.
+        att_units:  Positive integer, dimensionality of the attention space.
+        return_extra_variables: Return the attended context vectors and the attention weights (alphas)
+        return_states: Whether it should return the internal RNN states.
+        activation: Activation function to use
+            (see [activations](../activations.md)).
+            If you pass None, no activation is applied
+            (ie. "linear" activation: `a(x) = x`).
+        recurrent_activation: Activation function to use
+            for the recurrent step
+            (see [activations](../activations.md)).
+        use_bias: Boolean, whether the layer uses a bias vector.
+        kernel_initializer: Initializer for the `kernel` weights matrix,
+            used for the linear transformation of the inputs
+            (see [initializers](../initializers.md)).
+        conditional_initializer: Initializer for the `conditional_kernel`
+            weights matrix,
+            used for the linear transformation of the conditional inputs
+            (see [initializers](../initializers.md)).
+        recurrent_initializer: Initializer for the `recurrent_kernel`
+            weights matrix,
+            used for the linear transformation of the recurrent state
+            (see [initializers](../initializers.md)).
+        attention_recurrent_initializer:  Initializer for the `attention_recurrent_kernel`
+            weights matrix, used for the linear transformation of the conditional inputs
+            (see [initializers](../initializers.md)).
+        attention_context_initializer:  Initializer for the `attention_context_kernel`
+            weights matrix,
+            used for the linear transformation of the attention context inputs
+            (see [initializers](../initializers.md)).
+        attention_context_wa_initializer:  Initializer for the `attention_wa_kernel`
+            weights matrix,
+            used for the linear transformation of the attention context
+            (see [initializers](../initializers.md)).
+        bias_initializer: Initializer for the bias vector
+            (see [initializers](../initializers.md)).
+        bias_ba_initializer: Initializer for the bias_ba vector from the attention mechanism
+            (see [initializers](../initializers.md)).
+        bias_ca_initializer: Initializer for the bias_ca vector from the attention mechanism
+            (see [initializers](../initializers.md)).
+        mask_value: Value of the mask of the context (0. by default)
+        kernel_regularizer: Regularizer function applied to
+            the `kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        recurrent_regularizer: Regularizer function applied to
+            the `recurrent_kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        conditional_regularizer: Regularizer function applied to
+            the `conditional_kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        attention_recurrent_regularizer:  Regularizer function applied to
+            the `attention_recurrent__kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        attention_context_regularizer:  Regularizer function applied to
+            the `attention_context_kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        attention_context_wa_regularizer:  Regularizer function applied to
+            the `attention_context_wa_kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        bias_regularizer: Regularizer function applied to the bias vector
+            (see [regularizer](../regularizers.md)).
+        bias_ba_regularizer:  Regularizer function applied to the bias_ba vector
+            (see [regularizer](../regularizers.md)).
+        bias_ca_regularizer:  Regularizer function applied to the bias_ca vector
+            (see [regularizer](../regularizers.md)).
+        activity_regularizer: Regularizer function applied to
+            the output of the layer (its "activation").
+            (see [regularizer](../regularizers.md)).
+        kernel_constraint: Constraint function applied to
+            the `kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        recurrent_constraint: Constraint function applied to
+            the `recurrent_kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        conditional_constraint: Constraint function applied to
+            the `conditional_kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        attention_recurrent_constraint: Constraint function applied to
+            the `attention_recurrent_kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        attention_context_constraint: Constraint function applied to
+            the `attention_context_kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        attention_context_wa_constraint: Constraint function applied to
+            the `attention_context_wa_kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        bias_constraint: Constraint function applied to the bias vector
+            (see [constraints](../constraints.md)).
+        bias_ba_constraint: Constraint function applied to
+            the `bias_ba` weights matrix
+            (see [constraints](../constraints.md)).
+        bias_ca_constraint: Constraint function applied to
+            the `bias_ca` weights matrix
+            (see [constraints](../constraints.md)).
+        dropout: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the context.
+        recurrent_dropout: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the recurrent state.
+        conditional_dropout: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the input.
+        conditional_dropout: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the input.
+        attention_dropout: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the attention mechanism.
+        num_inputs: Number of inputs of the layer.
 
     # References
-        - [On the Properties of Neural Machine Translation:
-            Encoder–Decoder Approaches](http://www.aclweb.org/anthology/W14-4012)
-        - [Empirical Evaluation of Gated Recurrent Neural Networks on
-            Sequence Modeling](http://arxiv.org/pdf/1412.3555v1.pdf)
-        - [A Theoretically Grounded Application of Dropout in
-            Recurrent Neural Networks](http://arxiv.org/abs/1512.05287)
-    '''
+        - [On the Properties of Neural Machine Translation: Encoder-Decoder Approaches](https://arxiv.org/abs/1409.1259)
+        - [Empirical Evaluation of Gated Recurrent Neural Networks on Sequence Modeling](http://arxiv.org/abs/1412.3555v1)
+        - [A Theoretically Grounded Application of Dropout in Recurrent Neural Networks](http://arxiv.org/abs/1512.05287)
+        - [Nematus: a Toolkit for Neural Machine Translation](http://arxiv.org/abs/1703.04357)
+    """
 
     @interfaces.legacy_recurrent_support
     def __init__(self, units,
@@ -3221,10 +3413,10 @@ class AttConditionalGRUCond(Recurrent):
         self.bias_ca_constraint = constraints.get(bias_ca_constraint)
 
         # Dropouts
-        self.dropout = min(1., max(0., dropout))
-        self.recurrent_dropout = min(1., max(0., recurrent_dropout))
-        self.conditional_dropout = min(1., max(0., conditional_dropout))
-        self.attention_dropout = min(1., max(0., attention_dropout))
+        self.dropout = min(1., max(0., dropout)) if dropout is not None else 0.
+        self.recurrent_dropout = min(1., max(0., recurrent_dropout)) if recurrent_dropout is not None else 0.
+        self.conditional_dropout = min(1., max(0., conditional_dropout)) if conditional_dropout is not None else 0.
+        self.attention_dropout = min(1., max(0., attention_dropout)) if attention_dropout is not None else 0.
         self.num_inputs = num_inputs
         self.input_spec = [InputSpec(ndim=3), InputSpec(ndim=3)]
         for _ in range(len(self.input_spec), self.num_inputs):
@@ -3340,8 +3532,10 @@ class AttConditionalGRUCond(Recurrent):
 
         if 0 < self.conditional_dropout < 1:
             ones = K.ones_like(K.squeeze(inputs[:, 0:1, :], axis=1))
+
             def dropped_inputs():
                 return K.dropout(ones, self.conditional_dropout)
+
             cond_dp_mask = [K.in_train_phase(dropped_inputs,
                                              ones,
                                              training=training) for _ in range(3)]
@@ -3551,7 +3745,7 @@ class AttConditionalGRUCond(Recurrent):
 
         if 0 < self.attention_dropout < 1:
             input_dim = self.context_dim
-            ones = K.ones_like(K.reshape(self.context[:, :, 0], (-1, self.context.shape[1], 1)))
+            ones = K.ones_like(K.reshape(self.context[:, :, 0], (-1, K.shape(self.context)[1], 1)))
             ones = K.concatenate([ones] * input_dim, axis=2)
             B_Ua = [K.in_train_phase(K.dropout(ones, self.attention_dropout), ones)]
             pctx = K.dot(self.context * B_Ua[0], self.attention_context_kernel)
@@ -3652,11 +3846,11 @@ class LSTMCell(Layer):
             (see [activations](../activations.md)).
         use_bias: Boolean, whether the layer uses a bias vector.
         kernel_initializer: Initializer for the `kernel` weights matrix,
-            used for the linear transformation of the inputs.
+            used for the linear transformation of the inputs
             (see [initializers](../initializers.md)).
         recurrent_initializer: Initializer for the `recurrent_kernel`
             weights matrix,
-            used for the linear transformation of the recurrent state.
+            used for the linear transformation of the recurrent state
             (see [initializers](../initializers.md)).
         bias_initializer: Initializer for the bias vector
             (see [initializers](../initializers.md)).
@@ -3731,8 +3925,8 @@ class LSTMCell(Layer):
         self.recurrent_constraint = constraints.get(recurrent_constraint)
         self.bias_constraint = constraints.get(bias_constraint)
 
-        self.dropout = min(1., max(0., dropout))
-        self.recurrent_dropout = min(1., max(0., recurrent_dropout))
+        self.dropout = min(1., max(0., dropout)) if dropout is not None else 0.
+        self.recurrent_dropout = min(1., max(0., recurrent_dropout)) if recurrent_dropout is not None else 0.
         self.implementation = implementation
         self.state_size = (self.units, self.units)
         self._dropout_mask = None
@@ -3754,7 +3948,7 @@ class LSTMCell(Layer):
 
         if self.use_bias:
             if self.unit_forget_bias:
-                def bias_initializer(shape, *args, **kwargs):
+                def bias_initializer(_, *args, **kwargs):
                     return K.concatenate([
                         self.bias_initializer((self.units,), *args, **kwargs),
                         initializers.Ones()((self.units,), *args, **kwargs),
@@ -3799,8 +3993,7 @@ class LSTMCell(Layer):
                 self.dropout,
                 training=training,
                 count=4)
-        if (0 < self.recurrent_dropout < 1 and
-                self._recurrent_dropout_mask is None):
+        if (0 < self.recurrent_dropout < 1 and self._recurrent_dropout_mask is None):
             self._recurrent_dropout_mask = _generate_dropout_mask(
                 _generate_dropout_ones(inputs, self.units),
                 self.recurrent_dropout,
@@ -3879,6 +4072,27 @@ class LSTMCell(Layer):
             if training is None:
                 h._uses_learning_phase = True
         return h, [h, c]
+
+    def get_config(self):
+        config = {'units': self.units,
+                  'activation': activations.serialize(self.activation),
+                  'recurrent_activation': activations.serialize(self.recurrent_activation),
+                  'use_bias': self.use_bias,
+                  'kernel_initializer': initializers.serialize(self.kernel_initializer),
+                  'recurrent_initializer': initializers.serialize(self.recurrent_initializer),
+                  'bias_initializer': initializers.serialize(self.bias_initializer),
+                  'unit_forget_bias': self.unit_forget_bias,
+                  'kernel_regularizer': regularizers.serialize(self.kernel_regularizer),
+                  'recurrent_regularizer': regularizers.serialize(self.recurrent_regularizer),
+                  'bias_regularizer': regularizers.serialize(self.bias_regularizer),
+                  'kernel_constraint': constraints.serialize(self.kernel_constraint),
+                  'recurrent_constraint': constraints.serialize(self.recurrent_constraint),
+                  'bias_constraint': constraints.serialize(self.bias_constraint),
+                  'dropout': self.dropout,
+                  'recurrent_dropout': self.recurrent_dropout,
+                  'implementation': self.implementation}
+        base_config = super(LSTMCell, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
 
 
 class LSTM(RNN):
@@ -3991,7 +4205,9 @@ class LSTM(RNN):
             warnings.warn('`implementation=0` has been deprecated, '
                           'and now defaults to `implementation=2`.'
                           'Please update your layer call.')
-        if K.backend() == 'theano' and dropout > 0. or recurrent_dropout > 0.:
+        dropout = 0. if dropout is None else dropout
+        recurrent_dropout = 0. if recurrent_dropout is None else recurrent_dropout
+        if K.backend() == 'theano' and dropout + recurrent_dropout > 0.:
             warnings.warn(
                 'RNN dropout is no longer supported with the Theano backend '
                 'due to technical limitations. '
@@ -4027,6 +4243,8 @@ class LSTM(RNN):
         self.activity_regularizer = regularizers.get(activity_regularizer)
 
     def call(self, inputs, mask=None, training=None, initial_state=None):
+        self.cell._dropout_mask = None
+        self.cell._recurrent_dropout_mask = None
         return super(LSTM, self).call(inputs,
                                       mask=mask,
                                       training=training,
@@ -4129,6 +4347,7 @@ class LSTM(RNN):
             config['implementation'] = 1
         return cls(**config)
 
+
 def _generate_dropout_ones(inputs, dims):
     # Currently, CTNK can't instantiate `ones` with symbolic shapes.
     # Will update workaround once CTNK supports it.
@@ -4137,6 +4356,7 @@ def _generate_dropout_ones(inputs, dims):
         return K.tile(ones, (1, dims))
     else:
         return K.ones((K.shape(inputs)[0], dims))
+
 
 def _generate_dropout_mask(ones, rate, training=None, count=1):
     def dropped_inputs():
@@ -4156,37 +4376,73 @@ def _generate_dropout_mask(ones, rate, training=None, count=1):
 # TODO: Adapt ALL LSTM* to the new interface
 
 class LSTMCond(Recurrent):
-    '''Conditional LSTM: The previously generated word is fed to the current timestep
+    """Conditional LSTM: The previously generated word is fed to the current timestep
+    You should give two inputs to this layer:
+        1. The shifted sequence of words (shape: (batch_size, output_timesteps, embedding_size))
+        2. The input context  (shape: (batch_size, context_size))
 
     # Arguments
-        units: dimension of the internal projections and the final output.
-        kernel_initializer: weight initialization function.
-            Can be the name of an existing function (str),
-            or a Theano function (see: [initializations](../initializations.md)).
-        recurrent_initializer: initialization function of the inner cells.
-        return_states: boolean indicating if we want the intermediate states (hidden_state and memory) as additional outputs
-        forget_bias_initializer: initialization function for the bias of the forget gate.
-            [Jozefowicz et al.](http://www.jmlr.org/proceedings/papers/v37/jozefowicz15.pdf)
-            recommend initializing with ones.
-        activation: activation function.
-            Can be the name of an existing function (str),
-            or a Theano function (see: [activations](../activations.md)).
-        recurrent_activation: activation function for the inner cells.
-        W_regularizer: instance of [WeightRegularizer](../regularizers.md)
-            (eg. L1 or L2 regularization), applied to the input weights matrices.
-        U_regularizer: instance of [WeightRegularizer](../regularizers.md)
-            (eg. L1 or L2 regularization), applied to the recurrent weights matrices.
-        b_regularizer: instance of [WeightRegularizer](../regularizers.md),
-            applied to the bias.
-        dropout_W: float between 0 and 1. Fraction of the input units to drop for input gates.
-        dropout_U: float between 0 and 1. Fraction of the input units to drop for recurrent connections.
-
+        units: Positive integer, dimensionality of the output space.
+        return_states: Whether it should return the internal RNN states.
+        activation: Activation function to use
+            (see [activations](../activations.md)).
+            If you pass None, no activation is applied
+            (ie. "linear" activation: `a(x) = x`).
+        recurrent_activation: Activation function to use
+            for the recurrent step
+            (see [activations](../activations.md)).
+        use_bias: Boolean, whether the layer uses a bias vector.
+        kernel_initializer: Initializer for the `kernel` weights matrix,
+            used for the linear transformation of the inputs
+            (see [initializers](../initializers.md)).
+        recurrent_initializer: Initializer for the `recurrent_kernel`
+            weights matrix,
+            used for the linear transformation of the recurrent state
+            (see [initializers](../initializers.md)).
+        bias_initializer: Initializer for the bias vector
+            (see [initializers](../initializers.md)).
+        kernel_regularizer: Regularizer function applied to
+            the `kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        recurrent_regularizer: Regularizer function applied to
+            the `recurrent_kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        bias_regularizer: Regularizer function applied to the bias vector
+            (see [regularizer](../regularizers.md)).
+        kernel_constraint: Constraint function applied to
+            the `kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        recurrent_constraint: Constraint function applied to
+            the `recurrent_kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        bias_constraint: Constraint function applied to the bias vector
+            (see [constraints](../constraints.md)).
+        dropout: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the context.
+        recurrent_dropout: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the recurrent state.
+        conditional_dropout: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the input.
+        implementation: Implementation mode, either 1 or 2.
+            Mode 1 will structure its operations as a larger number of
+            smaller dot products and additions, whereas mode 2 will
+            batch them into fewer, larger operations. These modes will
+            have different performance profiles on different hardware and
+            for different applications.
+        num_inputs: Number of inputs of the layer.
+        static_ctx: If static_ctx, it should have 2 dimensions and it will
+                    be fed to each timestep of the RNN. Otherwise, it should
+                    have 3 dimensions and should have the same number of
+                    timesteps than the input.
     # References
-        - [Long short-term memory](http://deeplearning.cs.cmu.edu/pdfs/Hochreiter97_lstm.pdf) (original 1997 paper)
-        - [Learning to forget: Continual prediction with LSTM](http://www.mitpressjournals.org/doi/pdf/10.1162/089976600300015015)
-        - [Supervised sequence labelling with recurrent neural networks](http://www.cs.toronto.edu/~graves/preprint.pdf)
+        - [On the Properties of Neural Machine Translation: Encoder-Decoder Approaches](https://arxiv.org/abs/1409.1259)
+        - [Empirical Evaluation of Gated Recurrent Neural Networks on Sequence Modeling](http://arxiv.org/abs/1412.3555v1)
         - [A Theoretically Grounded Application of Dropout in Recurrent Neural Networks](http://arxiv.org/abs/1512.05287)
-    '''
+
+    """
 
     @interfaces.legacy_recurrent_support
     def __init__(self, units,
@@ -4220,6 +4476,7 @@ class LSTMCond(Recurrent):
                  recurrent_dropout=0.,
                  conditional_dropout=0.,
                  num_inputs=4,
+                 static_ctx=False,
                  **kwargs):
 
         super(LSTMCond, self).__init__(**kwargs)
@@ -4261,11 +4518,15 @@ class LSTMCond(Recurrent):
         self.bias_ca_constraint = constraints.get(bias_ca_constraint)
 
         # Dropouts
-        self.dropout = min(1., max(0., dropout))
-        self.recurrent_dropout = min(1., max(0., recurrent_dropout))
-        self.conditional_dropout = min(1., max(0., conditional_dropout))
+        self.dropout = min(1., max(0., dropout)) if dropout is not None else 0.
+        self.recurrent_dropout = min(1., max(0., recurrent_dropout)) if recurrent_dropout is not None else 0.
+        self.conditional_dropout = min(1., max(0., conditional_dropout)) if conditional_dropout is not None else 0.
         self.num_inputs = num_inputs
-        self.input_spec = [InputSpec(ndim=3), InputSpec(ndim=2)]
+        if static_ctx:
+            self.input_spec = [InputSpec(ndim=3), InputSpec(ndim=2)]
+        else:
+            self.input_spec = [InputSpec(ndim=3), InputSpec(ndim=3)]
+
         for _ in range(len(self.input_spec), self.num_inputs):
             self.input_spec.append(InputSpec(ndim=2))
 
@@ -4358,8 +4619,10 @@ class LSTMCond(Recurrent):
     def preprocess_input(self, inputs, training=None):
         if 0 < self.conditional_dropout < 1:
             ones = K.ones_like(K.squeeze(inputs[:, 0:1, :], axis=1))
+
             def dropped_inputs():
                 return K.dropout(ones, self.conditional_dropout)
+
             cond_dp_mask = [K.in_train_phase(dropped_inputs,
                                              ones,
                                              training=training) for _ in range(4)]
@@ -4373,10 +4636,12 @@ class LSTMCond(Recurrent):
         # Not Static ctx
         if 0 < self.dropout < 1:
             ones = K.ones_like(K.squeeze(self.context[:, 0:1, :], axis=1))
+
             def dropped_inputs():
                 return K.dropout(ones, self.dropout)
+
             dp_mask = [K.in_train_phase(dropped_inputs, ones,
-                                             training=training) for _ in range(4)]
+                                        training=training) for _ in range(4)]
             preprocessed_context = K.dot(self.context * dp_mask[0][:, None, :], self.kernel)
         else:
             preprocessed_context = K.dot(self.context, self.kernel)
@@ -4464,8 +4729,8 @@ class LSTMCond(Recurrent):
         z = x + K.dot(h_tm1 * rec_dp_mask[0], self.recurrent_kernel)
         if self.static_ctx:
             context = states[4]
-            #mask_context = states[5]  # Context mask
-            #if mask_context.ndim > 1:  # Mask the context (only if necessary)
+            # mask_context = states[5]  # Context mask
+            # if mask_context.ndim > 1:  # Mask the context (only if necessary)
             #    context = mask_context[:, :, None] * context
             z += K.dot(context * dp_mask[0], self.kernel)
         if self.use_bias:
@@ -4489,8 +4754,10 @@ class LSTMCond(Recurrent):
         # States[3] - Dropout_W
         if 0 < self.dropout < 1:
             ones = K.ones_like(K.squeeze(self.context[:, 0:1, :], axis=1))
+
             def dropped_inputs():
                 return K.dropout(ones, self.dropout)
+
             dp_mask = [K.in_train_phase(dropped_inputs,
                                         ones,
                                         training=training) for _ in range(4)]
@@ -4516,7 +4783,6 @@ class LSTMCond(Recurrent):
         # States[4] - context
         if self.static_ctx:
             constants.append(self.context)
-
 
         return constants
 
@@ -4577,49 +4843,72 @@ class LSTMCond(Recurrent):
 
 
 class AttLSTM(Recurrent):
-    '''Long-Short Term Memory unit with Attention + the previously generated word fed to the current timestep.
+    """Long-Short Term Memory unit with Attention
     You should give two inputs to this layer:
-        1. The shifted sequence of words (shape: (mini_batch_size, output_timesteps, embedding_size))
-        2. The complete input sequence (shape: (mini_batch_size, input_timesteps, input_dim))
+        1. The shifted sequence of words (shape: (batch_size, output_timesteps, embedding_size))
+        2. The complete input sequence (shape: (batch_size, input_timesteps, input_dim))
     # Arguments
-        units: dimension of the internal projections and the final output.
-        embedding_size: dimension of the word embedding module used for the enconding of the generated words.
-        return_extra_variables: indicates if we only need the LSTM hidden state (False) or we want
-            additional internal variables as outputs (True). The additional variables provided are:
-            - x_att (None, out_timesteps, dim_encoder): feature vector computed after the Att.Model at each timestep
-            - alphas (None, out_timesteps, in_timesteps): weights computed by the Att.Model at each timestep
-        return_states: boolean indicating if we want the intermediate states (hidden_state and memory) as additional outputs
-        output_timesteps: number of output timesteps (# of output vectors generated)
-        kernel_initializer: weight initialization function.
-            Can be the name of an existing function (str),
-            or a Theano function (see: [initializations](../initializations.md)).
-        recurrent_initializer: initialization function of the inner cells.
-        forget_bias_initializer: initialization function for the bias of the forget gate.
-            [Jozefowicz et al.](http://www.jmlr.org/proceedings/papers/v37/jozefowicz15.pdf)
-            recommend initializing with ones.
-        activation: activation function.
-            Can be the name of an existing function (str),
-            or a Theano function (see: [activations](../activations.md)).
-        recurrent_activation: activation function for the inner cells.
-        W_regularizer: instance of [WeightRegularizer](../regularizers.md)
-            (eg. L1 or L2 regularization), applied to the input weights matrices.
-        U_regularizer: instance of [WeightRegularizer](../regularizers.md)
-            (eg. L1 or L2 regularization), applied to the recurrent weights matrices.
-        b_regularizer: instance of [WeightRegularizer](../regularizers.md),
-            applied to the bias.
-        dropout_W: float between 0 and 1. Fraction of the input units to drop for input gates.
-        dropout_U: float between 0 and 1. Fraction of the input units to drop for recurrent connections.
-        w_a_regularizer: instance of [WeightRegularizer](../regularizers.md)
-            (eg. L1 or L2 regularization), applied to the input weights matrices.
-        W_a_regularizer: instance of [WeightRegularizer](../regularizers.md)
-            (eg. L1 or L2 regularization), applied to the input weights matrices.
-        U_a_regularizer: instance of [WeightRegularizer](../regularizers.md)
-            (eg. L1 or L2 regularization), applied to the recurrent weights matrices.
-        b_a_regularizer: instance of [WeightRegularizer](../regularizers.md),
-            applied to the bias.
-        dropout_w_a: float between 0 and 1.
-        dropout_W_a: float between 0 and 1.
-        dropout_U_a: float between 0 and 1.
+        units: Positive integer, dimensionality of the output space.
+        return_states: Whether it should return the internal RNN states.
+        activation: Activation function to use
+            (see [activations](../activations.md)).
+            If you pass None, no activation is applied
+            (ie. "linear" activation: `a(x) = x`).
+        recurrent_activation: Activation function to use
+            for the recurrent step
+            (see [activations](../activations.md)).
+        use_bias: Boolean, whether the layer uses a bias vector.
+        kernel_initializer: Initializer for the `kernel` weights matrix,
+            used for the linear transformation of the inputs
+            (see [initializers](../initializers.md)).
+        recurrent_initializer: Initializer for the `recurrent_kernel`
+            weights matrix,
+            used for the linear transformation of the recurrent state
+            (see [initializers](../initializers.md)).
+        bias_initializer: Initializer for the bias vector
+            (see [initializers](../initializers.md)).
+        kernel_regularizer: Regularizer function applied to
+            the `kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        recurrent_regularizer: Regularizer function applied to
+            the `recurrent_kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        bias_regularizer: Regularizer function applied to the bias vector
+            (see [regularizer](../regularizers.md)).
+        kernel_constraint: Constraint function applied to
+            the `kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        recurrent_constraint: Constraint function applied to
+            the `recurrent_kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        bias_constraint: Constraint function applied to the bias vector
+            (see [constraints](../constraints.md)).
+        dropout: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the context.
+        recurrent_dropout: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the recurrent state.
+        conditional_dropout: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the input.
+        dropout_w_a: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation in the attended context.
+        dropout_W_a: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the recurrent state in the attention mechanism.
+        dropout_U_a: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the input in the attention mechanism.
+        implementation: Implementation mode, either 1 or 2.
+            Mode 1 will structure its operations as a larger number of
+            smaller dot products and additions, whereas mode 2 will
+            batch them into fewer, larger operations. These modes will
+            have different performance profiles on different hardware and
+            for different applications.
+        num_inputs: Number of inputs of the layer.
+
 
     # Formulation
 
@@ -4652,7 +4941,7 @@ class AttLSTM(Recurrent):
         -   Yao L, Torabi A, Cho K, Ballas N, Pal C, Larochelle H, Courville A.
             Describing videos by exploiting temporal structure.
             InProceedings of the IEEE International Conference on Computer Vision 2015 (pp. 4507-4515).
-    '''
+    """
 
     @interfaces.legacy_recurrent_support
     def __init__(self, units,
@@ -4741,9 +5030,9 @@ class AttLSTM(Recurrent):
         self.bias_ca_constraint = constraints.get(bias_ca_constraint)
 
         # Dropouts
-        self.dropout = min(1., max(0., dropout))
-        self.recurrent_dropout = min(1., max(0., recurrent_dropout))
-        self.attention_dropout = min(1., max(0., attention_dropout))
+        self.dropout = min(1., max(0., dropout)) if dropout is not None else 0.
+        self.recurrent_dropout = min(1., max(0., recurrent_dropout)) if recurrent_dropout is not None else 0.
+        self.attention_dropout = min(1., max(0., attention_dropout)) if attention_dropout is not None else 0.
         self.num_inputs = num_inputs
         self.input_spec = [InputSpec(ndim=3)]
         for _ in range(len(self.input_spec), self.num_inputs):
@@ -4980,8 +5269,10 @@ class AttLSTM(Recurrent):
         # States[4] - Dropout W (input dropout)
         if 0 < self.dropout < 1:
             ones = K.ones_like(K.squeeze(self.context[:, 0:1, :], axis=1))
+
             def dropped_inputs():
                 return K.dropout(ones, self.dropout)
+
             dp_mask = [K.in_train_phase(dropped_inputs,
                                         ones,
                                         training=training) for _ in range(4)]
@@ -5099,82 +5390,130 @@ class AttLSTM(Recurrent):
 
 
 class AttLSTMCond(Recurrent):
-    '''Long-Short Term Memory unit with Attention + the previously generated word fed to the current timestep.
+    """Long-Short Term Memory unit with Attention + the previously generated word fed to the current timestep.
+
     You should give two inputs to this layer:
-        1. The shifted sequence of words (shape: (mini_batch_size, output_timesteps, embedding_size))
-        2. The complete input sequence (shape: (mini_batch_size, input_timesteps, input_dim))
+        1. The shifted sequence of words (shape: (batch_size, output_timesteps, embedding_size))
+        2. The complete input sequence (shape: (batch_size, input_timesteps, input_dim))
+    Optionally, you can set the initial hidden state, with a tensor of shape: (batch_size, units)
+
     # Arguments
-        units: dimension of the internal projections and the final output.
-        embedding_size: dimension of the word embedding module used for the enconding of the generated words.
-        return_extra_variables: indicates if we only need the LSTM hidden state (False) or we want
-            additional internal variables as outputs (True). The additional variables provided are:
-            - x_att (None, out_timesteps, dim_encoder): feature vector computed after the Att.Model at each timestep
-            - alphas (None, out_timesteps, in_timesteps): weights computed by the Att.Model at each timestep
-        return_states: boolean indicating if we want the intermediate states (hidden_state and memory) as additional outputs
-        output_timesteps: number of output timesteps (# of output vectors generated)
-        kernel_initializer: weight initialization function.
-            Can be the name of an existing function (str),
-            or a Theano function (see: [initializations](../initializations.md)).
-        recurrent_initializer: initialization function of the inner cells.
-        forget_bias_initializer: initialization function for the bias of the forget gate.
-            [Jozefowicz et al.](http://www.jmlr.org/proceedings/papers/v37/jozefowicz15.pdf)
-            recommend initializing with ones.
-        activation: activation function.
-            Can be the name of an existing function (str),
-            or a Theano function (see: [activations](../activations.md)).
-        recurrent_activation: activation function for the inner cells.
-        W_regularizer: instance of [WeightRegularizer](../regularizers.md)
-            (eg. L1 or L2 regularization), applied to the input weights matrices.
-        U_regularizer: instance of [WeightRegularizer](../regularizers.md)
-            (eg. L1 or L2 regularization), applied to the recurrent weights matrices.
-        b_regularizer: instance of [WeightRegularizer](../regularizers.md),
-            applied to the bias.
-        dropout_W: float between 0 and 1. Fraction of the input units to drop for input gates.
-        dropout_U: float between 0 and 1. Fraction of the input units to drop for recurrent connections.
-        w_a_regularizer: instance of [WeightRegularizer](../regularizers.md)
-            (eg. L1 or L2 regularization), applied to the input weights matrices.
-        W_a_regularizer: instance of [WeightRegularizer](../regularizers.md)
-            (eg. L1 or L2 regularization), applied to the input weights matrices.
-        U_a_regularizer: instance of [WeightRegularizer](../regularizers.md)
-            (eg. L1 or L2 regularization), applied to the recurrent weights matrices.
-        b_a_regularizer: instance of [WeightRegularizer](../regularizers.md),
-            applied to the bias.
-        dropout_w_a: float between 0 and 1.
-        dropout_W_a: float between 0 and 1.
-        dropout_U_a: float between 0 and 1.
-
-    # Formulation
-
-        The resulting attention vector 'phi' at time 't' is formed by applying a weighted sum over
-        the set of inputs 'x_i' contained in 'X':
-
-            phi(X, t) = ∑_i alpha_i(t) * x_i,
-
-        where each 'alpha_i' at time 't' is a weighting vector over all the input dimension that
-        accomplishes the following condition:
-
-            ∑_i alpha_i = 1
-
-        and is dynamically adapted at each timestep w.r.t. the following formula:
-
-            alpha_i(t) = exp{e_i(t)} /  ∑_j exp{e_j(t)}
-
-        where each 'e_i' at time 't' is calculated as:
-
-            e_i(t) = wa' * tanh( Wa * x_i  +  Ua * h(t-1)  +  ba ),
-
-        where the following are learnable with the respectively named sizes:
-                wa                Wa                     Ua                 ba
-            [input_dim] [input_dim, input_dim] [units, input_dim] [input_dim]
-
-        The names of 'Ua' and 'Wa' are exchanged w.r.t. the provided reference as well as 'v' being renamed
-        to 'x' for matching Keras LSTM's nomenclature.
+        units: Positive integer, dimensionality of the output space.
+        att_units:  Positive integer, dimensionality of the attention space.
+        return_extra_variables: Return the attended context vectors and the attention weights (alphas)
+        return_states: Whether it should return the internal RNN states.
+        activation: Activation function to use
+            (see [activations](../activations.md)).
+            If you pass None, no activation is applied
+            (ie. "linear" activation: `a(x) = x`).
+        recurrent_activation: Activation function to use
+            for the recurrent step
+            (see [activations](../activations.md)).
+        use_bias: Boolean, whether the layer uses a bias vector.
+        kernel_initializer: Initializer for the `kernel` weights matrix,
+            used for the linear transformation of the inputs
+            (see [initializers](../initializers.md)).
+        conditional_initializer: Initializer for the `conditional_kernel`
+            weights matrix,
+            used for the linear transformation of the conditional inputs
+            (see [initializers](../initializers.md)).
+        recurrent_initializer: Initializer for the `recurrent_kernel`
+            weights matrix,
+            used for the linear transformation of the recurrent state
+            (see [initializers](../initializers.md)).
+        attention_recurrent_initializer:  Initializer for the `attention_recurrent_kernel`
+            weights matrix, used for the linear transformation of the conditional inputs
+            (see [initializers](../initializers.md)).
+        attention_context_initializer:  Initializer for the `attention_context_kernel`
+            weights matrix,
+            used for the linear transformation of the attention context inputs
+            (see [initializers](../initializers.md)).
+        attention_context_wa_initializer:  Initializer for the `attention_wa_kernel`
+            weights matrix,
+            used for the linear transformation of the attention context
+            (see [initializers](../initializers.md)).
+        bias_initializer: Initializer for the bias vector
+            (see [initializers](../initializers.md)).
+        bias_ba_initializer: Initializer for the bias_ba vector from the attention mechanism
+            (see [initializers](../initializers.md)).
+        bias_ca_initializer: Initializer for the bias_ca vector from the attention mechanism
+            (see [initializers](../initializers.md)).
+        mask_value: Value of the mask of the context (0. by default)
+        kernel_regularizer: Regularizer function applied to
+            the `kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        recurrent_regularizer: Regularizer function applied to
+            the `recurrent_kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        conditional_regularizer: Regularizer function applied to
+            the `conditional_kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        attention_recurrent_regularizer:  Regularizer function applied to
+            the `attention_recurrent__kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        attention_context_regularizer:  Regularizer function applied to
+            the `attention_context_kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        attention_context_wa_regularizer:  Regularizer function applied to
+            the `attention_context_wa_kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        bias_regularizer: Regularizer function applied to the bias vector
+            (see [regularizer](../regularizers.md)).
+        bias_ba_regularizer:  Regularizer function applied to the bias_ba vector
+            (see [regularizer](../regularizers.md)).
+        bias_ca_regularizer:  Regularizer function applied to the bias_ca vector
+            (see [regularizer](../regularizers.md)).
+        activity_regularizer: Regularizer function applied to
+            the output of the layer (its "activation").
+            (see [regularizer](../regularizers.md)).
+        kernel_constraint: Constraint function applied to
+            the `kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        recurrent_constraint: Constraint function applied to
+            the `recurrent_kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        conditional_constraint: Constraint function applied to
+            the `conditional_kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        attention_recurrent_constraint: Constraint function applied to
+            the `attention_recurrent_kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        attention_context_constraint: Constraint function applied to
+            the `attention_context_kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        attention_context_wa_constraint: Constraint function applied to
+            the `attention_context_wa_kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        bias_constraint: Constraint function applied to the bias vector
+            (see [constraints](../constraints.md)).
+        bias_ba_constraint: Constraint function applied to
+            the `bias_ba` weights matrix
+            (see [constraints](../constraints.md)).
+        bias_ca_constraint: Constraint function applied to
+            the `bias_ca` weights matrix
+            (see [constraints](../constraints.md)).
+        dropout: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the context.
+        recurrent_dropout: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the recurrent state.
+        conditional_dropout: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the input.
+        conditional_dropout: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the input.
+        attention_dropout: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the attention mechanism.
+        num_inputs: Number of inputs of the layer.
 
     # References
-        -   Yao L, Torabi A, Cho K, Ballas N, Pal C, Larochelle H, Courville A.
-            Describing videos by exploiting temporal structure.
-            InProceedings of the IEEE International Conference on Computer Vision 2015 (pp. 4507-4515).
-    '''
+        - [On the Properties of Neural Machine Translation: Encoder-Decoder Approaches](https://arxiv.org/abs/1409.1259)
+        - [Empirical Evaluation of Gated Recurrent Neural Networks on Sequence Modeling](http://arxiv.org/abs/1412.3555v1)
+        - [A Theoretically Grounded Application of Dropout in Recurrent Neural Networks](http://arxiv.org/abs/1512.05287)
+    """
 
     @interfaces.legacy_recurrent_support
     def __init__(self, units,
@@ -5268,10 +5607,10 @@ class AttLSTMCond(Recurrent):
         self.bias_ca_constraint = constraints.get(bias_ca_constraint)
 
         # Dropouts
-        self.dropout = min(1., max(0., dropout))
-        self.recurrent_dropout = min(1., max(0., recurrent_dropout))
-        self.conditional_dropout = min(1., max(0., conditional_dropout))
-        self.attention_dropout = min(1., max(0., attention_dropout))
+        self.dropout = min(1., max(0., dropout)) if dropout is not None else 0.
+        self.recurrent_dropout = min(1., max(0., recurrent_dropout)) if recurrent_dropout is not None else 0.
+        self.conditional_dropout = min(1., max(0., conditional_dropout)) if conditional_dropout is not None else 0.
+        self.attention_dropout = min(1., max(0., attention_dropout)) if attention_dropout is not None else 0.
         self.num_inputs = num_inputs
         self.input_spec = [InputSpec(ndim=3), InputSpec(ndim=3)]
         for _ in range(len(self.input_spec), self.num_inputs):
@@ -5383,8 +5722,10 @@ class AttLSTMCond(Recurrent):
 
         if 0 < self.conditional_dropout < 1:
             ones = K.ones_like(K.squeeze(inputs[:, 0:1, :], axis=1))
+
             def dropped_inputs():
                 return K.dropout(ones, self.conditional_dropout)
+
             cond_dp_mask = [K.in_train_phase(dropped_inputs,
                                              ones,
                                              training=training) for _ in range(4)]
@@ -5466,7 +5807,6 @@ class AttLSTMCond(Recurrent):
             if not isinstance(ret, list):
                 ret = [ret]
             ret += [states[0], states[1]]
-
         return ret
 
     def compute_mask(self, input, mask):
@@ -5532,8 +5872,10 @@ class AttLSTMCond(Recurrent):
         # States[4] - Dropout_W
         if 0 < self.dropout < 1:
             ones = K.ones_like(K.squeeze(self.context[:, 0:1, :], axis=1))
+
             def dropped_inputs():
                 return K.dropout(ones, self.dropout)
+
             dp_mask = [K.in_train_phase(dropped_inputs,
                                         ones,
                                         training=training) for _ in range(4)]
@@ -5574,7 +5916,7 @@ class AttLSTMCond(Recurrent):
 
         if 0 < self.attention_dropout < 1:
             input_dim = self.context_dim
-            ones = K.ones_like(K.reshape(self.context[:, :, 0], (-1, self.context.shape[1], 1)))
+            ones = K.ones_like(K.reshape(self.context[:, :, 0], (-1, K.shape(self.context)[1], 1)))
             ones = K.concatenate([ones] * input_dim, axis=2)
             B_Ua = [K.in_train_phase(K.dropout(ones, self.attention_dropout), ones)]
             pctx = K.dot(self.context * B_Ua[0], self.attention_context_kernel)
@@ -5666,89 +6008,138 @@ class AttLSTMCond(Recurrent):
                   'conditional_dropout': self.conditional_dropout,
                   'attention_dropout': self.attention_dropout,
                   'num_inputs': self.num_inputs,
-                  #'input_spec': self.input_spec
+                  # 'input_spec': self.input_spec
                   }
         base_config = super(AttLSTMCond, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
 
 class AttConditionalLSTMCond(Recurrent):
-    '''Conditional Long-Short Term Memory unit with Attention + the previously generated word fed to the current timestep.
+    """Conditional Long-Short Term Memory unit with Attention + the previously generated word fed to the current timestep.
+
     You should give two inputs to this layer:
-        1. The shifted sequence of words (shape: (mini_batch_size, output_timesteps, embedding_size))
-        2. The complete input sequence (shape: (mini_batch_size, input_timesteps, input_dim))
+        1. The shifted sequence of words (shape: (batch_size, output_timesteps, embedding_size))
+        2. The complete input sequence (shape: (batch_size, input_timesteps, input_dim))
+    Optionally, you can set the initial hidden state, with a tensor of shape: (batch_size, units)
+
     # Arguments
-        units: dimension of the internal projections and the final output.
-        embedding_size: dimension of the word embedding module used for the enconding of the generated words.
-        return_extra_variables: indicates if we only need the LSTM hidden state (False) or we want
-            additional internal variables as outputs (True). The additional variables provided are:
-            - x_att (None, out_timesteps, dim_encoder): feature vector computed after the Att.Model at each timestep
-            - alphas (None, out_timesteps, in_timesteps): weights computed by the Att.Model at each timestep
-        return_states: boolean indicating if we want the intermediate states (hidden_state and memory) as additional outputs
-        output_timesteps: number of output timesteps (# of output vectors generated)
-        kernel_initializer: weight initialization function.
-            Can be the name of an existing function (str),
-            or a Theano function (see: [initializations](../initializations.md)).
-        recurrent_initializer: initialization function of the inner cells.
-        forget_bias_initializer: initialization function for the bias of the forget gate.
-            [Jozefowicz et al.](http://www.jmlr.org/proceedings/papers/v37/jozefowicz15.pdf)
-            recommend initializing with ones.
-        activation: activation function.
-            Can be the name of an existing function (str),
-            or a Theano function (see: [activations](../activations.md)).
-        recurrent_activation: activation function for the inner cells.
-        W_regularizer: instance of [WeightRegularizer](../regularizers.md)
-            (eg. L1 or L2 regularization), applied to the input weights matrices.
-        U_regularizer: instance of [WeightRegularizer](../regularizers.md)
-            (eg. L1 or L2 regularization), applied to the recurrent weights matrices.
-        b_regularizer: instance of [WeightRegularizer](../regularizers.md),
-            applied to the bias.
-        dropout_W: float between 0 and 1. Fraction of the input units to drop for input gates.
-        dropout_U: float between 0 and 1. Fraction of the input units to drop for recurrent connections.
-        w_a_regularizer: instance of [WeightRegularizer](../regularizers.md)
-            (eg. L1 or L2 regularization), applied to the input weights matrices.
-        W_a_regularizer: instance of [WeightRegularizer](../regularizers.md)
-            (eg. L1 or L2 regularization), applied to the input weights matrices.
-        U_a_regularizer: instance of [WeightRegularizer](../regularizers.md)
-            (eg. L1 or L2 regularization), applied to the recurrent weights matrices.
-        b_a_regularizer: instance of [WeightRegularizer](../regularizers.md),
-            applied to the bias.
-        dropout_w_a: float between 0 and 1.
-        dropout_W_a: float between 0 and 1.
-        dropout_U_a: float between 0 and 1.
-
-    # Formulation
-
-        The resulting attention vector 'phi' at time 't' is formed by applying a weighted sum over
-        the set of inputs 'x_i' contained in 'X':
-
-            phi(X, t) = ∑_i alpha_i(t) * x_i,
-
-        where each 'alpha_i' at time 't' is a weighting vector over all the input dimension that
-        accomplishes the following condition:
-
-            ∑_i alpha_i = 1
-
-        and is dynamically adapted at each timestep w.r.t. the following formula:
-
-            alpha_i(t) = exp{e_i(t)} /  ∑_j exp{e_j(t)}
-
-        where each 'e_i' at time 't' is calculated as:
-
-            e_i(t) = wa' * tanh( Wa * x_i  +  Ua * h(t-1)  +  ba ),
-
-        where the following are learnable with the respectively named sizes:
-                wa                Wa                     Ua                 ba
-            [input_dim] [input_dim, input_dim] [units, input_dim] [input_dim]
-
-        The names of 'Ua' and 'Wa' are exchanged w.r.t. the provided reference as well as 'v' being renamed
-        to 'x' for matching Keras LSTM's nomenclature.
+        units: Positive integer, dimensionality of the output space.
+        att_units:  Positive integer, dimensionality of the attention space.
+        return_extra_variables: Return the attended context vectors and the attention weights (alphas)
+        return_states: Whether it should return the internal RNN states.
+        activation: Activation function to use
+            (see [activations](../activations.md)).
+            If you pass None, no activation is applied
+            (ie. "linear" activation: `a(x) = x`).
+        recurrent_activation: Activation function to use
+            for the recurrent step
+            (see [activations](../activations.md)).
+        use_bias: Boolean, whether the layer uses a bias vector.
+        kernel_initializer: Initializer for the `kernel` weights matrix,
+            used for the linear transformation of the inputs
+            (see [initializers](../initializers.md)).
+        conditional_initializer: Initializer for the `conditional_kernel`
+            weights matrix,
+            used for the linear transformation of the conditional inputs
+            (see [initializers](../initializers.md)).
+        recurrent_initializer: Initializer for the `recurrent_kernel`
+            weights matrix,
+            used for the linear transformation of the recurrent state
+            (see [initializers](../initializers.md)).
+        attention_recurrent_initializer:  Initializer for the `attention_recurrent_kernel`
+            weights matrix, used for the linear transformation of the conditional inputs
+            (see [initializers](../initializers.md)).
+        attention_context_initializer:  Initializer for the `attention_context_kernel`
+            weights matrix,
+            used for the linear transformation of the attention context inputs
+            (see [initializers](../initializers.md)).
+        attention_context_wa_initializer:  Initializer for the `attention_wa_kernel`
+            weights matrix,
+            used for the linear transformation of the attention context
+            (see [initializers](../initializers.md)).
+        bias_initializer: Initializer for the bias vector
+            (see [initializers](../initializers.md)).
+        bias_ba_initializer: Initializer for the bias_ba vector from the attention mechanism
+            (see [initializers](../initializers.md)).
+        bias_ca_initializer: Initializer for the bias_ca vector from the attention mechanism
+            (see [initializers](../initializers.md)).
+        mask_value: Value of the mask of the context (0. by default)
+        kernel_regularizer: Regularizer function applied to
+            the `kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        recurrent_regularizer: Regularizer function applied to
+            the `recurrent_kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        conditional_regularizer: Regularizer function applied to
+            the `conditional_kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        attention_recurrent_regularizer:  Regularizer function applied to
+            the `attention_recurrent__kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        attention_context_regularizer:  Regularizer function applied to
+            the `attention_context_kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        attention_context_wa_regularizer:  Regularizer function applied to
+            the `attention_context_wa_kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        bias_regularizer: Regularizer function applied to the bias vector
+            (see [regularizer](../regularizers.md)).
+        bias_ba_regularizer:  Regularizer function applied to the bias_ba vector
+            (see [regularizer](../regularizers.md)).
+        bias_ca_regularizer:  Regularizer function applied to the bias_ca vector
+            (see [regularizer](../regularizers.md)).
+        activity_regularizer: Regularizer function applied to
+            the output of the layer (its "activation").
+            (see [regularizer](../regularizers.md)).
+        kernel_constraint: Constraint function applied to
+            the `kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        recurrent_constraint: Constraint function applied to
+            the `recurrent_kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        conditional_constraint: Constraint function applied to
+            the `conditional_kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        attention_recurrent_constraint: Constraint function applied to
+            the `attention_recurrent_kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        attention_context_constraint: Constraint function applied to
+            the `attention_context_kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        attention_context_wa_constraint: Constraint function applied to
+            the `attention_context_wa_kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        bias_constraint: Constraint function applied to the bias vector
+            (see [constraints](../constraints.md)).
+        bias_ba_constraint: Constraint function applied to
+            the `bias_ba` weights matrix
+            (see [constraints](../constraints.md)).
+        bias_ca_constraint: Constraint function applied to
+            the `bias_ca` weights matrix
+            (see [constraints](../constraints.md)).
+        dropout: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the context.
+        recurrent_dropout: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the recurrent state.
+        conditional_dropout: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the input.
+        conditional_dropout: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the input.
+        attention_dropout: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the attention mechanism.
+        num_inputs: Number of inputs of the layer.
 
     # References
-        -   Yao L, Torabi A, Cho K, Ballas N, Pal C, Larochelle H, Courville A.
-            Describing videos by exploiting temporal structure.
-            InProceedings of the IEEE International Conference on Computer Vision 2015 (pp. 4507-4515).
-    '''
+        - [On the Properties of Neural Machine Translation: Encoder-Decoder Approaches](https://arxiv.org/abs/1409.1259)
+        - [Empirical Evaluation of Gated Recurrent Neural Networks on Sequence Modeling](http://arxiv.org/abs/1412.3555v1)
+        - [A Theoretically Grounded Application of Dropout in Recurrent Neural Networks](http://arxiv.org/abs/1512.05287)
+        - [Nematus: a Toolkit for Neural Machine Translation](http://arxiv.org/abs/1703.04357)
+    """
 
     @interfaces.legacy_recurrent_support
     def __init__(self, units,
@@ -5849,10 +6240,10 @@ class AttConditionalLSTMCond(Recurrent):
         self.bias_ca_constraint = constraints.get(bias_ca_constraint)
 
         # Dropouts
-        self.dropout = min(1., max(0., dropout))
-        self.recurrent_dropout = min(1., max(0., recurrent_dropout))
-        self.conditional_dropout = min(1., max(0., conditional_dropout))
-        self.attention_dropout = min(1., max(0., attention_dropout))
+        self.dropout = min(1., max(0., dropout)) if dropout is not None else 0.
+        self.recurrent_dropout = min(1., max(0., recurrent_dropout)) if recurrent_dropout is not None else 0.
+        self.conditional_dropout = min(1., max(0., conditional_dropout)) if conditional_dropout is not None else 0.
+        self.attention_dropout = min(1., max(0., attention_dropout)) if attention_dropout is not None else 0.
 
         # Inputs
         self.num_inputs = num_inputs
@@ -5991,8 +6382,10 @@ class AttConditionalLSTMCond(Recurrent):
 
         if 0 < self.conditional_dropout < 1:
             ones = K.ones_like(K.squeeze(inputs[:, 0:1, :], axis=1))
+
             def dropped_inputs():
                 return K.dropout(ones, self.conditional_dropout)
+
             cond_dp_mask = [K.in_train_phase(dropped_inputs,
                                              ones,
                                              training=training) for _ in range(4)]
@@ -6154,8 +6547,10 @@ class AttConditionalLSTMCond(Recurrent):
         # States[4] - Dropout W (input dropout)
         if 0 < self.dropout < 1:
             ones = K.ones_like(K.squeeze(self.context[:, 0:1, :], axis=1))
+
             def dropped_inputs():
                 return K.dropout(ones, self.dropout)
+
             dp_mask = [K.in_train_phase(dropped_inputs,
                                         ones,
                                         training=training) for _ in range(4)]
@@ -6196,7 +6591,7 @@ class AttConditionalLSTMCond(Recurrent):
 
         if 0 < self.attention_dropout < 1:
             input_dim = self.context_dim
-            ones = K.ones_like(K.reshape(self.context[:, :, 0], (-1, self.context.shape[1], 1)))
+            ones = K.ones_like(K.reshape(self.context[:, :, 0], (-1, K.shape(self.context)[1], 1)))
             ones = K.concatenate([ones] * input_dim, axis=2)
             B_Ua = [K.in_train_phase(K.dropout(ones, self.attention_dropout), ones)]
             pctx = K.dot(self.context * B_Ua[0], self.attention_context_kernel)
@@ -6292,37 +6687,132 @@ class AttConditionalLSTMCond(Recurrent):
 
 
 class AttLSTMCond2Inputs(Recurrent):
-    '''Conditional LSTM: The previously generated word is fed to the current timestep
+    """Long-Short Term Memory unit with the previously generated word fed to the current timestep
+    and two input contexts (with two attention mechanisms).
+
+    You should give two inputs to this layer:
+        1. The shifted sequence of words (shape: (batch_size, output_timesteps, embedding_size))
+        2. The complete input sequence (shape: (batch_size, input_timesteps, input_dim))
+    Optionally, you can set the initial hidden state, with a tensor of shape: (batch_size, units)
 
     # Arguments
-        units: dimension of the internal projections and the final output.
-        kernel_initializer: weight initialization function.
-            Can be the name of an existing function (str),
-            or a Theano function (see: [initializations](../initializations.md)).
-        recurrent_initializer: initialization function of the inner cells.
-        return_states: boolean indicating if we want the intermediate states (hidden_state and memory) as additional outputs
-        forget_bias_initializer: initialization function for the bias of the forget gate.
-            [Jozefowicz et al.](http://www.jmlr.org/proceedings/papers/v37/jozefowicz15.pdf)
-            recommend initializing with ones.
-        activation: activation function.
-            Can be the name of an existing function (str),
-            or a Theano function (see: [activations](../activations.md)).
-        recurrent_activation: activation function for the inner cells.
-        W_regularizer: instance of [WeightRegularizer](../regularizers.md)
-            (eg. L1 or L2 regularization), applied to the input weights matrices.
-        U_regularizer: instance of [WeightRegularizer](../regularizers.md)
-            (eg. L1 or L2 regularization), applied to the recurrent weights matrices.
-        b_regularizer: instance of [WeightRegularizer](../regularizers.md),
-            applied to the bias.
-        dropout_W: float between 0 and 1. Fraction of the input units to drop for input gates.
-        dropout_U: float between 0 and 1. Fraction of the input units to drop for recurrent connections.
+        units: Positive integer, dimensionality of the output space.
+        att_units:  Positive integer, dimensionality of the attention space.
+        return_extra_variables: Return the attended context vectors and the attention weights (alphas)
+        return_states: Whether it should return the internal RNN states.
+        activation: Activation function to use
+            (see [activations](../activations.md)).
+            If you pass None, no activation is applied
+            (ie. "linear" activation: `a(x) = x`).
+        recurrent_activation: Activation function to use
+            for the recurrent step
+            (see [activations](../activations.md)).
+        use_bias: Boolean, whether the layer uses a bias vector.
+        kernel_initializer: Initializer for the `kernel` weights matrix,
+            used for the linear transformation of the inputs
+            (see [initializers](../initializers.md)).
+        conditional_initializer: Initializer for the `conditional_kernel`
+            weights matrix,
+            used for the linear transformation of the conditional inputs
+            (see [initializers](../initializers.md)).
+        recurrent_initializer: Initializer for the `recurrent_kernel`
+            weights matrix,
+            used for the linear transformation of the recurrent state
+            (see [initializers](../initializers.md)).
+        attention_recurrent_initializer:  Initializer for the `attention_recurrent_kernel`
+            weights matrix, used for the linear transformation of the conditional inputs
+            (see [initializers](../initializers.md)).
+        attention_context_initializer:  Initializer for the `attention_context_kernel`
+            weights matrix,
+            used for the linear transformation of the attention context inputs
+            (see [initializers](../initializers.md)).
+        attention_context_wa_initializer:  Initializer for the `attention_wa_kernel`
+            weights matrix,
+            used for the linear transformation of the attention context
+            (see [initializers](../initializers.md)).
+        bias_initializer: Initializer for the bias vector
+            (see [initializers](../initializers.md)).
+        bias_ba_initializer: Initializer for the bias_ba vector from the attention mechanism
+            (see [initializers](../initializers.md)).
+        bias_ca_initializer: Initializer for the bias_ca vector from the attention mechanism
+            (see [initializers](../initializers.md)).
+        mask_value: Value of the mask of the context (0. by default)
+        kernel_regularizer: Regularizer function applied to
+            the `kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        recurrent_regularizer: Regularizer function applied to
+            the `recurrent_kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        conditional_regularizer: Regularizer function applied to
+            the `conditional_kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        attention_recurrent_regularizer:  Regularizer function applied to
+            the `attention_recurrent__kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        attention_context_regularizer:  Regularizer function applied to
+            the `attention_context_kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        attention_context_wa_regularizer:  Regularizer function applied to
+            the `attention_context_wa_kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        bias_regularizer: Regularizer function applied to the bias vector
+            (see [regularizer](../regularizers.md)).
+        bias_ba_regularizer:  Regularizer function applied to the bias_ba vector
+            (see [regularizer](../regularizers.md)).
+        bias_ca_regularizer:  Regularizer function applied to the bias_ca vector
+            (see [regularizer](../regularizers.md)).
+        activity_regularizer: Regularizer function applied to
+            the output of the layer (its "activation").
+            (see [regularizer](../regularizers.md)).
+        kernel_constraint: Constraint function applied to
+            the `kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        recurrent_constraint: Constraint function applied to
+            the `recurrent_kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        conditional_constraint: Constraint function applied to
+            the `conditional_kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        attention_recurrent_constraint: Constraint function applied to
+            the `attention_recurrent_kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        attention_context_constraint: Constraint function applied to
+            the `attention_context_kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        attention_context_wa_constraint: Constraint function applied to
+            the `attention_context_wa_kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        bias_constraint: Constraint function applied to the bias vector
+            (see [constraints](../constraints.md)).
+        bias_ba_constraint: Constraint function applied to
+            the `bias_ba` weights matrix
+            (see [constraints](../constraints.md)).
+        bias_ca_constraint: Constraint function applied to
+            the `bias_ca` weights matrix
+            (see [constraints](../constraints.md)).
+        dropout: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the context.
+        recurrent_dropout: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the recurrent state.
+        conditional_dropout: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the input.
+        conditional_dropout: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the input.
+        attention_dropout: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the attention mechanism.
+        num_inputs: Number of inputs of the layer.
 
     # References
-        - [Long short-term memory](http://deeplearning.cs.cmu.edu/pdfs/Hochreiter97_lstm.pdf) (original 1997 paper)
-        - [Learning to forget: Continual prediction with LSTM](http://www.mitpressjournals.org/doi/pdf/10.1162/089976600300015015)
-        - [Supervised sequence labelling with recurrent neural networks](http://www.cs.toronto.edu/~graves/preprint.pdf)
+        - [On the Properties of Neural Machine Translation: Encoder-Decoder Approaches](https://arxiv.org/abs/1409.1259)
+        - [Empirical Evaluation of Gated Recurrent Neural Networks on Sequence Modeling](http://arxiv.org/abs/1412.3555v1)
         - [A Theoretically Grounded Application of Dropout in Recurrent Neural Networks](http://arxiv.org/abs/1512.05287)
-    '''
+        - [Egocentric Video Description based on Temporally-Linked Sequences](https://arxiv.org/abs/1704.02163)
+    """
 
     def __init__(self, units,
                  att_units1=0,
@@ -6441,11 +6931,11 @@ class AttLSTMCond2Inputs(Recurrent):
 
         if self.attend_on_both:
             assert K.ndim(self.input_spec[1]) == 3 and K.ndim(self.input_spec[2]), 'When using two attention models,' \
-                                                                             'you should pass two 3D tensors' \
-                                                                             'to AttLSTMCond2Inputs'
+                                                                                   'you should pass two 3D tensors' \
+                                                                                   'to AttLSTMCond2Inputs'
         else:
             assert K.ndim(self.input_spec[1]) == 3, 'When using an attention model, you should pass one 3D tensors' \
-                                                 'to AttLSTMCond2Inputs'
+                                                    'to AttLSTMCond2Inputs'
 
         if K.ndim(self.input_spec[1]) == 3:
             self.context1_steps = input_shape[1][1]
@@ -6981,37 +7471,132 @@ class AttLSTMCond2Inputs(Recurrent):
 
 
 class AttLSTMCond3Inputs(Recurrent):
-    '''Conditional LSTM: The previously generated word is fed to the current timestep
+    """Long-Short Term Memory unit with the previously generated word fed to the current timestep
+    and three input contexts (with three attention mechanisms).
+
+    You should give two inputs to this layer:
+        1. The shifted sequence of words (shape: (batch_size, output_timesteps, embedding_size))
+        2. The complete input sequence (shape: (batch_size, input_timesteps, input_dim))
+    Optionally, you can set the initial hidden state, with a tensor of shape: (batch_size, units)
 
     # Arguments
-        units: dimension of the internal projections and the final output.
-        kernel_initializer: weight initialization function.
-            Can be the name of an existing function (str),
-            or a Theano function (see: [initializations](../initializations.md)).
-        recurrent_initializer: initialization function of the inner cells.
-        return_states: boolean indicating if we want the intermediate states (hidden_state and memory) as additional outputs
-        forget_bias_initializer: initialization function for the bias of the forget gate.
-            [Jozefowicz et al.](http://www.jmlr.org/proceedings/papers/v37/jozefowicz15.pdf)
-            recommend initializing with ones.
-        activation: activation function.
-            Can be the name of an existing function (str),
-            or a Theano function (see: [activations](../activations.md)).
-        recurrent_activation: activation function for the inner cells.
-        W_regularizer: instance of [WeightRegularizer](../regularizers.md)
-            (eg. L1 or L2 regularization), applied to the input weights matrices.
-        U_regularizer: instance of [WeightRegularizer](../regularizers.md)
-            (eg. L1 or L2 regularization), applied to the recurrent weights matrices.
-        b_regularizer: instance of [WeightRegularizer](../regularizers.md),
-            applied to the bias.
-        dropout_W: float between 0 and 1. Fraction of the input units to drop for input gates.
-        dropout_U: float between 0 and 1. Fraction of the input units to drop for recurrent connections.
+        units: Positive integer, dimensionality of the output space.
+        att_units:  Positive integer, dimensionality of the attention space.
+        return_extra_variables: Return the attended context vectors and the attention weights (alphas)
+        return_states: Whether it should return the internal RNN states.
+        activation: Activation function to use
+            (see [activations](../activations.md)).
+            If you pass None, no activation is applied
+            (ie. "linear" activation: `a(x) = x`).
+        recurrent_activation: Activation function to use
+            for the recurrent step
+            (see [activations](../activations.md)).
+        use_bias: Boolean, whether the layer uses a bias vector.
+        kernel_initializer: Initializer for the `kernel` weights matrix,
+            used for the linear transformation of the inputs
+            (see [initializers](../initializers.md)).
+        conditional_initializer: Initializer for the `conditional_kernel`
+            weights matrix,
+            used for the linear transformation of the conditional inputs
+            (see [initializers](../initializers.md)).
+        recurrent_initializer: Initializer for the `recurrent_kernel`
+            weights matrix,
+            used for the linear transformation of the recurrent state
+            (see [initializers](../initializers.md)).
+        attention_recurrent_initializer:  Initializer for the `attention_recurrent_kernel`
+            weights matrix, used for the linear transformation of the conditional inputs
+            (see [initializers](../initializers.md)).
+        attention_context_initializer:  Initializer for the `attention_context_kernel`
+            weights matrix,
+            used for the linear transformation of the attention context inputs
+            (see [initializers](../initializers.md)).
+        attention_context_wa_initializer:  Initializer for the `attention_wa_kernel`
+            weights matrix,
+            used for the linear transformation of the attention context
+            (see [initializers](../initializers.md)).
+        bias_initializer: Initializer for the bias vector
+            (see [initializers](../initializers.md)).
+        bias_ba_initializer: Initializer for the bias_ba vector from the attention mechanism
+            (see [initializers](../initializers.md)).
+        bias_ca_initializer: Initializer for the bias_ca vector from the attention mechanism
+            (see [initializers](../initializers.md)).
+        mask_value: Value of the mask of the context (0. by default)
+        kernel_regularizer: Regularizer function applied to
+            the `kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        recurrent_regularizer: Regularizer function applied to
+            the `recurrent_kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        conditional_regularizer: Regularizer function applied to
+            the `conditional_kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        attention_recurrent_regularizer:  Regularizer function applied to
+            the `attention_recurrent__kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        attention_context_regularizer:  Regularizer function applied to
+            the `attention_context_kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        attention_context_wa_regularizer:  Regularizer function applied to
+            the `attention_context_wa_kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        bias_regularizer: Regularizer function applied to the bias vector
+            (see [regularizer](../regularizers.md)).
+        bias_ba_regularizer:  Regularizer function applied to the bias_ba vector
+            (see [regularizer](../regularizers.md)).
+        bias_ca_regularizer:  Regularizer function applied to the bias_ca vector
+            (see [regularizer](../regularizers.md)).
+        activity_regularizer: Regularizer function applied to
+            the output of the layer (its "activation").
+            (see [regularizer](../regularizers.md)).
+        kernel_constraint: Constraint function applied to
+            the `kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        recurrent_constraint: Constraint function applied to
+            the `recurrent_kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        conditional_constraint: Constraint function applied to
+            the `conditional_kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        attention_recurrent_constraint: Constraint function applied to
+            the `attention_recurrent_kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        attention_context_constraint: Constraint function applied to
+            the `attention_context_kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        attention_context_wa_constraint: Constraint function applied to
+            the `attention_context_wa_kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        bias_constraint: Constraint function applied to the bias vector
+            (see [constraints](../constraints.md)).
+        bias_ba_constraint: Constraint function applied to
+            the `bias_ba` weights matrix
+            (see [constraints](../constraints.md)).
+        bias_ca_constraint: Constraint function applied to
+            the `bias_ca` weights matrix
+            (see [constraints](../constraints.md)).
+        dropout: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the context.
+        recurrent_dropout: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the recurrent state.
+        conditional_dropout: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the input.
+        conditional_dropout: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the input.
+        attention_dropout: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the attention mechanism.
+        num_inputs: Number of inputs of the layer.
 
     # References
-        - [Long short-term memory](http://deeplearning.cs.cmu.edu/pdfs/Hochreiter97_lstm.pdf) (original 1997 paper)
-        - [Learning to forget: Continual prediction with LSTM](http://www.mitpressjournals.org/doi/pdf/10.1162/089976600300015015)
-        - [Supervised sequence labelling with recurrent neural networks](http://www.cs.toronto.edu/~graves/preprint.pdf)
+        - [On the Properties of Neural Machine Translation: Encoder-Decoder Approaches](https://arxiv.org/abs/1409.1259)
+        - [Empirical Evaluation of Gated Recurrent Neural Networks on Sequence Modeling](http://arxiv.org/abs/1412.3555v1)
         - [A Theoretically Grounded Application of Dropout in Recurrent Neural Networks](http://arxiv.org/abs/1512.05287)
-    '''
+        - [Egocentric Video Description based on Temporally-Linked Sequences](https://arxiv.org/abs/1704.02163)
+    """
 
     def __init__(self, units, att_units1=0, att_units2=0, att_units3=0,
                  init='glorot_uniform', inner_init='orthogonal', init_att='glorot_uniform',
@@ -7065,8 +7650,8 @@ class AttLSTMCond3Inputs(Recurrent):
         if self.dropout_T or self.dropout_W or self.dropout_U or self.dropout_V or self.dropout_wa or \
                 self.dropout_Wa or self.dropout_Ua:
             self.uses_learning_phase = True
-        if self.attend_on_both and (self.dropout_wa2 or self.dropout_Wa2 or self.dropout_Ua2 or
-                                        self.dropout_wa3 or self.dropout_Wa3 or self.dropout_Ua3):
+        if self.attend_on_both and \
+                (self.dropout_wa2 or self.dropout_Wa2 or self.dropout_Ua2 or self.dropout_wa3 or self.dropout_Wa3 or self.dropout_Ua3):
             self.uses_learning_phase = True
 
         # Initializers
@@ -7127,14 +7712,11 @@ class AttLSTMCond3Inputs(Recurrent):
         self.input_dim = input_shape[0][2]
 
         if self.attend_on_both:
-            assert K.ndim(self.input_spec[1]) == 3 and \
-                   K.ndim(self.input_spec[2]) == 3 and \
-                   K.ndim(self.input_spec[3]) == 3, 'When using two attention models,' \
-                                                 'you should pass two 3D tensors' \
-                                                 'to AttLSTMCond3Inputs'
+            assert K.ndim(self.input_spec[1]) == 3 and K.ndim(self.input_spec[2]) == 3 and K.ndim(self.input_spec[3]) == 3,\
+                'When using two attention models, you should pass two 3D tensors to AttLSTMCond3Inputs'
         else:
             assert K.ndim(self.input_spec[1]) == 3, 'When using an attention model, you should pass one 3D tensors' \
-                                                 'to AttLSTMCond3Inputs'
+                                                    'to AttLSTMCond3Inputs'
 
         if K.ndim(self.input_spec[1]) == 3:
             self.context1_steps = input_shape[1][1]

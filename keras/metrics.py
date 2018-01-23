@@ -1,4 +1,9 @@
+"""Built-in metrics.
+"""
 from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
 import six
 from . import backend as K
 from .losses import mean_squared_error
@@ -40,17 +45,19 @@ def top_k_categorical_accuracy(y_true, y_pred, k=5):
 def sparse_top_k_categorical_accuracy(y_true, y_pred, k=5):
     return K.mean(K.in_top_k(y_pred, K.cast(K.max(y_true, axis=-1), 'int32'), k), axis=-1)
 
+
 def perplexity(y_true, y_pred, mask=None):
-    ''' Calculates the perplexity
-    '''
+    """Calculates the perplexity
+    """
     if mask is not None:
         y_pred /= K.sum(y_pred, axis=-1, keepdims=True)
         mask = K.permute_dimensions(K.reshape(mask, y_true.shape[:-1]), (0, 1, 'x'))
-        truth_mask = K.flatten(y_true*mask).nonzero()[0]  ### How do you do this on tensorflow?
+        truth_mask = K.flatten(y_true * mask).nonzero()[0]  # How do you do this on tensorflow?
         predictions = K.gather(y_pred.flatten(), truth_mask)
         return K.pow(2, K.mean(-K.log2(predictions)))
     else:
         return K.pow(2, K.mean(-K.log2(y_pred)))
+
 
 # Aliases
 
