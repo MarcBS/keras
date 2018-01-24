@@ -1075,7 +1075,7 @@ class MaskedMean(Layer):
         super(MaskedMean, self).__init__(**kwargs)
 
     def call(self, x, mask=None):
-        return K.mean(mask[:, :, None] * x, axis=1)
+        return K.mean(K.cast(mask[:, :, None], K.dtype(x)) * x, axis=1)
 
     def compute_mask(self, input_shape, input_mask=None):
         return None
@@ -1097,7 +1097,7 @@ class MaskLayer(Layer):
         super(MaskLayer, self).__init__(**kwargs)
 
     def call(self, x, mask=None):
-        return mask[:, :, None] * x
+        return K.cast(mask[:, :, None], K.dtype(x)) * x
 
     def compute_mask(self, input_shape, input_mask=None):
         return input_mask
