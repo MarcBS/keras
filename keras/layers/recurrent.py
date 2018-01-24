@@ -1937,7 +1937,7 @@ class GRUCond(Recurrent):
             context = states[4]
             mask_context = states[5]  # Context mask
             if K.ndim(mask_context) > 1:  # Mask the context (only if necessary)
-                context = mask_context[:, :, None] * context
+                context = K.cast(mask_context[:, :, None], K.dtype(context)) * context
             matrix_x += K.dot(context * dp_mask[0], self.kernel)
 
         matrix_inner = K.dot(h_tm1 * rec_dp_mask[0], self.recurrent_kernel[:, :2 * self.units])
@@ -3023,15 +3023,15 @@ class AttGRUCond(Recurrent):
         context = states[7]  # Original context
         mask_context = states[8]  # Context mask
         if K.ndim(mask_context) > 1:  # Mask the context (only if necessary)
-            pctx_ = mask_context[:, :, None] * pctx_
-            context = mask_context[:, :, None] * context
+            pctx_ = K.cast(mask_context[:, :, None], K.dtype(pctx_)) * pctx_
+            context = K.cast(mask_context[:, :, None], K.dtype(context)) * context
 
         # Attention model (see Formulation in class header)
         p_state_ = K.dot(h_tm1 * att_dp_mask[0], self.attention_recurrent_kernel)
         pctx_ = K.tanh(pctx_ + p_state_[:, None, :])
         e = K.dot_product(pctx_, self.attention_context_wa) + self.bias_ca
         if K.ndim(mask_context) > 1:  # Mask the context (only if necessary)
-            e = mask_context * e
+            e = K.cast(mask_context, K.dtype(e)) * e
         alphas = K.softmax(K.reshape(e, [K.shape(e)[0], K.shape(e)[1]]))
         # sum over the in_timesteps dimension resulting in [batch_size, input_dim]
         ctx_ = K.sum(context * alphas[:, :, None], axis=1)
@@ -3644,8 +3644,8 @@ class AttConditionalGRUCond(Recurrent):
         context = states[7]  # Original context
         mask_context = states[8]  # Context mask
         if K.ndim(mask_context) > 1:  # Mask the context (only if necessary)
-            pctx_ = mask_context[:, :, None] * pctx_
-            context = mask_context[:, :, None] * context
+            pctx_ = K.cast(mask_context[:, :, None], K.dtype(pctx_)) * pctx_
+            context = K.cast(mask_context[:, :, None], K.dtype(context)) * context
 
         # GRU_1
         matrix_x_ = x
@@ -3668,7 +3668,7 @@ class AttConditionalGRUCond(Recurrent):
         pctx_ = K.tanh(pctx_ + p_state_[:, None, :])
         e = K.dot_product(pctx_, self.attention_context_wa) + self.bias_ca
         if K.ndim(mask_context) > 1:  # Mask the context (only if necessary)
-            e = mask_context * e
+            e = K.cast(mask_context, K.dtype(e)) * e
         alphas = K.softmax(K.reshape(e, [K.shape(e)[0], K.shape(e)[1]]))
         # sum over the in_timesteps dimension resulting in [batch_size, input_dim]
         ctx_ = K.sum(context * alphas[:, :, None], axis=1)
@@ -5836,15 +5836,15 @@ class AttLSTMCond(Recurrent):
         context = states[8]  # Original context
         mask_context = states[9]  # Context mask
         if K.ndim(mask_context) > 1:  # Mask the context (only if necessary)
-            pctx_ = mask_context[:, :, None] * pctx_
-            context = mask_context[:, :, None] * context
+            pctx_ = K.cast(mask_context[:, :, None], K.dtype(pctx_)) * pctx_
+            context = K.cast(mask_context[:, :, None], K.dtype(context)) * context
 
         # Attention model (see Formulation in class header)
         p_state_ = K.dot(h_tm1 * att_dp_mask[0], self.attention_recurrent_kernel)
         pctx_ = K.tanh(pctx_ + p_state_[:, None, :])
         e = K.dot_product(pctx_, self.attention_context_wa) + self.bias_ca
         if K.ndim(mask_context) > 1:  # Mask the context (only if necessary)
-            e = mask_context * e
+            e = K.cast(mask_context, K.dtype(e)) * e
         alphas = K.softmax(K.reshape(e, [K.shape(e)[0], K.shape(e)[1]]))
         # sum over the in_timesteps dimension resulting in [batch_size, input_dim]
         ctx_ = K.sum(context * alphas[:, :, None], axis=1)
@@ -6498,8 +6498,8 @@ class AttConditionalLSTMCond(Recurrent):
         context = states[8]  # Original context
         mask_context = states[9]  # Context mask
         if K.ndim(mask_context) > 1:  # Mask the context (only if necessary)
-            pctx_ = mask_context[:, :, None] * pctx_
-            context = mask_context[:, :, None] * context
+            pctx_ = K.cast(mask_context[:, :, None], K.dtype(pctx_)) * pctx_
+            context = K.cast(mask_context[:, :, None], K.dtype(context)) * context
 
         # LSTM_1
         z_ = x + K.dot(h_tm1 * rec_dp_mask[0], self.recurrent1_kernel)
@@ -6520,7 +6520,7 @@ class AttConditionalLSTMCond(Recurrent):
         pctx_ = K.tanh(pctx_ + p_state_[:, None, :])
         e = K.dot_product(pctx_, self.attention_context_wa) + self.bias_ca
         if K.ndim(mask_context) > 1:  # Mask the context (only if necessary)
-            e = mask_context * e
+            e = K.cast(mask_context, K.dtype(e)) * e
         alphas = K.softmax(K.reshape(e, [K.shape(e)[0], K.shape(e)[1]]))
         # sum over the in_timesteps dimension resulting in [batch_size, input_dim]
         ctx_ = K.sum(context * alphas[:, :, None], axis=1)
