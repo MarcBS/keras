@@ -1855,7 +1855,6 @@ class GRUCond(Recurrent):
             preprocessed_context = K.dot(self.context, self.kernel)
         return preprocessed_input + preprocessed_context
 
-
     def compute_output_shape(self, input_shape):
         if self.return_sequences:
             main_out = (input_shape[0][0], input_shape[0][1], self.units)
@@ -7597,9 +7596,7 @@ class AttLSTMCond3Inputs(Recurrent):
         if self.dropout_T or self.dropout_W or self.dropout_U or self.dropout_V or self.dropout_wa or \
                 self.dropout_Wa or self.dropout_Ua:
             self.uses_learning_phase = True
-        if self.attend_on_both and \
-                (
-                                    self.dropout_wa2 or self.dropout_Wa2 or self.dropout_Ua2 or self.dropout_wa3 or self.dropout_Wa3 or self.dropout_Ua3):
+        if self.attend_on_both and (self.dropout_wa2 or self.dropout_Wa2 or self.dropout_Ua2 or self.dropout_wa3 or self.dropout_Wa3 or self.dropout_Ua3):
             self.uses_learning_phase = True
 
         # Regularizers
