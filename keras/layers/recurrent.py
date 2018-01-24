@@ -7017,7 +7017,7 @@ class AttLSTMCond2Inputs(Recurrent):
 
         self.recurrent_kernel = self.add_weight(
                                             shape=(self.units, self.units * 4),
-                                            name='attention_recurrent_kernel',
+                                            name='recurrent_kernel',
                                             initializer=self.attention_recurrent_initializer,
                                             regularizer=self.attention_recurrent_regularizer,
                                             constraint=self.attention_recurrent_constraint)
@@ -7312,7 +7312,7 @@ class AttLSTMCond2Inputs(Recurrent):
         p_state_1 = K.dot(h_tm1 * att_dp_mask[0], self.attention_recurrent_kernel)
         pctx_1 = K.tanh(pctx_1 + p_state_1[:, None, :])
         e1 = K.dot(pctx_1, self.attention_context_wa) + self.bias_ca  # * att_dp_mask_wa[0]
-        if K.ndim(mask_context1.ndim) > 1:  # Mask the context (only if necessary)
+        if K.ndim(mask_context1) > 1:  # Mask the context (only if necessary)
             e1 = mask_context1 * e1
         alphas_shape1 = e1.shape
         alphas1 = K.softmax(e1.reshape([alphas_shape1[0], alphas_shape1[1]]))
@@ -7532,7 +7532,7 @@ class AttLSTMCond2Inputs(Recurrent):
                   "use_bias": self.use_bias,
                   "mask_value": self.mask_value,
                   "attend_on_both": self.attend_on_both,
-                  'unit_forget_bias': initializers.serialize(self.unit_forget_bias),
+                  'unit_forget_bias': self.unit_forget_bias,
                   'activation': activations.serialize(self.activation),
                   'recurrent_activation': activations.serialize(self.recurrent_activation),
                   "kernel_regularizer": regularizers.serialize(self.kernel_regularizer),
