@@ -1075,7 +1075,7 @@ class MaskedMean(Layer):
         super(MaskedMean, self).__init__(**kwargs)
 
     def call(self, x, mask=None):
-        return K.mean(mask[:, :, None] * x, axis=1)
+        return K.mean(K.cast(mask[:, :, None], K.dtype(x)) * x, axis=1)
 
     def compute_mask(self, input_shape, input_mask=None):
         return None
@@ -1097,7 +1097,7 @@ class MaskLayer(Layer):
         super(MaskLayer, self).__init__(**kwargs)
 
     def call(self, x, mask=None):
-        return mask[:, :, None] * x
+        return K.cast(mask[:, :, None], K.dtype(x)) * x
 
     def compute_mask(self, input_shape, input_mask=None):
         return input_mask
@@ -1109,6 +1109,29 @@ class MaskLayer(Layer):
         base_config = super(MaskLayer, self).get_config()
         return dict(list(base_config.items()))
 
+class FlatMask(Layer):
+    """
+    Flattens a n-dimensional mask to an (n-1)-dimensional one.
+
+    """
+
+    def __init__(self, axis=2, **kwargs):
+        self.supports_masking = True
+        self.axis = axis
+        super(FlatMask, self).__init__(**kwargs)
+
+    def call(self, x, mask=None):
+        return x
+
+    def compute_mask(self, input_shape, input_mask=None):
+        return K.any(input_mask, self.axis)
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+    def get_config(self):
+        base_config = super(FlatMask, self).get_config()
+        return dict(list(base_config.items()))
 
 class WeightedSum(Layer):
     """ Applies a weighted sum over a set of vectors input[0] and their respective weights input[1].

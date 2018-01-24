@@ -286,6 +286,8 @@ class Layer(object):
                           'trainable',
                           'weights',
                           'input_dtype',  # legacy
+                          'unit_forget_bias',
+                          'recurrent_activation'
                           }
         for kwarg in kwargs:
             if kwarg not in allowed_kwargs:
