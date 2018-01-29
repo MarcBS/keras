@@ -21,3 +21,6 @@ examples/img/*
 # developer environments
 .idea
 .vscode
+_linux/*
+inspection/*
+codestyles/*

@@ -27,6 +27,7 @@ def test_progbar():
 
 
 def test_custom_objects_scope():
+
     def custom_fn():
         pass
 
@@ -65,7 +66,7 @@ def test_has_arg(fn, name, accept_all, expected):
     if isinstance(fn, str):
         context = dict()
         try:
-            exec ('def {}: pass'.format(fn), context)
+            exec('def {}: pass'.format(fn), context)
         except SyntaxError:
             if sys.version_info >= (3,):
                 raise
@@ -86,6 +87,7 @@ def test_has_arg_positional_only():
     'test_function_type',
     ('simple function', 'closured function'))
 def test_func_dump_and_load(test_function_type):
+
     if test_function_type == 'simple function':
         def test_func():
             return r'\u'
@@ -96,9 +98,7 @@ def test_func_dump_and_load(test_function_type):
 
             def test_func():
                 return x
-
             return test_func
-
         test_func = get_test_func()
     else:
         raise Exception('Unknown test case for test_func_dump_and_load')
@@ -121,19 +121,18 @@ def test_func_dump_and_load_closure():
 
 
 @pytest.mark.parametrize(
-    'test_func', [activations.softmax, np.argmax, lambda x: x ** 2])
+    'test_func', [activations.softmax, np.argmax, lambda x: x**2, lambda x: x])
 def test_func_dump_and_load_backwards_compat(test_func):
     # this test ensures that models serialized prior to version 2.1.2 can still be
     # deserialized
 
     # see https://github.com/evhub/keras/blob/2.1.1/keras/utils/generic_utils.py#L166
     serialized = marshal.dumps(test_func.__code__).decode('raw_unicode_escape')
-    # TODO: This test fails, don't know why
-    # deserialized = func_load(serialized, defaults=test_func.__defaults__)
-    # assert deserialized.__code__ == test_func.__code__
-    # assert deserialized.__defaults__ == test_func.__defaults__
-    # assert deserialized.__closure__ == test_func.__closure__
 
+    deserialized = func_load(serialized, defaults=test_func.__defaults__)
+    assert deserialized.__code__ == test_func.__code__
+    assert deserialized.__defaults__ == test_func.__defaults__
+    assert deserialized.__closure__ == test_func.__closure__
 
 if __name__ == '__main__':
     pytest.main([__file__])
