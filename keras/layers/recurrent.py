@@ -4409,8 +4409,6 @@ def _generate_dropout_mask(ones, rate, training=None, count=1):
         training=training)
 
 
-# TODO: Adapt ALL LSTM* to the new interface
-
 class LSTMCond(Recurrent):
     """Conditional LSTM: The previously generated word is fed to the current timestep
     You should give two inputs to this layer:
@@ -7624,7 +7622,7 @@ class AttLSTMCond2Inputs(Recurrent):
         base_config = super(AttLSTMCond2Inputs, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
-
+# TODO: Adapt ALL LSTM* to the new interface
 class AttLSTMCond3Inputs(Recurrent):
     """Long-Short Term Memory unit with the previously generated word fed to the current timestep
     and three input contexts (with three attention mechanisms).
