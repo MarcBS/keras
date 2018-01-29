@@ -7371,8 +7371,8 @@ class AttLSTMCond2Inputs(Recurrent):
 
         z = x + \
             K.dot(h_tm1 * rec_dp_mask[0], self.recurrent_kernel) + \
-            K.dot(ctx_1 * dp_mask2[0], self.kernel2) + \
-            K.dot(ctx_2 * dp_mask[0], self.kernel)
+            K.dot(ctx_1 * dp_mask[0], self.kernel) + \
+            K.dot(ctx_2 * dp_mask2[0], self.kernel2)
         if self.use_bias:
             z = K.bias_add(z, self.bias)
             z = K.bias_add(z, self.bias2)
@@ -7509,7 +7509,7 @@ class AttLSTMCond2Inputs(Recurrent):
                 B_Ua2 = [K.in_train_phase(K.dropout(ones, self.attention_dropout2), ones)]
                 pctx_2 = K.dot(self.context2 * B_Ua2[0], self.attention_context_kernel2)
             else:
-                pctx_2 = K.dot(self.context2, self.attention_context_kernel)
+                pctx_2 = K.dot(self.context2, self.attention_context_kernel2)
             if self.use_bias:
                 pctx_2 = K.bias_add(pctx_2, self.bias_ba2)
             constants.append(pctx_2)
