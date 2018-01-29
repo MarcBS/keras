@@ -7738,9 +7738,9 @@ class AttLSTMCond2Inputs(Recurrent):
         self.recurrent_kernel = self.add_weight(
                                             shape=(self.units, self.units * 4),
                                             name='recurrent_kernel',
-                                            initializer=self.attention_recurrent_initializer,
-                                            regularizer=self.attention_recurrent_regularizer,
-                                            constraint=self.attention_recurrent_constraint)
+                                            initializer=self.recurrent_initializer,
+                                            regularizer=self.recurrent_regularizer,
+                                            constraint=self.recurrent_constraint)
 
         self.conditional_kernel = self.add_weight(shape=(self.input_dim, self.units * 4),
                                                           name='conditional_kernel',
@@ -7772,7 +7772,7 @@ class AttLSTMCond2Inputs(Recurrent):
                                   name='bias_ba',
                                   regularizer=self.bias_ba_regularizer,
                                   constraint=self.bias_ba_constraint)
-        bias_ca_shape = self.context1_steps if self.context1_steps is None else (self.context1_steps,)
+        bias_ca_shape = None if self.context1_steps is None else (self.context1_steps,)
         self.bias_ca = self.add_weight(shape=bias_ca_shape,
                                   initializer=self.bias_ca_initializer,
                                   name='bias_ca',
@@ -7822,8 +7822,8 @@ class AttLSTMCond2Inputs(Recurrent):
                                            name='bias_ba2',
                                            regularizer=self.bias_ba_regularizer2,
                                            constraint=self.bias_ba_constraint2)
-            bias_ca_shape = self.context2_steps if self.context2_steps is None else (self.context2_steps,)
-            self.bias_ca2 = self.add_weight(shape=bias_ca_shape,
+            bias_ca_shape2 = None if self.context2_steps is None else (self.context2_steps,)
+            self.bias_ca2 = self.add_weight(shape=bias_ca_shape2,
                                            initializer=self.bias_ca_initializer2,
                                            name='bias_ca2',
                                            regularizer=self.bias_ca_regularizer2,
@@ -8278,7 +8278,7 @@ class AttLSTMCond2Inputs(Recurrent):
                   "bias_initializer": initializers.serialize(self.bias_initializer),
                   'attention_context_wa_initializer': initializers.serialize(self.attention_context_wa_initializer),
                   'attention_context_initializer': initializers.serialize(self.attention_context_initializer),
-                  'attention_recurrent_initializer': initializers.serialize(self.attention_recurrent_regularizer),
+                  'attention_recurrent_initializer': initializers.serialize(self.attention_recurrent_initializer),
                   'bias_ba_initializer': initializers.serialize(self.bias_ba_initializer),
                   'bias_ca_initializer': initializers.serialize(self.bias_ca_initializer),
                   "bias_initializer2": initializers.serialize(self.bias_regularizer2),
