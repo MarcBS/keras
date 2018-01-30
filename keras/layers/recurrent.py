@@ -7621,6 +7621,7 @@ class AttLSTMCond2Inputs(Recurrent):
         base_config = super(AttLSTMCond2Inputs, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
+
 # TODO: Adapt ALL LSTM* to the new interface
 class AttLSTMCond3Inputs(Recurrent):
     """Long-Short Term Memory unit with the previously generated word fed to the current timestep
