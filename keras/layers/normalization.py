@@ -316,6 +316,7 @@ class BatchNormalization(Layer):
             x_normed = (inputs - m) / (std + self.epsilon)
             x_normed = self.gamma * x_normed + self.beta
             return x_normed
+
     def get_config(self):
         config = {
             'axis': self.axis,
