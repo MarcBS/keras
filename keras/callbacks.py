@@ -307,7 +307,7 @@ class ProgbarLogger(Callback):
             if k in logs:
                 self.log_values.append((k, logs[k]))
         if self.verbose:
-            self.progbar.update(self.seen, self.log_values, force=True)
+            self.progbar.update(self.seen, self.log_values)
 
 
 class History(Callback):
@@ -546,7 +546,10 @@ class RemoteMonitor(Callback):
         send = {}
         send['epoch'] = epoch
         for k, v in logs.items():
-            send[k] = v
+            if isinstance(v, (np.ndarray, np.generic)):
+                send[k] = v.item()
+            else:
+                send[k] = v
         try:
             requests.post(self.root + self.path,
                           {self.field: json.dumps(send)},
@@ -561,8 +564,8 @@ class LearningRateScheduler(Callback):
 
     # Arguments
         schedule: a function that takes an epoch index as input
-            (integer, indexed from 0) and returns a new
-            learning rate as output (float).
+            (integer, indexed from 0) and current learning rate
+            and returns a new learning rate as output (float).
         verbose: int. 0: quiet, 1: update messages.
     """
 
@@ -574,7 +577,11 @@ class LearningRateScheduler(Callback):
     def on_epoch_begin(self, epoch, logs=None):
         if not hasattr(self.model.optimizer, 'lr'):
             raise ValueError('Optimizer must have a "lr" attribute.')
-        lr = self.schedule(epoch)
+        lr = float(K.get_value(self.model.optimizer.lr))
+        try:  # new API
+            lr = self.schedule(epoch, lr=lr)
+        except TypeError:  # old API for backward compatibility
+            lr = self.schedule(epoch)
         if not isinstance(lr, (float, np.float32, np.float64)):
             raise ValueError('The output of the "schedule" function '
                              'should be float.')

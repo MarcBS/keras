@@ -60,17 +60,19 @@ def _standardize_input_data(data, names, shapes=None,
     if isinstance(data, dict):
         try:
             data = [data[x].values if data[x].__class__.__name__ == 'DataFrame' else data[x] for x in names]
-            data = [np.expand_dims(x, 1) if x.ndim == 1 else x for x in data]
         except KeyError as e:
             raise ValueError(
                 'No data provided for "' + e.args[0] + '". Need data '
                 'for each key in: ' + str(names))
     elif isinstance(data, list):
-        data = [x.values if x.__class__.__name__ == 'DataFrame' else x for x in data]
-        data = [np.expand_dims(x, 1) if x is not None and x.ndim == 1 else x for x in data]
+        if len(names) == 1 and data and isinstance(data[0], (float, int)):
+            data = [np.asarray(data)]
+        else:
+            data = [x.values if x.__class__.__name__ == 'DataFrame' else x for x in data]
     else:
         data = data.values if data.__class__.__name__ == 'DataFrame' else data
-        data = [np.expand_dims(data, 1)] if data.ndim == 1 else [data]
+        data = [data]
+    data = [np.expand_dims(x, 1) if x is not None and x.ndim == 1 else x for x in data]
 
     if len(data) != len(names):
         if data and hasattr(data[0], 'shape'):
@@ -514,7 +516,7 @@ def _standardize_weights(y, sample_weight=None, class_weight=None,
             raise ValueError('`class_weight` not supported for '
                              '3+ dimensional targets.')
         if y.shape[1] > 1:
-            y_classes = y.argmax(axis=1)
+            y_classes = np.argmax(y, axis=1)
         elif y.shape[1] == 1:
             y_classes = np.reshape(y, y.shape[0])
         else:
@@ -1176,7 +1178,7 @@ class Model(Container):
                 count_mode = 'steps'
             else:
                 count_mode = 'samples'
-            callbacks += [cbks.ProgbarLogger(count_mode)]
+            callbacks.insert(1, cbks.ProgbarLogger(count_mode))
         callbacks = cbks.CallbackList(callbacks)
         out_labels = out_labels or []
 
@@ -2126,13 +2128,12 @@ class Model(Container):
         ```python
             def generate_arrays_from_file(path):
                 while 1:
-                    f = open(path)
-                    for line in f:
-                        # create numpy arrays of input data
-                        # and labels, from each line in the file
-                        x1, x2, y = process_line(line)
-                        yield ({'input_1': x1, 'input_2': x2}, {'output': y})
-                    f.close()
+                    with open(path) as f:
+                        for line in f:
+                            # create numpy arrays of input data
+                            # and labels, from each line in the file
+                            x1, x2, y = process_line(line)
+                            yield ({'input_1': x1, 'input_2': x2}, {'output': y})
 
             model.fit_generator(generate_arrays_from_file('/my_file.txt'),
                                 steps_per_epoch=10000, epochs=10)
@@ -2186,7 +2187,7 @@ class Model(Container):
         self.history = cbks.History()
         callbacks = [cbks.BaseLogger()] + (callbacks or []) + [self.history]
         if verbose:
-            callbacks += [cbks.ProgbarLogger(count_mode='steps')]
+            callbacks.insert(1, cbks.ProgbarLogger(count_mode='steps'))
         callbacks = cbks.CallbackList(callbacks)
 
         # it's possible to callback a different model than self:
