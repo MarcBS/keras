@@ -1730,7 +1730,7 @@ class GRUCond(Recurrent):
                  dropout=0.,
                  recurrent_dropout=0.,
                  conditional_dropout=0.,
-                 num_inputs=4,
+                 num_inputs=3,
                  static_ctx=False,
                  **kwargs):
 
