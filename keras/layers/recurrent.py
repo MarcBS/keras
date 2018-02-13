@@ -2062,7 +2062,9 @@ class GRUCond(Recurrent):
                   'dropout': self.dropout,
                   'recurrent_dropout': self.recurrent_dropout,
                   'conditional_dropout': self.conditional_dropout,
-                  'mask_value': self.mask_value
+                  'mask_value': self.mask_value,
+                  'static_ctx': self.static_ctx,
+                  'num_inputs': self.num_inputs
                   }
         base_config = super(GRUCond, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
@@ -4872,7 +4874,9 @@ class LSTMCond(Recurrent):
                   'dropout': self.dropout,
                   'recurrent_dropout': self.recurrent_dropout,
                   'conditional_dropout': self.conditional_dropout,
-                  'mask_value': self.mask_value
+                  'mask_value': self.mask_value,
+                  'static_ctx': self.static_ctx,
+                  'num_inputs': self.num_inputs
                   }
         base_config = super(LSTMCond, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
