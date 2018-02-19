@@ -73,7 +73,7 @@ class StackedRNNCells(Layer):
                 state_size.append(cell.state_size)
         return tuple(state_size)
 
-    def call(self, inputs, states, **kwargs):
+    def call(self, inputs, states, constants=None, **kwargs):
         # Recover per-cell states.
         nested_states = []
         for cell in self.cells[::-1]:
@@ -88,7 +88,12 @@ class StackedRNNCells(Layer):
         # Call the cells in order and store the returned states.
         new_nested_states = []
         for cell, states in zip(self.cells, nested_states):
-            inputs, states = cell.call(inputs, states, **kwargs)
+            if has_arg(cell.call, 'constants'):
+                inputs, states = cell.call(inputs, states,
+                                           constants=constants,
+                                           **kwargs)
+            else:
+                inputs, states = cell.call(inputs, states, **kwargs)
             new_nested_states.append(states)
 
         # Format the new states as a flat list
@@ -99,9 +104,15 @@ class StackedRNNCells(Layer):
         return inputs, states
 
     def build(self, input_shape):
+        if isinstance(input_shape, list):
+            constants_shape = input_shape[1:]
+            input_shape = input_shape[0]
         for cell in self.cells:
             if isinstance(cell, Layer):
-                cell.build(input_shape)
+                if has_arg(cell.call, 'constants'):
+                    cell.build([input_shape] + constants_shape)
+                else:
+                    cell.build(input_shape)
             if hasattr(cell.state_size, '__len__'):
                 output_dim = cell.state_size[0]
             else:
@@ -507,12 +518,14 @@ class RNN(Layer):
             self._num_constants = len(constants)
             additional_specs += self.constants_spec
         # at this point additional_inputs cannot be empty
-        is_keras_tensor = hasattr(additional_inputs[0], '_keras_history')
+        is_keras_tensor = K.is_keras_tensor(additional_inputs[0])
         for tensor in additional_inputs:
-            if hasattr(tensor, '_keras_history') != is_keras_tensor:
+            if K.is_keras_tensor(tensor) != is_keras_tensor:
                 raise ValueError('The initial state or constants of an RNN'
                                  ' layer cannot be specified with a mix of'
-                                 ' Keras tensors and non-Keras tensors')
+                                 ' Keras tensors and non-Keras tensors'
+                                 ' (a "Keras tensor" is a tensor that was'
+                                 ' returned by a Keras layer, or by `Input`)')
 
         if is_keras_tensor:
             # Compute the full input spec, including state and constants
@@ -694,7 +707,7 @@ class RNN(Layer):
             if len(states) != len(self.states):
                 raise ValueError('Layer ' + self.name + ' expects ' +
                                  str(len(self.states)) + ' states, '
-                                                         'but it received ' + str(len(states)) +
+                                 'but it received ' + str(len(states)) +
                                  ' state values. Input received: ' +
                                  str(states))
             for index, (value, state) in enumerate(zip(states, self.states)):
@@ -772,7 +785,8 @@ class SimpleRNNCell(Layer):
         units: Positive integer, dimensionality of the output space.
         activation: Activation function to use
             (see [activations](../activations.md)).
-            If you pass None, no activation is applied
+            Default: hyperbolic tangent (`tanh`).
+            If you pass `None`, no activation is applied
             (ie. "linear" activation: `a(x) = x`).
         use_bias: Boolean, whether the layer uses a bias vector.
         kernel_initializer: Initializer for the `kernel` weights matrix,
@@ -875,7 +889,8 @@ class SimpleRNNCell(Layer):
                 _generate_dropout_ones(inputs, K.shape(inputs)[-1]),
                 self.dropout,
                 training=training)
-        if (0 < self.recurrent_dropout < 1 and self._recurrent_dropout_mask is None):
+        if (0 < self.recurrent_dropout < 1 and
+                self._recurrent_dropout_mask is None):
             self._recurrent_dropout_mask = _generate_dropout_mask(
                 _generate_dropout_ones(inputs, self.units),
                 self.recurrent_dropout,
@@ -929,7 +944,8 @@ class SimpleRNN(RNN):
         units: Positive integer, dimensionality of the output space.
         activation: Activation function to use
             (see [activations](../activations.md)).
-            If you pass None, no activation is applied
+            Default: hyperbolic tangent (`tanh`).
+            If you pass `None`, no activation is applied
             (ie. "linear" activation: `a(x) = x`).
         use_bias: Boolean, whether the layer uses a bias vector.
         kernel_initializer: Initializer for the `kernel` weights matrix,
@@ -1143,11 +1159,15 @@ class GRUCell(Layer):
         units: Positive integer, dimensionality of the output space.
         activation: Activation function to use
             (see [activations](../activations.md)).
-            If you pass None, no activation is applied
+            Default: hyperbolic tangent (`tanh`).
+            If you pass `None`, no activation is applied
             (ie. "linear" activation: `a(x) = x`).
         recurrent_activation: Activation function to use
             for the recurrent step
             (see [activations](../activations.md)).
+            Default: hard sigmoid (`hard_sigmoid`).
+            If you pass `None`, no activation is applied
+            (ie. "linear" activation: `a(x) = x`).
         use_bias: Boolean, whether the layer uses a bias vector.
         kernel_initializer: Initializer for the `kernel` weights matrix,
             used for the linear transformation of the inputs
@@ -1279,9 +1299,13 @@ class GRUCell(Layer):
                 self.dropout,
                 training=training,
                 count=3)
-        if (0 < self.recurrent_dropout < 1 and self._recurrent_dropout_mask is None):
-            self._recurrent_dropout_mask = _generate_dropout_mask(_generate_dropout_ones(inputs, self.units),
-                                                                  self.recurrent_dropout, training=training, count=3)
+        if (0 < self.recurrent_dropout < 1 and
+                self._recurrent_dropout_mask is None):
+            self._recurrent_dropout_mask = _generate_dropout_mask(
+                _generate_dropout_ones(inputs, self.units),
+                self.recurrent_dropout,
+                training=training,
+                count=3)
 
         # dropout matrices for input units
         dp_mask = self._dropout_mask
@@ -1377,11 +1401,15 @@ class GRU(RNN):
         units: Positive integer, dimensionality of the output space.
         activation: Activation function to use
             (see [activations](../activations.md)).
-            If you pass None, no activation is applied
+            Default: hyperbolic tangent (`tanh`).
+            If you pass `None`, no activation is applied
             (ie. "linear" activation: `a(x) = x`).
         recurrent_activation: Activation function to use
             for the recurrent step
             (see [activations](../activations.md)).
+            Default: hard sigmoid (`hard_sigmoid`).
+            If you pass `None`, no activation is applied
+            (ie. "linear" activation: `a(x) = x`).
         use_bias: Boolean, whether the layer uses a bias vector.
         kernel_initializer: Initializer for the `kernel` weights matrix,
             used for the linear transformation of the inputs
@@ -1702,7 +1730,7 @@ class GRUCond(Recurrent):
                  dropout=0.,
                  recurrent_dropout=0.,
                  conditional_dropout=0.,
-                 num_inputs=4,
+                 num_inputs=3,
                  static_ctx=False,
                  **kwargs):
 
@@ -2034,7 +2062,9 @@ class GRUCond(Recurrent):
                   'dropout': self.dropout,
                   'recurrent_dropout': self.recurrent_dropout,
                   'conditional_dropout': self.conditional_dropout,
-                  'mask_value': self.mask_value
+                  'mask_value': self.mask_value,
+                  'static_ctx': self.static_ctx,
+                  'num_inputs': self.num_inputs
                   }
         base_config = super(GRUCond, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
@@ -3840,11 +3870,15 @@ class LSTMCell(Layer):
         units: Positive integer, dimensionality of the output space.
         activation: Activation function to use
             (see [activations](../activations.md)).
-            If you pass None, no activation is applied
+            Default: hyperbolic tangent (`tanh`).
+            If you pass `None`, no activation is applied
             (ie. "linear" activation: `a(x) = x`).
         recurrent_activation: Activation function to use
             for the recurrent step
             (see [activations](../activations.md)).
+            Default: hard sigmoid (`hard_sigmoid`).
+            If you pass `None`, no activation is applied
+            (ie. "linear" activation: `a(x) = x`).x
         use_bias: Boolean, whether the layer uses a bias vector.
         kernel_initializer: Initializer for the `kernel` weights matrix,
             used for the linear transformation of the inputs
@@ -3994,7 +4028,8 @@ class LSTMCell(Layer):
                 self.dropout,
                 training=training,
                 count=4)
-        if (0 < self.recurrent_dropout < 1 and self._recurrent_dropout_mask is None):
+        if (0 < self.recurrent_dropout < 1 and
+                self._recurrent_dropout_mask is None):
             self._recurrent_dropout_mask = _generate_dropout_mask(
                 _generate_dropout_ones(inputs, self.units),
                 self.recurrent_dropout,
@@ -4103,11 +4138,15 @@ class LSTM(RNN):
         units: Positive integer, dimensionality of the output space.
         activation: Activation function to use
             (see [activations](../activations.md)).
-            If you pass None, no activation is applied
+            Default: hyperbolic tangent (`tanh`).
+            If you pass `None`, no activation is applied
             (ie. "linear" activation: `a(x) = x`).
         recurrent_activation: Activation function to use
             for the recurrent step
             (see [activations](../activations.md)).
+            Default: hard sigmoid (`hard_sigmoid`).
+            If you pass `None`, no activation is applied
+            (ie. "linear" activation: `a(x) = x`).
         use_bias: Boolean, whether the layer uses a bias vector.
         kernel_initializer: Initializer for the `kernel` weights matrix,
             used for the linear transformation of the inputs.
@@ -4350,8 +4389,8 @@ class LSTM(RNN):
 
 
 def _generate_dropout_ones(inputs, dims):
-    # Currently, CTNK can't instantiate `ones` with symbolic shapes.
-    # Will update workaround once CTNK supports it.
+    # Currently, CNTK can't instantiate `ones` with symbolic shapes.
+    # Will update workaround once CNTK supports it.
     if K.backend() == 'cntk':
         ones = K.ones_like(K.reshape(inputs[:, 0], (-1, 1)))
         return K.tile(ones, (1, dims))
@@ -4373,8 +4412,6 @@ def _generate_dropout_mask(ones, rate, training=None, count=1):
         ones,
         training=training)
 
-
-# TODO: Adapt ALL LSTM* to the new interface
 
 class LSTMCond(Recurrent):
     """Conditional LSTM: The previously generated word is fed to the current timestep
@@ -4837,7 +4874,9 @@ class LSTMCond(Recurrent):
                   'dropout': self.dropout,
                   'recurrent_dropout': self.recurrent_dropout,
                   'conditional_dropout': self.conditional_dropout,
-                  'mask_value': self.mask_value
+                  'mask_value': self.mask_value,
+                  'static_ctx': self.static_ctx,
+                  'num_inputs': self.num_inputs
                   }
         base_config = super(LSTMCond, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
@@ -6009,7 +6048,6 @@ class AttLSTMCond(Recurrent):
                   'conditional_dropout': self.conditional_dropout,
                   'attention_dropout': self.attention_dropout,
                   'num_inputs': self.num_inputs,
-                  # 'input_spec': self.input_spec
                   }
         base_config = super(AttLSTMCond, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
@@ -6826,8 +6864,6 @@ class AttLSTMCond2Inputs(Recurrent):
                  return_extra_variables=False,
                  attend_on_both=False,
                  use_bias=True,
-                 unit_forget_bias=True,
-                 mask_value=0.,
                  kernel_initializer='glorot_uniform',
                  kernel_initializer2='glorot_uniform',
                  conditional_initializer='glorot_uniform',
@@ -6844,6 +6880,8 @@ class AttLSTMCond2Inputs(Recurrent):
                  bias_ba_initializer2='zeros',
                  bias_ca_initializer='zero',
                  bias_ca_initializer2='zero',
+                 unit_forget_bias=True,
+                 mask_value=0.,
                  kernel_regularizer=None,
                  kernel_regularizer2=None,
                  conditional_regularizer=None,
@@ -6887,7 +6925,10 @@ class AttLSTMCond2Inputs(Recurrent):
 
         super(AttLSTMCond2Inputs, self).__init__(**kwargs)
 
-        #Main parameters
+        self.return_extra_variables = return_extra_variables
+        self.return_states = return_states
+
+        # Main parameters
         self.units = units
         self.num_inputs = num_inputs
         self.att_units1 = units if att_units1 == 0 else att_units1
@@ -6897,8 +6938,6 @@ class AttLSTMCond2Inputs(Recurrent):
         self.use_bias = use_bias
         self.mask_value = mask_value
         self.attend_on_both = attend_on_both
-        self.return_extra_variables = return_extra_variables
-        self.return_states = return_states
 
         # Initializers
         self.kernel_initializer = initializers.get(kernel_initializer)
@@ -7001,7 +7040,6 @@ class AttLSTMCond2Inputs(Recurrent):
         else:
             self.context2_dim = input_shape[2][1]
 
-
         self.kernel = self.add_weight(shape=(self.context1_dim, self.units * 4),
                                       initializer=self.kernel_initializer,
                                       name='kernel',
@@ -7017,9 +7055,9 @@ class AttLSTMCond2Inputs(Recurrent):
         self.recurrent_kernel = self.add_weight(
             shape=(self.units, self.units * 4),
             name='recurrent_kernel',
-            initializer=self.recurrent_initializer,
-            regularizer=self.recurrent_regularizer,
-            constraint=self.recurrent_constraint)
+            initializer=self.attention_recurrent_initializer,
+            regularizer=self.attention_recurrent_regularizer,
+            constraint=self.attention_recurrent_constraint)
 
         self.conditional_kernel = self.add_weight(shape=(self.input_dim, self.units * 4),
                                                   name='conditional_kernel',
@@ -7044,7 +7082,6 @@ class AttLSTMCond2Inputs(Recurrent):
                                                     name='attention_context_wa',
                                                     regularizer=self.attention_context_wa_regularizer,
                                                     constraint=self.attention_context_wa_constraint)
-
 
         self.bias_ba = self.add_weight(shape=(self.att_units1,),
                                        initializer=self.bias_ba_initializer,
@@ -7996,7 +8033,7 @@ class AttConditionalLSTMCond2Inputs(Recurrent):
                                         initializer=bias_initializer,
                                         regularizer=self.bias_regularizer,
                                         constraint=self.bias_constraint)
-        
+
             if self.unit_forget_bias:
                 def bias_initializer_conditional(shape, *args, **kwargs):
                     return K.concatenate([
@@ -8015,7 +8052,7 @@ class AttConditionalLSTMCond2Inputs(Recurrent):
             self.bias = None
             self.bias_conditional = None
             self.bias_ba = None
-            self.bias_ca = None            
+            self.bias_ca = None
 
         if self.attend_on_both:
             # Initialize Att model params (following the same format for any option of self.consume_less)
@@ -8064,7 +8101,7 @@ class AttConditionalLSTMCond2Inputs(Recurrent):
                                              initializer=bias_initializer2,
                                              regularizer=self.bias_regularizer2,
                                              constraint=self.bias_constraint2)
-                
+
                 if self.unit_forget_bias:
                     def bias_initializer2_conditional(shape, *args, **kwargs):
                         return K.concatenate([
@@ -8795,6 +8832,7 @@ class AttLSTMCond3Inputs(Recurrent):
                  attention_dropout3=0.,
                  num_inputs=6,
                  **kwargs):
+
 
         super(AttLSTMCond3Inputs, self).__init__(**kwargs)
 

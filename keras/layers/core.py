@@ -1067,7 +1067,14 @@ class MaskedMean(Layer):
     """
     This layer is called after an Embedding layer.
     It averages all of the masked-out embeddings.
-    The mask is discarded
+    The mask is discarded.
+
+    # Input shape
+        Arbitrary. Use the keyword argument `input_shape`
+        when using this layer as the first layer in a model.
+
+    # Output shape
+        Same shape as input.
     """
 
     def __init__(self, **kwargs):
@@ -1089,7 +1096,14 @@ class MaskedMean(Layer):
 
 
 class MaskLayer(Layer):
-    """Applies to the layer its mask
+    """Applies to the input its mask. The mask is kept.
+
+    # Input shape
+        Arbitrary. Use the keyword argument `input_shape`
+        when using this layer as the first layer in a model.
+
+    # Output shape
+        Same shape as input.
     """
 
     def __init__(self, **kwargs):
@@ -1109,10 +1123,20 @@ class MaskLayer(Layer):
         base_config = super(MaskLayer, self).get_config()
         return dict(list(base_config.items()))
 
+
 class FlatMask(Layer):
     """
     Flattens a n-dimensional mask to an (n-1)-dimensional one.
 
+    # Arguments
+        axis: Axis to flatten the mask.
+
+    # Input shape
+        Arbitrary. Use the keyword argument `input_shape`
+        when using this layer as the first layer in a model.
+
+    # Output shape
+        Same shape as input.
     """
 
     def __init__(self, axis=2, **kwargs):
@@ -1132,6 +1156,7 @@ class FlatMask(Layer):
     def get_config(self):
         base_config = super(FlatMask, self).get_config()
         return dict(list(base_config.items()))
+
 
 class WeightedSum(Layer):
     """ Applies a weighted sum over a set of vectors input[0] and their respective weights input[1].

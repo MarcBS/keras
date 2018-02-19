@@ -97,7 +97,7 @@ class _Conv(Layer):
         rank: An integer, the rank of the convolution,
             e.g. "2" for 2D convolution.
         filters: Integer, the dimensionality of the output space
-            (i.e. the number output of filters in the convolution).
+            (i.e. the number of output filters in the convolution).
         kernel_size: An integer or tuple/list of n integers, specifying the
             dimensions of the convolution window.
         strides: An integer or tuple/list of n integers,
@@ -336,7 +336,7 @@ class Conv1D(_Conv):
 
     # Arguments
         filters: Integer, the dimensionality of the output space
-            (i.e. the number output of filters in the convolution).
+            (i.e. the number of output filters in the convolution).
         kernel_size: An integer or tuple/list of a single integer,
             specifying the length of the 1D convolution window.
         strides: An integer or tuple/list of a single integer,
@@ -445,7 +445,7 @@ class Conv2D(_Conv):
 
     # Arguments
         filters: Integer, the dimensionality of the output space
-            (i.e. the number output of filters in the convolution).
+            (i.e. the number of output filters in the convolution).
         kernel_size: An integer or tuple/list of 2 integers, specifying the
             width and height of the 2D convolution window.
             Can be a single integer to specify the same value for
@@ -576,7 +576,7 @@ class Conv3D(_Conv):
 
     # Arguments
         filters: Integer, the dimensionality of the output space
-            (i.e. the number output of filters in the convolution).
+            (i.e. the number of output filters in the convolution).
         kernel_size: An integer or tuple/list of 3 integers, specifying the
             depth, height and width of the 3D convolution window.
             Can be a single integer to specify the same value for
@@ -1155,7 +1155,7 @@ class _SeparableConv(_Conv):
         rank: An integer, the rank of the convolution,
             e.g. "2" for 2D convolution.
         filters: Integer, the dimensionality of the output space
-            (i.e. the number output of filters in the convolution).
+            (i.e. the number of output filters in the convolution).
         kernel_size: An integer or tuple/list of 2 integers, specifying the
             width and height of the 2D convolution window.
             Can be a single integer to specify the same value for
@@ -1368,7 +1368,7 @@ class SeparableConv1D(_SeparableConv):
 
     # Arguments
         filters: Integer, the dimensionality of the output space
-            (i.e. the number output of filters in the convolution).
+            (i.e. the number of output filters in the convolution).
         kernel_size: An integer or tuple/list of single integer,
             specifying the length of the 1D convolution window.
         strides: An integer or tuple/list of single integer,
@@ -1493,7 +1493,7 @@ class SeparableConv2D(_SeparableConv):
 
     # Arguments
         filters: Integer, the dimensionality of the output space
-            (i.e. the number output of filters in the convolution).
+            (i.e. the number of output filters in the convolution).
         kernel_size: An integer or tuple/list of 2 integers, specifying the
             width and height of the 2D convolution window.
             Can be a single integer to specify the same value for
