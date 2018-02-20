@@ -75,6 +75,14 @@ def sparse_categorical_crossentropy(y_true, y_pred):
     return K.sparse_categorical_crossentropy(y_true, y_pred)
 
 
+def categorical_crossentropy_from_logits(y_true, y_pred):
+    return K.categorical_crossentropy(y_true, y_pred, from_logits=True)
+
+
+def sparse_categorical_crossentropy_from_logits(y_true, y_pred):
+    return K.sparse_categorical_crossentropy(y_true, y_pred, from_logits=True)
+
+
 def binary_crossentropy(y_true, y_pred):
     return K.mean(K.binary_crossentropy(y_true, y_pred), axis=-1)
 
