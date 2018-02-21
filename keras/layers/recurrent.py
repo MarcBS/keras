@@ -7919,8 +7919,10 @@ class AttConditionalLSTMCond2Inputs(Recurrent):
         self.attention_dropout = min(1., max(0., attention_dropout)) if attention_dropout is not None else 0.
         if self.attend_on_both:
             self.attention_dropout2 = min(1., max(0., attention_dropout2)) if attention_dropout2 is not None else 0.
+            self.input_spec = [InputSpec(ndim=3), InputSpec(ndim=3), InputSpec(ndim=3)]
+        else:
+            self.input_spec = [InputSpec(ndim=3), InputSpec(ndim=3), InputSpec(ndim=2)]
 
-        self.input_spec = [InputSpec(ndim=3), InputSpec(ndim=3), InputSpec(ndim=3)]
         for _ in range(len(self.input_spec), self.num_inputs):
             self.input_spec.append(InputSpec(ndim=2))
 
@@ -7953,7 +7955,6 @@ class AttConditionalLSTMCond2Inputs(Recurrent):
             self.context2_dim = input_shape[2][2]
         else:
             self.context2_dim = input_shape[2][1]
-
 
         self.kernel = self.add_weight(shape=(self.context1_dim, self.units * 4),
                                       initializer=self.kernel_initializer,
@@ -8197,19 +8198,7 @@ class AttConditionalLSTMCond2Inputs(Recurrent):
         elif self.num_inputs == 5:  # input: [state_below, context, init_state, init_memory]
             self.init_state = inputs[3]
             self.init_memory = inputs[4]
-        if K._BACKEND == 'tensorflow':
-            if not input_shape[1]:
-                raise Exception('When using TensorFlow, you should define '
-                                'explicitly the number of timesteps of '
-                                'your sequences.\n'
-                                'If your first layer is an Embedding, '
-                                'make sure to pass it an "input_length" '
-                                'argument. Otherwise, make sure '
-                                'the first layer has '
-                                'an "input_shape" or "batch_input_shape" '
-                                'argument, including the time axis. '
-                                'Found input shape at layer ' + self.name +
-                                ': ' + str(input_shape))
+
         if self.stateful:
             initial_states = self.states
         else:
@@ -8473,18 +8462,17 @@ class AttConditionalLSTMCond2Inputs(Recurrent):
             pctx_1 = K.bias_add(pctx_1, self.bias_ba)
         constants.append(pctx_1)
 
+        # States[14] - Context2
+        constants.append(self.context2)
+        # States[15] - MaskContext2
         if self.attend_on_both:
-
-            # States[14] - Context2
-            constants.append(self.context2)
-            # States[15] - MaskContext2
-            if self.attend_on_both:
-                if mask_context2 is None:
-                    mask_context2 = K.not_equal(K.sum(self.context2, axis=2), self.mask_value)
-                    mask_context2 = K.cast(mask_context2, K.floatx())
-            else:
-                mask_context2 = K.ones_like(self.context2[:, 0])
-            constants.append(mask_context2)
+            if mask_context2 is None:
+                mask_context2 = K.not_equal(K.sum(self.context2, axis=2), self.mask_value)
+                mask_context2 = K.cast(mask_context2, K.floatx())
+        else:
+            mask_context2 = K.ones_like(self.context2[:, 0])
+        constants.append(mask_context2)
+        if self.attend_on_both:
             # States[16] - pctx_2
             if 0 < self.attention_dropout2 < 1:
                 input_dim = self.context2_dim
