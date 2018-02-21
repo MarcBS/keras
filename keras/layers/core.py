@@ -1258,7 +1258,7 @@ class WeightedMerge(Layer):
                 "Merge mode of type '" + mode + "' is not valid. Valid modes are: " + str(self._valid_modes))
         self.mode = mode
 
-        self.init = initializations.get(init)
+        self.init = initializers.get(init)
         self.lambdas_regularizer = regularizers.get(lambdas_regularizer)
         self.initial_weights = weights
 
