@@ -22,6 +22,71 @@ from ..legacy.layers import Recurrent
 from ..legacy import interfaces
 
 
+def compute_attention(h_tm1, pctx_, context, att_dp_mask, attention_recurrent_kernel,
+                      attention_context_wa, bias_ca, mask_context, attention_mode='add'):
+    """
+
+    Computes an attended vector over an input sequence of vectors (context).
+
+    The resulting attention vector 'phi' at time 't' is formed by applying a weighted sum over the sequence of inputs 'x_1^I':
+            phi(x_1^I, t) = ∑_i alpha_i(t) * x_i,
+        where each 'alpha_i' at time 't' is a weighting vector over all the input dimension that accomplishes the following condition:
+            ∑_i alpha_i = 1
+        and is dynamically adapted at each timestep w.r.t. the following formula:
+            alpha_i(t) = exp{e_i(t)} /  ∑_j exp{e_j(t)}
+        where each 'e_i' at time 't' is calculated as:
+            e_i(t) = score(h_tm1, x_i)
+
+        score is a function that assigns a weight depending on how well h_tm1 and x_i match.
+        The following scoring functions are implemented:
+            - 'add'/'bahdanau':
+               e_i(t) = wa' * tanh( Wa * x_i  +  Ua * h_tm1 +  ba ),
+            - 'dot'/'luong':
+               e_i(t) = h_tm1' · Ua * x_i
+
+    # Arguments
+        h_tm1: Last decoder state
+        pctx_: Projected context (i.e. context * Ua + ba)
+        pctx_: Original context
+        att_dp_mask: Dropout for the attention MLP
+        attention_recurrent_kernel:  attention MLP weights
+        attention_context_wa:  attention MLP weights
+        bias_ca:  attention MLP bias
+        mask_context: mask of the context
+        attention_mode: 'add' or 'dot'
+
+    # Returns
+        ctx_: attended representation of the input
+        alphas: weights computed by the attention mechanism
+
+
+    # References
+        - [Neural Machine Translation by Jointly Learning to Align and Translate](https://arxiv.org/abs/1409.0473)
+        - [Effective Approaches to Attention-based Neural Machine Translation](http://www.aclweb.org/anthology/D15-1166)
+    """
+    p_state_ = K.dot_product(h_tm1 * att_dp_mask[0], attention_recurrent_kernel)
+
+    if attention_mode == 'add' or attention_mode == 'bahdanau':
+        pctx_ = K.tanh(pctx_ + p_state_[:, None, :])
+        e = K.dot_product(pctx_, attention_context_wa) + bias_ca
+
+    elif attention_mode == 'dot' or attention_mode == 'luong':
+        pctx_ = K.batch_dot(p_state_[:, :, None], pctx_, axes=[1, 2])
+        e = K.squeeze(pctx_, 1)
+
+    else:
+        raise NotImplementedError('The attention mode ' + attention_mode + ' is not implemented.')
+
+    if K.ndim(mask_context) > 1:  # Mask the context (only if necessary)
+        e = K.cast(mask_context, K.dtype(e)) * e
+    alphas = K.softmax(K.reshape(e, [K.shape(e)[0], K.shape(e)[1]]))
+
+    # sum over the in_timesteps dimension resulting in [batch_size, input_dim]
+    ctx_ = K.sum(context * alphas[:, :, None], axis=1)
+
+    return ctx_, alphas
+
+
 class StackedRNNCells(Layer):
     """Wrapper allowing a stack of RNN cells to behave as a single cell.
 
@@ -2259,6 +2324,7 @@ class AttGRU(Recurrent):
                  att_units=0,
                  return_extra_variables=False,
                  return_states=False,
+                 attention_mode='add',
                  activation='tanh',
                  recurrent_activation='sigmoid',
                  use_bias=True,
@@ -2304,6 +2370,7 @@ class AttGRU(Recurrent):
         self.recurrent_activation = activations.get(recurrent_activation)
         self.use_bias = use_bias
         self.mask_value = mask_value
+        self.attention_mode = attention_mode.lower()
 
         # Initializers
         self.kernel_initializer = initializers.get(kernel_initializer)
@@ -2527,13 +2594,9 @@ class AttGRU(Recurrent):
         pctx_ = states[6]  # Projected context (i.e. context * Ua + ba)
         context = states[7]  # Original context
 
-        # Attention model (see Formulation in class header)
-        p_state_ = K.dot(h_tm1 * att_dp_mask[0], self.attention_recurrent_kernel)
-        pctx_ = K.tanh(pctx_ + p_state_[:, None, :])
-        e = K.dot_product(pctx_, self.attention_context_wa) + self.bias_ca
-        alphas = K.softmax(K.reshape(e, [K.shape(e)[0], K.shape(e)[1]]))
-        # sum over the in_timesteps dimension resulting in [batch_size, input_dim]
-        ctx_ = K.sum(context * alphas[:, :, None], axis=1)
+        ctx_, alphas = compute_attention(h_tm1, pctx_, context, att_dp_mask, self.attention_recurrent_kernel,
+                                         self.attention_context_wa, self.bias_ca, mask_context,
+                                         attention_mode=self.attention_mode)
 
         matrix_x = x + K.dot(ctx_ * dp_mask[0], self.kernel)
         if self.use_bias:
@@ -2671,7 +2734,8 @@ class AttGRU(Recurrent):
                   'dropout': self.dropout,
                   'recurrent_dropout': self.recurrent_dropout,
                   'attention_dropout': self.attention_dropout,
-                  'mask_value': self.mask_value
+                  'mask_value': self.mask_value,
+                  'attention_mode': self.attention_mode
                   }
         base_config = super(AttGRU, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
@@ -2835,6 +2899,7 @@ class AttGRUCond(Recurrent):
                  att_units=0,
                  return_extra_variables=False,
                  return_states=False,
+                 attention_mode='add',
                  activation='tanh',
                  recurrent_activation='sigmoid',
                  use_bias=True,
@@ -2884,6 +2949,7 @@ class AttGRUCond(Recurrent):
         self.recurrent_activation = activations.get(recurrent_activation)
         self.use_bias = use_bias
         self.mask_value = mask_value
+        self.attention_mode = attention_mode.lower()
 
         # Initializers
         self.kernel_initializer = initializers.get(kernel_initializer)
@@ -3139,15 +3205,9 @@ class AttGRUCond(Recurrent):
             pctx_ = K.cast(mask_context[:, :, None], K.dtype(pctx_)) * pctx_
             context = K.cast(mask_context[:, :, None], K.dtype(context)) * context
 
-        # Attention model (see Formulation in class header)
-        p_state_ = K.dot(h_tm1 * att_dp_mask[0], self.attention_recurrent_kernel)
-        pctx_ = K.tanh(pctx_ + p_state_[:, None, :])
-        e = K.dot_product(pctx_, self.attention_context_wa) + self.bias_ca
-        if K.ndim(mask_context) > 1:  # Mask the context (only if necessary)
-            e = K.cast(mask_context, K.dtype(e)) * e
-        alphas = K.softmax(K.reshape(e, [K.shape(e)[0], K.shape(e)[1]]))
-        # sum over the in_timesteps dimension resulting in [batch_size, input_dim]
-        ctx_ = K.sum(context * alphas[:, :, None], axis=1)
+        ctx_, alphas = compute_attention(h_tm1, pctx_, context, att_dp_mask, self.attention_recurrent_kernel,
+                                         self.attention_context_wa, self.bias_ca, mask_context,
+                                         attention_mode=self.attention_mode)
 
         matrix_x = x + K.dot(ctx_ * dp_mask[0], self.kernel)
         if self.use_bias:
@@ -3298,7 +3358,8 @@ class AttGRUCond(Recurrent):
                   'recurrent_dropout': self.recurrent_dropout,
                   'conditional_dropout': self.conditional_dropout,
                   'attention_dropout': self.attention_dropout,
-                  'mask_value': self.mask_value
+                  'mask_value': self.mask_value,
+                  'attention_mode': self.attention_mode
                   }
         base_config = super(AttGRUCond, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
@@ -3437,6 +3498,7 @@ class AttConditionalGRUCond(Recurrent):
                  return_extra_variables=False,
                  return_states=False,
                  activation='tanh',
+                 attention_mode='add',
                  recurrent_activation='sigmoid',
                  use_bias=True,
                  kernel_initializer='glorot_uniform',
@@ -3485,6 +3547,7 @@ class AttConditionalGRUCond(Recurrent):
         self.recurrent_activation = activations.get(recurrent_activation)
         self.use_bias = use_bias
         self.mask_value = mask_value
+        self.attention_mode = attention_mode.lower()
 
         # Initializers
         self.kernel_initializer = initializers.get(kernel_initializer)
@@ -3776,15 +3839,9 @@ class AttConditionalGRUCond(Recurrent):
         hh_ = self.activation(x_h_ + inner_h_)
         h_ = z_ * h_tm1 + (1 - z_) * hh_
 
-        # Attention model (see Formulation in class header)
-        p_state_ = K.dot(h_ * att_dp_mask[0], self.attention_recurrent_kernel)
-        pctx_ = K.tanh(pctx_ + p_state_[:, None, :])
-        e = K.dot_product(pctx_, self.attention_context_wa) + self.bias_ca
-        if K.ndim(mask_context) > 1:  # Mask the context (only if necessary)
-            e = K.cast(mask_context, K.dtype(e)) * e
-        alphas = K.softmax(K.reshape(e, [K.shape(e)[0], K.shape(e)[1]]))
-        # sum over the in_timesteps dimension resulting in [batch_size, input_dim]
-        ctx_ = K.sum(context * alphas[:, :, None], axis=1)
+        ctx_, alphas = compute_attention(h_, pctx_, context, att_dp_mask, self.attention_recurrent_kernel,
+                                         self.attention_context_wa, self.bias_ca, mask_context,
+                                         attention_mode=self.attention_mode)
 
         matrix_x = K.dot(ctx_ * dp_mask[0], self.kernel)
         if self.use_bias:
@@ -3940,7 +3997,8 @@ class AttConditionalGRUCond(Recurrent):
                   'recurrent_dropout': self.recurrent_dropout,
                   'conditional_dropout': self.conditional_dropout,
                   'attention_dropout': self.attention_dropout,
-                  'num_inputs': self.num_inputs
+                  'num_inputs': self.num_inputs,
+                  'attention_mode': self.attention_mode
                   }
         base_config = super(AttConditionalGRUCond, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
@@ -5070,6 +5128,7 @@ class AttLSTM(Recurrent):
                  return_extra_variables=False,
                  return_states=False,
                  activation='tanh',
+                 attention_mode='add',
                  recurrent_activation='sigmoid',
                  use_bias=True,
                  kernel_initializer='glorot_uniform',
@@ -5116,6 +5175,7 @@ class AttLSTM(Recurrent):
         self.recurrent_activation = activations.get(recurrent_activation)
         self.use_bias = use_bias
         self.mask_value = mask_value
+        self.attention_mode = attention_mode.lower()
 
         # Initializers
         self.kernel_initializer = initializers.get(kernel_initializer)
@@ -5359,13 +5419,9 @@ class AttLSTM(Recurrent):
         pctx_ = states[7]  # Projected context (i.e. context * Ua + ba)
 
         # Attention model (see Formulation in class header)
-        p_state_ = K.dot(h_tm1 * att_dp_mask[0], self.attention_recurrent_kernel)
-        pctx_ = K.tanh(pctx_ + p_state_[:, None, :])
-        e = K.dot_product(pctx_, self.attention_context_wa) + self.bias_ca
-        alphas = K.softmax(K.reshape(e, [K.shape(e)[0], K.shape(e)[1]]))
-        # sum over the in_timesteps dimension resulting in [batch_size, input_dim]
-        ctx_ = K.sum(context * alphas[:, :, None], axis=1)
-
+        ctx_, alphas = compute_attention(h_tm1, pctx_, context, att_dp_mask, self.attention_recurrent_kernel,
+                                         self.attention_context_wa, self.bias_ca, mask_context,
+                                         attention_mode=self.attention_mode)
         # LSTM
         z = x + \
             K.dot(h_tm1 * rec_dp_mask[0], self.recurrent_kernel) + \
@@ -5504,7 +5560,8 @@ class AttLSTM(Recurrent):
                   'dropout': self.dropout,
                   'recurrent_dropout': self.recurrent_dropout,
                   'attention_dropout': self.attention_dropout,
-                  'mask_value': self.mask_value
+                  'mask_value': self.mask_value,
+                  'attention_mode': self.attention_mode
                   }
         base_config = super(AttLSTM, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
@@ -5641,6 +5698,7 @@ class AttLSTMCond(Recurrent):
                  att_units=0,
                  return_extra_variables=False,
                  return_states=False,
+                 attention_mode='add',
                  activation='tanh',
                  recurrent_activation='sigmoid',
                  use_bias=True,
@@ -5691,7 +5749,7 @@ class AttLSTMCond(Recurrent):
         self.recurrent_activation = activations.get(recurrent_activation)
         self.use_bias = use_bias
         self.mask_value = mask_value
-
+        self.attention_mode = attention_mode.lower()
         # Initializers
         self.kernel_initializer = initializers.get(kernel_initializer)
         self.recurrent_initializer = initializers.get(recurrent_initializer)
@@ -5783,12 +5841,16 @@ class AttLSTMCond(Recurrent):
             regularizer=self.attention_context_regularizer,
             constraint=self.attention_context_constraint)
 
-        self.attention_context_wa = self.add_weight(
-            shape=(self.att_units,),
-            name='attention_context_wa',
-            initializer=self.attention_context_wa_initializer,
-            regularizer=self.attention_context_wa_regularizer,
-            constraint=self.attention_context_wa_constraint)
+        if self.attention_mode != 'dot':
+            self.attention_context_wa = self.add_weight(
+                shape=(self.att_units,),
+                name='attention_context_wa',
+                initializer=self.attention_context_wa_initializer,
+                regularizer=self.attention_context_wa_regularizer,
+                constraint=self.attention_context_wa_constraint)
+
+        else:
+            self.attention_context_wa = None
 
         if self.use_bias:
             if self.unit_forget_bias:
@@ -5813,12 +5875,15 @@ class AttLSTMCond(Recurrent):
                                        initializer=self.bias_ba_initializer,
                                        regularizer=self.bias_ba_regularizer,
                                        constraint=self.bias_ba_constraint)
-        bias_ca_shape = self.context_steps if self.context_steps is None else (self.context_steps,)
-        self.bias_ca = self.add_weight(shape=bias_ca_shape,
-                                       name='bias_ca',
-                                       initializer=self.bias_ca_initializer,
-                                       regularizer=self.bias_ca_regularizer,
-                                       constraint=self.bias_ca_constraint)
+        if self.attention_mode != 'dot':
+            bias_ca_shape = self.context_steps if self.context_steps is None else (self.context_steps,)
+            self.bias_ca = self.add_weight(shape=bias_ca_shape,
+                                           name='bias_ca',
+                                           initializer=self.bias_ca_initializer,
+                                           regularizer=self.bias_ca_regularizer,
+                                           constraint=self.bias_ca_constraint)
+        else:
+            self.bias_ca = None
         self.built = True
 
     def reset_states(self, states=None):
@@ -5959,16 +6024,9 @@ class AttLSTMCond(Recurrent):
             pctx_ = K.cast(mask_context[:, :, None], K.dtype(pctx_)) * pctx_
             context = K.cast(mask_context[:, :, None], K.dtype(context)) * context
 
-        # Attention model (see Formulation in class header)
-        p_state_ = K.dot(h_tm1 * att_dp_mask[0], self.attention_recurrent_kernel)
-        pctx_ = K.tanh(pctx_ + p_state_[:, None, :])
-        e = K.dot_product(pctx_, self.attention_context_wa) + self.bias_ca
-        if K.ndim(mask_context) > 1:  # Mask the context (only if necessary)
-            e = K.cast(mask_context, K.dtype(e)) * e
-        alphas = K.softmax(K.reshape(e, [K.shape(e)[0], K.shape(e)[1]]))
-        # sum over the in_timesteps dimension resulting in [batch_size, input_dim]
-        ctx_ = K.sum(context * alphas[:, :, None], axis=1)
-
+        ctx_, alphas = compute_attention(h_tm1, pctx_, context, att_dp_mask, self.attention_recurrent_kernel,
+                                         self.attention_context_wa, self.bias_ca, mask_context,
+                                         attention_mode=self.attention_mode)
         # LSTM
         z = x + \
             K.dot(h_tm1 * rec_dp_mask[0], self.recurrent_kernel) + \
@@ -6129,6 +6187,7 @@ class AttLSTMCond(Recurrent):
                   'conditional_dropout': self.conditional_dropout,
                   'attention_dropout': self.attention_dropout,
                   'num_inputs': self.num_inputs,
+                  'attention_mode': self.attention_mode
                   }
         base_config = super(AttLSTMCond, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
@@ -6146,6 +6205,7 @@ class AttConditionalLSTMCond(Recurrent):
         units: Positive integer, dimensionality of the output space.
         att_units:  Positive integer, dimensionality of the attention space.
         return_extra_variables: Return the attended context vectors and the attention weights (alphas)
+        att_mode: Attention mode. 'add' or 'dot' implemented.
         return_states: Whether it should return the internal RNN states.
         activation: Activation function to use
             (see [activations](../activations.md)).
@@ -6267,6 +6327,7 @@ class AttConditionalLSTMCond(Recurrent):
                  return_extra_variables=False,
                  return_states=False,
                  activation='tanh',
+                 attention_mode='add',
                  recurrent_activation='sigmoid',
                  use_bias=True,
                  kernel_initializer='glorot_uniform',
@@ -6317,6 +6378,7 @@ class AttConditionalLSTMCond(Recurrent):
         self.recurrent_activation = activations.get(recurrent_activation)
         self.use_bias = use_bias
         self.mask_value = mask_value
+        self.attention_mode = attention_mode.lower()
 
         # Initializers
         self.kernel_initializer = initializers.get(kernel_initializer)
@@ -6634,15 +6696,9 @@ class AttConditionalLSTMCond(Recurrent):
         c_ = f_ * c_tm1 + i_ * self.activation(z_2)
         h_ = o_ * self.activation(c_)
 
-        # Attention model (see Formulation in class header)
-        p_state_ = K.dot_product(h_ * att_dp_mask[0], self.attention_recurrent_kernel)
-        pctx_ = K.tanh(pctx_ + p_state_[:, None, :])
-        e = K.dot_product(pctx_, self.attention_context_wa) + self.bias_ca
-        if K.ndim(mask_context) > 1:  # Mask the context (only if necessary)
-            e = K.cast(mask_context, K.dtype(e)) * e
-        alphas = K.softmax(K.reshape(e, [K.shape(e)[0], K.shape(e)[1]]))
-        # sum over the in_timesteps dimension resulting in [batch_size, input_dim]
-        ctx_ = K.sum(context * alphas[:, :, None], axis=1)
+        ctx_, alphas = compute_attention(h_, pctx_, context, att_dp_mask, self.attention_recurrent_kernel,
+                                         self.attention_context_wa, self.bias_ca, mask_context,
+                                         attention_mode=self.attention_mode)
 
         # LSTM
         z = K.dot(h_ * rec_dp_mask[0], self.recurrent_kernel) + \
@@ -6802,7 +6858,8 @@ class AttConditionalLSTMCond(Recurrent):
                   'recurrent_dropout': self.recurrent_dropout,
                   'conditional_dropout': self.conditional_dropout,
                   'attention_dropout': self.attention_dropout,
-                  'num_inputs': self.num_inputs
+                  'num_inputs': self.num_inputs,
+                  'attention_mode': self.attention_mode
                   }
         base_config = super(AttConditionalLSTMCond, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
@@ -6941,6 +6998,7 @@ class AttLSTMCond2Inputs(Recurrent):
                  att_units2=0,
                  return_states=False,
                  activation='tanh',
+                 attention_mode='add',
                  recurrent_activation='sigmoid',
                  return_extra_variables=False,
                  attend_on_both=False,
@@ -7019,6 +7077,7 @@ class AttLSTMCond2Inputs(Recurrent):
         self.use_bias = use_bias
         self.mask_value = mask_value
         self.attend_on_both = attend_on_both
+        self.attention_mode = attention_mode.lower()
 
         # Initializers
         self.kernel_initializer = initializers.get(kernel_initializer)
@@ -7415,31 +7474,19 @@ class AttLSTMCond2Inputs(Recurrent):
             pctx_1 = mask_context1[:, :, None] * pctx_1
             context1 = mask_context1[:, :, None] * context1
 
-        # Attention model 1 (see Formulation in class header)
-        p_state_1 = K.dot(h_tm1 * att_dp_mask[0], self.attention_recurrent_kernel)
-        pctx_1 = K.tanh(pctx_1 + p_state_1[:, None, :])
-        e1 = K.dot(pctx_1, self.attention_context_wa) + self.bias_ca  # * att_dp_mask_wa[0]
-        if K.ndim(mask_context1) > 1:  # Mask the context (only if necessary)
-            e1 = K.cast(mask_context1, K.dtype(e1)) * e1
-        alphas_shape1 = K.shape(e1)
-        alphas1 = K.softmax(e1.reshape([alphas_shape1[0], alphas_shape1[1]]))
-        # sum over the in_timesteps dimension resulting in [batch_size, input_dim]
-        ctx_1 = (context1 * alphas1[:, :, None]).sum(axis=1)
+        ctx_1, alphas1 = compute_attention(h_tm1, pctx_1, context, att_dp_mask, self.attention_recurrent_kernel,
+                                           self.attention_context_wa, self.bias_ca, mask_context1,
+                                           attention_mode=self.attention_mode)
 
         if self.attend_on_both:
             if K.ndim(mask_context2) > 1:  # Mask the context2 (only if necessary)
                 pctx_2 = mask_context2[:, :, None] * pctx_2
                 context2 = mask_context2[:, :, None] * context2
+
             # Attention model 2 (see Formulation in class header)
-            p_state_2 = K.dot(h_tm1 * att_dp_mask2[0], self.attention_recurrent_kernel2)
-            pctx_2 = K.tanh(pctx_2 + p_state_2[:, None, :])
-            e2 = K.dot(pctx_2, self.attention_context_wa2) + self.bias_ca2  # * att_dp_mask_wa2[0]
-            if K.ndim(mask_context2) > 1:  # Mask the context (only if necessary)
-                e2 = K.cast(mask_context2, K.dtype(e2)) * e2
-            alphas_shape2 = K.shape(e2)
-            alphas2 = K.softmax(e2.reshape([alphas_shape2[0], alphas_shape2[1]]))
-            # sum over the in_timesteps dimension resulting in [batch_size, input_dim]
-            ctx_2 = (context2 * alphas2[:, :, None]).sum(axis=1)
+            ctx_2, alphas2 = compute_attention(h_tm1, pctx_1, context, att_dp_mask2, self.attention_recurrent_kernel2,
+                                               self.attention_context_wa2, self.bias_ca2, mask_context2,
+                                               attention_mode=self.attention_mode)
         else:
             ctx_2 = context2
             alphas2 = mask_context2
@@ -7695,7 +7742,8 @@ class AttLSTMCond2Inputs(Recurrent):
                   "recurrent_dropout": self.recurrent_dropout,
                   "conditional_dropout": self.conditional_dropout,
                   'attention_dropout': self.attention_dropout,
-                  'attention_dropout2': self.attention_dropout2 if self.attend_on_both else None
+                  'attention_dropout2': self.attention_dropout2 if self.attend_on_both else None,
+                  'attention_mode': self.attention_mode
                   }
         base_config = super(AttLSTMCond2Inputs, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
@@ -7833,6 +7881,7 @@ class AttConditionalLSTMCond2Inputs(Recurrent):
                  att_units1=0,
                  att_units2=0,
                  return_states=False,
+                 attention_mode='add',
                  activation='tanh',
                  recurrent_activation='sigmoid',
                  return_extra_variables=False,
@@ -7911,6 +7960,7 @@ class AttConditionalLSTMCond2Inputs(Recurrent):
         self.attend_on_both = attend_on_both
         self.return_extra_variables = return_extra_variables
         self.return_states = return_states
+        self.attention_mode = attention_mode.lower()
 
         # Initializers
         self.kernel_initializer = initializers.get(kernel_initializer)
@@ -8377,30 +8427,18 @@ class AttConditionalLSTMCond2Inputs(Recurrent):
         h_ = o_ * self.activation(c_)
 
         # Attention model 1 (see Formulation in class header)
-        p_state_1 = K.dot(h_ * att_dp_mask[0], self.attention_recurrent_kernel)
-        pctx_1 = K.tanh(pctx_1 + p_state_1[:, None, :])
-        e1 = K.dot(pctx_1, self.attention_context_wa) + self.bias_ca  # * att_dp_mask_wa[0]
-        if K.ndim(mask_context1) > 1:  # Mask the context (only if necessary)
-            e1 = K.cast(mask_context1, K.dtype(e1)) * e1
-        alphas_shape1 = K.shape(e1)
-        alphas1 = K.softmax(K.reshape(e1, [alphas_shape1[0], alphas_shape1[1]]))
-        # sum over the in_timesteps dimension resulting in [batch_size, input_dim]
-        ctx_1 = K.sum(context1 * alphas1[:, :, None], axis=1)
+        ctx_, alphas = compute_attention(h_, pctx_1, context, att_dp_mask, self.attention_recurrent_kernel,
+                                         self.attention_context_wa, self.bias_ca, mask_context1,
+                                         attention_mode=self.attention_mode)
 
         if self.attend_on_both:
             if K.ndim(mask_context2) > 1:  # Mask the context2 (only if necessary)
                 pctx_2 = mask_context2[:, :, None] * pctx_2
                 context2 = mask_context2[:, :, None] * context2
             # Attention model 2 (see Formulation in class header)
-            p_state_2 = K.dot(h_ * att_dp_mask2[0], self.attention_recurrent_kernel2)
-            pctx_2 = K.tanh(pctx_2 + p_state_2[:, None, :])
-            e2 = K.dot(pctx_2, self.attention_context_wa2) + self.bias_ca2  # * att_dp_mask_wa2[0]
-            if K.ndim(mask_context2) > 1:  # Mask the context (only if necessary)
-                e2 = K.cast(mask_context2, K.dtype(e2)) * e2
-            alphas_shape2 = K.shape(e2)
-            alphas2 = K.softmax(K.reshape(e2, [alphas_shape2[0], alphas_shape2[1]]))
-            # sum over the in_timesteps dimension resulting in [batch_size, input_dim]
-            ctx_2 = K.sum(context2 * alphas2[:, :, None], axis=1)
+            ctx_2, alphas2 = compute_attention(h_, pctx_1, context, att_dp_mask2, self.attention_recurrent_kernel2,
+                                               self.attention_context_wa2, self.bias_ca2, mask_context2,
+                                               attention_mode=self.attention_mode)
         else:
             ctx_2 = context2
             alphas2 = mask_context2
@@ -8656,7 +8694,8 @@ class AttConditionalLSTMCond2Inputs(Recurrent):
                   "recurrent_dropout": self.recurrent_dropout,
                   "conditional_dropout": self.conditional_dropout,
                   'attention_dropout': self.attention_dropout,
-                  'attention_dropout2': self.attention_dropout2 if self.attend_on_both else None
+                  'attention_dropout2': self.attention_dropout2 if self.attend_on_both else None,
+                  'attention_mode': self.attention_mode
                   }
         base_config = super(AttConditionalLSTMCond2Inputs, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
@@ -8795,6 +8834,7 @@ class AttLSTMCond3Inputs(Recurrent):
                  att_units1=0,
                  att_units2=0,
                  att_units3=0,
+                 attention_mode='add',
                  activation='tanh',
                  recurrent_activation='sigmoid',
                  return_states=False,
@@ -8901,6 +8941,7 @@ class AttLSTMCond3Inputs(Recurrent):
         self.attend_on_both = attend_on_both
         self.return_extra_variables = return_extra_variables
         self.return_states = return_states
+        self.attention_mode = attention_mode.lower()
 
         # Initializers
         self.kernel_initializer = initializers.get(kernel_initializer)
@@ -9415,25 +9456,13 @@ class AttLSTMCond3Inputs(Recurrent):
 
         if self.attend_on_both:
             # Attention model 2 (see Formulation in class header)
-            p_state_2 = K.dot(h_tm1 * B_Wa2[0], self.Wa2)
-            pctx_2 = K.tanh(pctx_2 + p_state_2[:, None, :])
-            e2 = K.dot(pctx_2 * B_wa2[0], self.wa2) + self.ca2
-            if K.ndim(mask_context2) > 1:  # Mask the context (only if necessary)
-                e2 = mask_context2 * e2
-            alphas2 = K.softmax(e2.reshape([K.shape(e2)[0], K.shape(e2)[1]]))
-            # sum over the in_timesteps dimension resulting in [batch_size, input_dim]
-            ctx_2 = K.sum(context2 * alphas2[:, :, None], axis=1)
-
+            ctx_2, alphas2 = compute_attention(h_tm1, pctx_, context, B_Wa2, self.Wa2,
+                                               self.wa2, self.ca2, mask_context2,
+                                               attention_mode=self.attention_mode)
             # Attention model 3 (see Formulation in class header)
-            p_state_3 = K.dot(h_tm1 * B_Wa3[0], self.Wa3)
-            pctx_3 = K.tanh(pctx_3 + p_state_3[:, None, :])
-            e3 = K.dot(pctx_3 * B_wa3[0], self.wa3) + self.ca3
-            if K.ndim(mask_context3) > 1:  # Mask the context (only if necessary)
-                e3 = mask_context3 * e3
-            alphas3 = K.softmax(e3.reshape([K.shape(e3)[0], K.shape(e3)[1]]))
-            # sum over the in_timesteps dimension resulting in [batch_size, input_dim]
-            ctx_3 = K.sum(context3 * alphas3[:, :, None], axis=1)
-
+            ctx_3, alphas3 = compute_attention(h_tm1, pctx_, context, B_Wa3, self.Wa3,
+                                               self.wa3, self.ca3, mask_context3,
+                                               attention_mode=self.attention_mode)
         else:
             ctx_2 = context2
             alphas2 = mask_context2
@@ -9694,6 +9723,7 @@ class AttLSTMCond3Inputs(Recurrent):
                   "recurrent_initializer": initializers.serialize(self.U_regularizer),
                   "unit_forget_bias": initializers.serialize(self.forget_bias_init),
                   "activation": activations.serialize(self.activation),
+                  'attention_mode': self.attention_mode,
                   "recurrent_activation": activations.serialize(self.inner_activation),
                   "S_regularizer": self.S_regularizer.get_config() if self.S_regularizer else None,
                   "T_regularizer": self.T_regularizer.get_config() if self.T_regularizer else None,
