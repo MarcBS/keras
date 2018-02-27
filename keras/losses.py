@@ -68,6 +68,15 @@ def logcosh(y_true, y_pred):
 
 
 def categorical_crossentropy(y_true, y_pred):
+    xent = K.sparse_categorical_crossentropy(y_true, y_pred)
+    xent = K.printing(xent, "log_cost_diff=")
+    xent *= 1.
+
+    return xent
+
+
+def categorical_crossentropy2(args):
+    y_true, y_pred = args
     return K.categorical_crossentropy(y_true, y_pred)
 
 
@@ -111,47 +120,11 @@ def log_diff(args):
         cost_difference(categorical_crossentropy(y_true, y_pred) - categorical_crossentropy(h_true, h_pred))
     """
     y_true, y_pred, h_true, h_pred = args
-    p_y_x = K.mean(K.categorical_crossentropy(y_true, y_pred))
-    p_h_x = K.mean(K.categorical_crossentropy(h_true, h_pred))
-    cost_difference = p_y_x - p_h_x
-    cost_difference = K.switch(cost_difference > -1., cost_difference, 0.)
+    p_y_x = K.categorical_crossentropy(y_true, y_pred)
+    p_h_x = K.categorical_crossentropy(h_true, h_pred)
+    cost_difference = p_y_x  # - p_h_x
+    # cost_difference = K.switch(cost_difference > -1., cost_difference, 0.)
     return cost_difference
-
-
-# def kl_diff(args):
-#     """Cross-entropy difference between a GT and a hypothesis
-#     # Arguments
-#          args:  y_pred, y_true, h_pred, h_true
-#     """
-#     y_true, y_pred, h_true, h_pred = args
-#     kldiff_y = kullback_leibler_divergence(y_true, y_true * y_pred)
-#     kldiff_h = kullback_leibler_divergence(y_true, y_true * h_pred)
-#     # kldiff = K.printing(kldiff, "kldiff = ")
-#     # p_y_x = K.categorical_crossentropy(y_true, y_pred)
-#     # p_y_x = K.printing(p_y_x, "p_y_x = ")
-#     # p_h_x = K.mean(K.categorical_crossentropy(h_true, h_pred))
-#     cost_difference = kldiff_y + kldiff_h
-#     # cost_difference = K.switch(cost_difference > -1., cost_difference, 0.)
-#     return cost_difference
-
-
-def hybrid_log_diff(args):
-    """Weighted Cross-entropy difference between a GT and a hypothesis
-    # Arguments
-         args: y_pred, y_true, h_pred, h_true
-    # Returns
-        lambda * cost_difference(y_true, y_pred) + (1 - lambda) * cost_difference(h_true, h_pred)
-    """
-    y_true, y_pred, h_true, h_pred, weight1, weight2, constant = args
-    p_y_x = K.mean(K.categorical_crossentropy(y_true, y_pred))
-    p_h_x = K.mean(K.categorical_crossentropy(h_true, h_pred))
-    cost_difference1 = p_y_x - p_h_x
-    cost_difference1 = K.switch(cost_difference1 > -1., cost_difference1, 0.)
-
-    cost_difference2 = p_y_x - constant
-    cost_difference2 = K.switch(cost_difference2 > -1., cost_difference2, 0.)
-
-    return weight1 * cost_difference1 + weight2 * cost_difference2
 
 
 def weighted_log_diff(args):
@@ -159,13 +132,21 @@ def weighted_log_diff(args):
     # Arguments
          args: y_pred, y_true, h_pred, h_true
     # Returns
-        lambda * categorical_crossentropy(y_true, y_pred) + (1 - lambda) * categorical_crossentropy(h_true, h_pred)
 
     """
-    y_true, y_pred, h_true, h_pred, weight = args
-    p_y_x = K.mean(K.categorical_crossentropy(y_true, y_pred))
-    p_h_x = K.mean(K.categorical_crossentropy(h_true, h_pred))
-    return p_y_x - weight * p_h_x
+    y_true, y_pred, h_true, h_pred, mask_y, mask_h, weight = args
+    minus_log_p_y_x = K.categorical_crossentropy(y_true, y_pred)
+    minus_log_p_y_x = K.printing(minus_log_p_y_x, "minus_log_p_y_x=")
+
+    minus_log_p_h_x = K.categorical_crossentropy(h_true, h_pred)
+    p_y_x = K.exp(-minus_log_p_y_x)
+    p_h_x = K.exp(-minus_log_p_h_x)
+    zeros = K.zeros_like(p_h_x)
+    log_cost_diff = K.log(1 + weight[:, :, None] * K.maximum(zeros, mask_y * p_y_x - mask_h * p_h_x))[0] # / (p_y_x + K.epsilon())))
+    # K.mean(log_cost_diff, axis=None)
+    log_cost_diff = K.printing(log_cost_diff, "log_cost_diff=")
+    # mean_cost_diff *= 1.
+    return  minus_log_p_y_x - log_cost_diff
 
 
 def log_diff_plus_categorical_crossentropy(args):
@@ -181,7 +162,7 @@ def log_diff_plus_categorical_crossentropy(args):
     p_h2_x = K.mean(K.categorical_crossentropy(h2_true, h2_pred))
     cost_difference = p_h1_x - p_h2_x
     # cost_difference = K.switch(cost_difference > -1., cost_difference, 0.)
-    return weight * p_y_x + (1 - weight) * cost_difference
+    return p_y_x + (weight) * cost_difference
 
 
 def linear_interpolation_categorical_crossentropy(args):

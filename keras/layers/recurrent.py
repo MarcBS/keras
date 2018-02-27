@@ -53,7 +53,8 @@ def compute_attention(h_tm1, pctx_, context, att_dp_mask, attention_recurrent_ke
         attention_context_wa:  attention MLP weights.
         bias_ca:  attention MLP bias.
         mask_context: mask of the context.
-        attention_mode: 'add', 'dot' or function that accepts as arguments:  h_tm1, pctx_, context, att_dp_mask, attention_recurrent_kernel, attention_context_wa, bias_ca, mask_context
+        attention_mode: 'add', 'dot' or function that accepts as arguments: `h_tm1, pctx_, context, att_dp_mask, attention_recurrent_kernel, attention_context_wa, bias_ca, mask_context`
+        and should return the scores `e` for the input annotations.
 
     # Returns
         ctx_: attended representation of the input.
