@@ -45,20 +45,22 @@ def compute_attention(h_tm1, pctx_, context, att_dp_mask, attention_recurrent_ke
                e_i(t) = h_tm1' · Ua * x_i
 
     # Arguments
-        h_tm1: Last decoder state
-        pctx_: Projected context (i.e. context * Ua + ba)
-        context: Original context
-        att_dp_mask: Dropout for the attention MLP
-        attention_recurrent_kernel:  attention MLP weights
-        attention_context_wa:  attention MLP weights
-        bias_ca:  attention MLP bias
-        mask_context: mask of the context
-        attention_mode: 'add' or 'dot'
+        h_tm1: Last decoder state.
+        pctx_: Projected context (i.e. context * Ua + ba).
+        context: Original context.
+        att_dp_mask: Dropout for the attention MLP.
+        attention_recurrent_kernel:  attention MLP weights.
+        attention_context_wa:  attention MLP weights.
+        bias_ca:  attention MLP bias.
+        mask_context: mask of the context.
+        attention_mode: 'add', 'dot' or function that accepts as arguments:  h_tm1, pctx_, context, att_dp_mask, attention_recurrent_kernel, attention_context_wa, bias_ca, mask_context
 
     # Returns
-        ctx_: attended representation of the input
-        alphas: weights computed by the attention mechanism
+        ctx_: attended representation of the input.
+        alphas: weights computed by the attention mechanism.
 
+    # Raises
+        NotImplementedError: If the attention_mode specified is not implemented.
 
     # References
         - [Neural Machine Translation by Jointly Learning to Align and Translate](https://arxiv.org/abs/1409.0473)
@@ -73,7 +75,9 @@ def compute_attention(h_tm1, pctx_, context, att_dp_mask, attention_recurrent_ke
     elif attention_mode == 'dot' or attention_mode == 'luong':
         pctx_ = K.batch_dot(p_state_[:, :, None], pctx_, axes=[1, 2])
         e = K.squeeze(pctx_, 1)
-
+    elif hasattr(attention_mode, '__call__'):
+        e = attention_mode(h_tm1, pctx_, context, att_dp_mask, attention_recurrent_kernel,
+                           attention_context_wa, bias_ca, mask_context)
     else:
         raise NotImplementedError('The attention mode ' + attention_mode + ' is not implemented.')
 
