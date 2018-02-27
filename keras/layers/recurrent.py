@@ -24,9 +24,7 @@ from ..legacy import interfaces
 
 def compute_attention(h_tm1, pctx_, context, att_dp_mask, attention_recurrent_kernel,
                       attention_context_wa, bias_ca, mask_context, attention_mode='add'):
-    """
-
-    Computes an attended vector over an input sequence of vectors (context).
+    """Computes an attended vector over an input sequence of vectors (context).
 
     The resulting attention vector 'phi' at time 't' is formed by applying a weighted sum over the sequence of inputs 'x_1^I':
             phi(x_1^I, t) = ∑_i alpha_i(t) * x_i,
