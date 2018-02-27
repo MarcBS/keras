@@ -47,7 +47,7 @@ def compute_attention(h_tm1, pctx_, context, att_dp_mask, attention_recurrent_ke
     # Arguments
         h_tm1: Last decoder state
         pctx_: Projected context (i.e. context * Ua + ba)
-        pctx_: Original context
+        context: Original context
         att_dp_mask: Dropout for the attention MLP
         attention_recurrent_kernel:  attention MLP weights
         attention_context_wa:  attention MLP weights
