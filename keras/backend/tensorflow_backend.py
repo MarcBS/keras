@@ -2205,7 +2205,7 @@ def arange(start, stop=None, step=1, dtype='int32'):
 
     The function arguments use the same convention as
     Theano's arange: if only one argument is provided,
-    it is in fact the "stop" argument.
+    it is in fact the "stop" argument and "start" is 0.
 
     The default type of the returned tensor is `'int32'` to
     match TensorFlow's default.
@@ -2220,7 +2220,7 @@ def arange(start, stop=None, step=1, dtype='int32'):
         An integer tensor.
 
     """
-    # Match the behavior of numpy and Theano by returning an empty seqence.
+    # Match the behavior of numpy and Theano by returning an empty sequence.
     if stop is None:
         try:
             if start < 0:
@@ -3694,10 +3694,10 @@ def separable_conv1d(x, depthwise_kernel, pointwise_kernel, strides=1,
     padding = _preprocess_padding(padding)
     if tf_data_format == 'NHWC':
         spatial_start_dim = 1
-        strides = (1, 1) + strides + (1,)
+        strides = (1,) + strides * 2 + (1,)
     else:
         spatial_start_dim = 2
-        strides = (1, 1, 1) + strides
+        strides = (1, 1) + strides * 2
     x = tf.expand_dims(x, spatial_start_dim)
     depthwise_kernel = tf.expand_dims(depthwise_kernel, 0)
     pointwise_kernel = tf.expand_dims(pointwise_kernel, 0)
