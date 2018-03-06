@@ -297,7 +297,7 @@ class RNN(Layer):
             It is also possible for `cell` to be a list of RNN cell instances,
             in which cases the cells get stacked on after the other in the RNN,
             implementing an efficient stacked RNN.
-        return_sequences: Boolean. Whether to return the last output.
+        return_sequences: Boolean. Whether to return the last output
             in the output sequence, or the full sequence.
         return_state: Boolean. Whether to return the last state
             in addition to the output.
@@ -835,9 +835,10 @@ class RNN(Layer):
 
     @property
     def losses(self):
+        layer_losses = super(RNN, self).losses
         if isinstance(self.cell, Layer):
-            return self.cell.losses
-        return []
+            return self.cell.losses + layer_losses
+        return layer_losses
 
     def get_losses_for(self, inputs=None):
         if isinstance(self.cell, Layer):
@@ -1049,7 +1050,7 @@ class SimpleRNN(RNN):
         recurrent_dropout: Float between 0 and 1.
             Fraction of the units to drop for
             the linear transformation of the recurrent state.
-        return_sequences: Boolean. Whether to return the last output.
+        return_sequences: Boolean. Whether to return the last output
             in the output sequence, or the full sequence.
         return_state: Boolean. Whether to return the last state
             in addition to the output.
@@ -1096,7 +1097,7 @@ class SimpleRNN(RNN):
                           'Please remove it from your layer call.')
         dropout = 0. if dropout is None else dropout
         recurrent_dropout = 0. if recurrent_dropout is None else recurrent_dropout
-        if K.backend() == 'theano' and dropout + recurrent_dropout > 0.:
+        if K.backend() == 'theano' and (dropout or recurrent_dropout):
             warnings.warn(
                 'RNN dropout is no longer supported with the Theano backend '
                 'due to technical limitations. '
@@ -1591,7 +1592,7 @@ class GRU(RNN):
             batch them into fewer, larger operations. These modes will
             have different performance profiles on different hardware and
             for different applications.
-        return_sequences: Boolean. Whether to return the last output.
+        return_sequences: Boolean. Whether to return the last output
             in the output sequence, or the full sequence.
         return_state: Boolean. Whether to return the last state
             in addition to the output.
@@ -1649,7 +1650,7 @@ class GRU(RNN):
                           'Please update your layer call.')
         dropout = 0. if dropout is None else dropout
         recurrent_dropout = 0. if recurrent_dropout is None else recurrent_dropout
-        if K.backend() == 'theano' and dropout + recurrent_dropout > 0.:
+        if K.backend() == 'theano' and (dropout or recurrent_dropout):
             warnings.warn(
                 'RNN dropout is no longer supported with the Theano backend '
                 'due to technical limitations. '
@@ -4334,7 +4335,7 @@ class LSTM(RNN):
             batch them into fewer, larger operations. These modes will
             have different performance profiles on different hardware and
             for different applications.
-        return_sequences: Boolean. Whether to return the last output.
+        return_sequences: Boolean. Whether to return the last output
             in the output sequence, or the full sequence.
         return_state: Boolean. Whether to return the last state
             in addition to the output.
@@ -4389,7 +4390,7 @@ class LSTM(RNN):
                           'Please update your layer call.')
         dropout = 0. if dropout is None else dropout
         recurrent_dropout = 0. if recurrent_dropout is None else recurrent_dropout
-        if K.backend() == 'theano' and dropout + recurrent_dropout > 0.:
+        if K.backend() == 'theano' and (dropout or recurrent_dropout):
             warnings.warn(
                 'RNN dropout is no longer supported with the Theano backend '
                 'due to technical limitations. '

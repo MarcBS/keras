@@ -15,6 +15,7 @@ show_missing = True
 omit =
     keras/applications/*
     keras/datasets/*
+    keras/layers/cudnn_recurrent.py
     keras/legacy/*
     keras/caffe/*
     keras/layers/attention.py
