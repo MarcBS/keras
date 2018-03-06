@@ -1,19 +1,23 @@
 # -*- coding: utf-8 -*-
-"""Recurrent layers and their base classes.
-"""
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
-
 
 from .. import backend as K
 
 from ..engine import Layer
 
 
-
 # Custom loss layer
 class CustomMultiLossLayer(Layer):
+    """CustomMultiLossLayer. Adds losses to the model.
+        TODO: Write docs.
+
+    # Arguments
+        nb_outputs: Number of outputs
+        loss_functions: List of loss functions to add.
+    """
+
     def __init__(self, nb_outputs=2, loss_functions=[], **kwargs):
         self.nb_outputs = nb_outputs
         self.loss_functions = loss_functions
@@ -34,7 +38,7 @@ class CustomMultiLossLayer(Layer):
         loss = 0
         for y_true, y_pred, log_var, loss_func in zip(ys_true, ys_pred, self.log_vars, self.loss_functions):
             precision = K.exp(-log_var[0])
-            loss += K.sum(precision * loss_func(y_true,y_pred) + log_var[0], -1)
+            loss += K.sum(precision * loss_func(y_true, y_pred) + log_var[0], -1)
         return K.mean(loss)
 
     def call(self, inputs):
