@@ -149,7 +149,7 @@ class Optimizer(object):
     def set_lr(self, lr):
         K.set_value(self.lr, lr)
 
-    def get_lr(self, lr):
+    def get_lr(self):
         return K.get_value(self.lr)
 
     def get_weights(self):
