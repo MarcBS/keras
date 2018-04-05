@@ -2708,6 +2708,20 @@ def _assert_has_capability(module, func):
             '--upgrade --no-deps')
 
 
+def elu(x, alpha=1.0):
+    """Exponential linear unit.
+
+    # Arguments
+        x: A tensor or variable to compute the activation function for.
+        alpha: A scalar, slope of negative section.
+
+    # Returns
+        A tensor.
+    """
+    _assert_has_capability(T.nnet, 'elu')
+    return T.nnet.elu(x, alpha)
+
+
 def relu(x, alpha=0., max_value=None):
     """Rectified linear unit.
 
@@ -2728,30 +2742,11 @@ def relu(x, alpha=0., max_value=None):
     return x
 
 
-def elu(x, alpha=1.0):
-    """Exponential linear unit.
-
-    # Arguments
-        x: A tensor or variable to compute the activation function for.
-        alpha: A scalar, slope of negative section.
-
-    # Returns
-        A tensor.
-    """
-    _assert_has_capability(T.nnet, 'elu')
-    return T.nnet.elu(x, alpha)
-
-
-def softmax(x):
-    """Softmax of a tensor.
-
-    # Arguments
-        x: A tensor or variable.
-
-    # Returns
-        A tensor.
-    """
-    return T.nnet.softmax(x)
+def softmax(x, axis=-1):
+    if axis == -1 or axis == x.ndim - 1:
+        return T.nnet.softmax(x)
+    return T.exp(x - x.max()) / T.exp(
+        x - x.max()).sum(axis=axis, keepdims=True)
 
 
 def softmax_3d(x):
@@ -3698,9 +3693,9 @@ def pool3d(x, pool_size, strides=(1, 1, 1), padding='valid',
         w_pad = pool_size[0] - 2 if pool_size[0] % 2 == 1 else pool_size[0] - 1
         h_pad = pool_size[1] - 2 if pool_size[1] % 2 == 1 else pool_size[1] - 1
         d_pad = pool_size[2] - 2 if pool_size[2] % 2 == 1 else pool_size[2] - 1
-        padding = (w_pad, h_pad, d_pad)
+        pad = (w_pad, h_pad, d_pad)
     elif padding == 'valid':
-        padding = (0, 0, 0)
+        pad = (0, 0, 0)
     else:
         raise ValueError('Invalid padding:', padding)
 
@@ -3710,12 +3705,12 @@ def pool3d(x, pool_size, strides=(1, 1, 1), padding='valid',
     if pool_mode == 'max':
         pool_out = pool.pool_3d(x, ws=pool_size, stride=strides,
                                 ignore_border=True,
-                                pad=padding,
+                                pad=pad,
                                 mode='max')
     elif pool_mode == 'avg':
         pool_out = pool.pool_3d(x, ws=pool_size, stride=strides,
                                 ignore_border=True,
-                                pad=padding,
+                                pad=pad,
                                 mode='average_exc_pad')
     else:
         raise ValueError('Invalid pooling mode:', pool_mode)

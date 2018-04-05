@@ -95,7 +95,8 @@ def get_uid(prefix=''):
 
 
 def reset_uids():
-    """Reset graph identifiers."""
+    """Resets graph identifiers.
+    """
     global _GRAPH_UID_DICTS
     _GRAPH_UID_DICTS = {}
 
@@ -3162,16 +3163,18 @@ def elu(x, alpha=1.):
         return tf.where(x > 0, res, alpha * res)
 
 
-def softmax(x):
+def softmax(x, axis=-1):
     """Softmax of a tensor.
 
     # Arguments
         x: A tensor or variable.
+        axis: The dimension softmax would be performed on.
+            The default is -1 which indicates the last dimension.
 
     # Returns
         A tensor.
     """
-    return tf.nn.softmax(x)
+    return tf.nn.softmax(x, axis=axis)
 
 
 def softmax_3d(x):
@@ -4280,8 +4283,8 @@ def ctc_batch_cost(y_true, y_pred, input_length, label_length):
         Tensor with shape (samples,1) containing the
             CTC loss of each element.
     """
-    label_length = tf.to_int32(tf.squeeze(label_length))
-    input_length = tf.to_int32(tf.squeeze(input_length))
+    label_length = tf.to_int32(tf.squeeze(label_length, axis=-1))
+    input_length = tf.to_int32(tf.squeeze(input_length, axis=-1))
     sparse_labels = tf.to_int32(ctc_label_dense_to_sparse(y_true, label_length))
 
     y_pred = tf.log(tf.transpose(y_pred, perm=[1, 0, 2]) + epsilon())
