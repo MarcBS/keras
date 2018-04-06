@@ -3174,7 +3174,11 @@ def softmax(x, axis=-1):
     # Returns
         A tensor.
     """
-    return tf.nn.softmax(x, axis=axis)
+    try:
+        t = tf.nn.softmax(x, axis=axis)
+    except: # tensorflow retrocompatibility
+        t = tf.nn.softmax(x)
+    return t
 
 
 def softmax_3d(x):
