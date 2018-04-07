@@ -159,18 +159,27 @@ class TimeDistributed(Wrapper):
         self.supports_masking = True
 
     def build(self, input_shape):
-        assert len(input_shape) >= 3
-        self.input_spec = InputSpec(shape=input_shape)
-        child_input_shape = (input_shape[0],) + input_shape[2:]
+        if type(input_shape) != list:
+            input_shape = [input_shape]
+        for shape in input_shape:
+            assert len(shape) >= 3
+        self.input_spec = [InputSpec(shape=shape) for shape in input_shape]
+        child_input_shape = [(shape[0],) + shape[2:] for shape in input_shape]
+        if len(input_shape) == 1:  # Single input
+            child_input_shape = child_input_shape[0]
         if not self.layer.built:
             self.layer.build(child_input_shape)
             self.layer.built = True
         super(TimeDistributed, self).build()
 
     def compute_output_shape(self, input_shape):
-        child_input_shape = (input_shape[0],) + input_shape[2:]
+        if type(input_shape) != list:  # Single input
+            child_input_shape = (input_shape[0],) + input_shape[2:]
+            timesteps = input_shape[1]
+        else:
+            child_input_shape = [((shape[0],) + shape[2:]) for shape in input_shape]
+            timesteps = input_shape[0][1]
         child_output_shape = self.layer.compute_output_shape(child_input_shape)
-        timesteps = input_shape[1]
         return (child_output_shape[0], timesteps) + child_output_shape[1:]
 
     def call(self, inputs, training=None, mask=None):
@@ -178,46 +187,85 @@ class TimeDistributed(Wrapper):
         if has_arg(self.layer.call, 'training'):
             kwargs['training'] = training
         uses_learning_phase = False
+        if type(inputs) != list:
+            first_input_shape = K.int_shape(inputs)
+            if first_input_shape[0]:
+                # batch size matters, use rnn-based implementation
+                def step(x, _):
+                    global uses_learning_phase
+                    output = self.layer.call(x, **kwargs)
+                    if hasattr(output, '_uses_learning_phase'):
+                        uses_learning_phase = (output._uses_learning_phase or
+                                               uses_learning_phase)
+                    return output, []
 
-        input_shape = K.int_shape(inputs)
-        if input_shape[0]:
-            # batch size matters, use rnn-based implementation
-            def step(x, _):
-                global uses_learning_phase
-                output = self.layer.call(x, **kwargs)
-                if hasattr(output, '_uses_learning_phase'):
-                    uses_learning_phase = (output._uses_learning_phase or
-                                           uses_learning_phase)
-                return output, []
+                _, outputs, _ = K.rnn(step, inputs,
+                                      initial_states=[],
+                                      input_length=first_input_shape[1],
+                                      unroll=False)
+                y = outputs
+            else:
+                # No batch size specified, therefore the layer will be able
+                # to process batches of any size.
+                # We can go with reshape-based implementation for performance.
+                input_length = first_input_shape[1]
+                if not input_length:
+                    input_length = K.shape(inputs)[1]
+                # Shape: (num_samples * timesteps, ...). And track the
+                # transformation in self._input_map.
+                input_uid = _object_list_uid(inputs)
+                inputs = K.reshape(inputs, (-1,) + first_input_shape[2:])
+                self._input_map[input_uid] = inputs
+                # (num_samples * timesteps, ...)
+                y = self.layer.call(inputs, **kwargs)
+                if hasattr(y, '_uses_learning_phase'):
+                    uses_learning_phase = y._uses_learning_phase
+                # Shape: (num_samples, timesteps, ...)
+                output_shape = self.compute_output_shape(first_input_shape)
+                y = K.reshape(y, (-1, input_length) + output_shape[2:])
 
-            _, outputs, _ = K.rnn(step, inputs,
-                                  initial_states=[],
-                                  input_length=input_shape[1],
-                                  unroll=False)
-            y = outputs
         else:
-            # No batch size specified, therefore the layer will be able
-            # to process batches of any size.
-            # We can go with reshape-based implementation for performance.
-            input_length = input_shape[1]
-            if not input_length:
-                input_length = K.shape(inputs)[1]
-            # Shape: (num_samples * timesteps, ...). And track the
-            # transformation in self._input_map.
-            input_uid = _object_list_uid(inputs)
-            inputs = K.reshape(inputs, (-1,) + input_shape[2:])
-            self._input_map[input_uid] = inputs
-            # (num_samples * timesteps, ...)
-            y = self.layer.call(inputs, **kwargs)
-            if hasattr(y, '_uses_learning_phase'):
-                uses_learning_phase = y._uses_learning_phase
-            # Shape: (num_samples, timesteps, ...)
-            output_shape = self.compute_output_shape(input_shape)
-            y = K.reshape(y, (-1, input_length) + output_shape[2:])
+            first_input_shape = K.int_shape(inputs[0])
+            input_shape = [K.int_shape(input) for input in inputs]
+            if first_input_shape[0]:
+                # batch size matters, use rnn-based implementation
+                def step(x, _):
+                    global uses_learning_phase
+                    output = self.layer.call(x, **kwargs)
+                    if hasattr(output, '_uses_learning_phase'):
+                        uses_learning_phase = (output._uses_learning_phase or
+                                               uses_learning_phase)
+                    return output, []
+
+                _, outputs, _ = K.rnn(step, inputs,
+                                      initial_states=[],
+                                      input_length=first_input_shape[1],
+                                      unroll=False)
+                y = outputs
+            else:
+                # No batch size specified, therefore the layer will be able
+                # to process batches of any size.
+                # We can go with reshape-based implementation for performance.
+                input_length = first_input_shape[1]
+                if not input_length:
+                    input_length = K.shape(inputs[0])[1]
+                # Shape: (num_samples * timesteps, ...). And track the
+                # transformation in self._input_map.
+                input_uid = _object_list_uid(inputs)
+
+                inputs = [K.reshape(input, (-1,) + first_input_shape[2:]) for input in inputs]
+                self._input_map[input_uid] = inputs
+                # (num_samples * timesteps, ...)
+                y = self.layer.call(inputs, **kwargs)
+                if hasattr(y, '_uses_learning_phase'):
+                    uses_learning_phase = y._uses_learning_phase
+                # Shape: (num_samples, timesteps, ...)
+                output_shape = self.compute_output_shape(input_shape)
+                y = K.reshape(y, (-1, input_length) + output_shape[2:])
 
         # Apply activity regularizer if any:
         if (hasattr(self.layer, 'activity_regularizer') and
-           self.layer.activity_regularizer is not None):
+                self.layer.activity_regularizer is not None):
             regularization_loss = self.layer.activity_regularizer(y)
             self.add_loss(regularization_loss, inputs)
 
@@ -404,7 +452,7 @@ class Bidirectional(Wrapper):
 
         # Properly set learning phase
         if (getattr(y, '_uses_learning_phase', False) or
-           getattr(y_rev, '_uses_learning_phase', False)):
+                getattr(y_rev, '_uses_learning_phase', False)):
             if self.merge_mode is None:
                 for out in output:
                     out._uses_learning_phase = True
