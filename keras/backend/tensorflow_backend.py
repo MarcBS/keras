@@ -489,7 +489,7 @@ def is_keras_tensor(x):
                           tf_variables.Variable,
                           tf.SparseTensor)):
         raise ValueError('Unexpectedly found an instance of type `' + str(type(x)) + '`. '
-                         'Expected a symbolic tensor instance.')
+                                                                                     'Expected a symbolic tensor instance.')
     return hasattr(x, '_keras_history')
 
 
@@ -3044,7 +3044,7 @@ def switch(condition, then_expression, else_expression):
                              ' equal to rank of `then_expression` and '
                              '`else_expression`. ndim(condition)=' +
                              str(cond_ndim) + ', ndim(then_expression)'
-                             '=' + str(expr_ndim))
+                                              '=' + str(expr_ndim))
         if cond_ndim > 1:
             ndim_diff = expr_ndim - cond_ndim
             cond_shape = tf.concat([tf.shape(condition), [1] * ndim_diff], axis=0)
@@ -3176,7 +3176,7 @@ def softmax(x, axis=-1):
     """
     try:
         t = tf.nn.softmax(x, axis=axis)
-    except: # tensorflow retrocompatibility
+    except:  # tensorflow retrocompatibility
         t = tf.nn.softmax(x)
     return t
 
@@ -4064,7 +4064,7 @@ def bias_add(x, bias, data_format=None):
             if len(bias_shape) == 1:
                 x += reshape(bias, (1, 1, bias_shape[0]))
             else:
-                x += reshape(bias, (1, ) + bias_shape)
+                x += reshape(bias, (1,) + bias_shape)
     else:
         x = tf.nn.bias_add(x, bias)
     return x

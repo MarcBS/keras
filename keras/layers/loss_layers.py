@@ -57,46 +57,51 @@ class CustomMultiLossLayer(Layer):
         base_config = super(Layer, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
-## Losses uncertainty loss
+
+# Losses uncertainty loss
 def deactivate_loss():
     def loss(y_true, y_pred):
         cost = K.variable(0)
         return cost
+
     return loss
+
 
 def uncertainty_categorical_crossentropy(auto_weight=True, norm=False):
     def loss(y_true, y_pred):
         # categorical cross entropy loss (L(W) single task labels)
-        y_pred_top = y_pred[:,:-1]
+        y_pred_top = y_pred[:, :-1]
 
         if auto_weight:
-            logsigma2 = y_pred[:,-1]
+            logsigma2 = y_pred[:, -1]
         else:
             logsigma2 = K.variable(0.0)
 
         cost = K.categorical_crossentropy(y_true, y_pred_top)
         # L(W,s)
-        cost = K.exp(-logsigma2)*cost + logsigma2
+        cost = K.exp(-logsigma2) * cost + logsigma2
         # Ln(W,s)
         if norm:
-            if K.backend() == 'tensorflow': 
-                max_loss = -K.log(K.exp(-1.0)/(K.exp(1.0)*(float(K.int_shape(y_pred_top)[-1]))))
+            if K.backend() == 'tensorflow':
+                max_loss = -K.log(K.exp(-1.0) / (K.exp(1.0) * (float(K.int_shape(y_pred_top)[-1]))))
             elif K.backend() == 'theano':
-                max_loss = -K.log(K.exp(-1.0)/(K.exp(1.0)*(K.shape(y_pred_top)[-1])))
+                max_loss = -K.log(K.exp(-1.0) / (K.exp(1.0) * (K.shape(y_pred_top)[-1])))
             else:
                 raise NotImplementedError("Loss function not implemented for the chosen backend.")
-            cost = cost/max_loss
+            cost = cost / max_loss
         cost = K.mean(cost)
         return cost
+
     return loss
+
 
 def uncertainty_binary_crossentropy(auto_weight=True, norm=False):
     def loss(y_true, y_pred):
         # categorical cross entropy loss (L(W) single task labels)
-        y_pred_top = y_pred[:,:-1]
+        y_pred_top = y_pred[:, :-1]
 
         if auto_weight:
-            logsigma2 = y_pred[:,-1]
+            logsigma2 = y_pred[:, -1]
         else:
             logsigma2 = K.variable(0.0)
 
@@ -108,13 +113,12 @@ def uncertainty_binary_crossentropy(auto_weight=True, norm=False):
             nlabels = K.shape(y_true)[-1]
         else:
             raise NotImplementedError("Loss function not implemented for the chosen backend.")
-        cost = K.exp(-logsigma2)*cost + nlabels * logsigma2
+        cost = K.exp(-logsigma2) * cost + nlabels * logsigma2
         # Ln(W,s)
         if norm:
             max_loss = nlabels
-            cost = cost/max_loss
-        cost =  K.mean(cost)
+            cost = cost / max_loss
+        cost = K.mean(cost)
         return cost
+
     return loss
-
-

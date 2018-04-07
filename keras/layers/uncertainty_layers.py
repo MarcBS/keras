@@ -11,6 +11,7 @@ import warnings
 from .. import backend as K
 from ..engine import Layer
 
+
 class ConcatenateOutputWithSigma(Layer):
 
     def __init__(self, output_dim, **kwargs):
@@ -26,8 +27,8 @@ class ConcatenateOutputWithSigma(Layer):
         super(ConcatenateOutputWithSigma, self).build(input_shape)  # Be sure to call this somewhere!
 
     def call(self, x):
-        input_ones_matrix = ((K.abs(x)+1)/(K.abs(x)+1))
-        batch_kernel = K.expand_dims(input_ones_matrix[:,0], -1)*self.kernel
+        input_ones_matrix = ((K.abs(x) + 1) / (K.abs(x) + 1))
+        batch_kernel = K.expand_dims(input_ones_matrix[:, 0], -1) * self.kernel
         return K.concatenate((x, batch_kernel), -1)
 
     def compute_output_shape(self, input_shape):
@@ -36,4 +37,4 @@ class ConcatenateOutputWithSigma(Layer):
     def get_config(self):
         config = {'output_dim': self.output_dim}
         base_config = super(ConcatenateOutputWithSigma, self).get_config()
-        return dict(list(base_config.items()) + list(config.items())) 
+        return dict(list(base_config.items()) + list(config.items()))
