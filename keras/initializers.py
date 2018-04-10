@@ -208,7 +208,7 @@ class VarianceScaling(Initializer):
         elif self.mode == 'fan_out':
             scale /= max(1., fan_out)
         else:
-            scale /= max(1., float(fan_in + fan_out) / 2)
+            scale /= max(1., np.float32(fan_in + fan_out) / 2)
         if self.distribution == 'normal':
             stddev = np.sqrt(scale)
             return K.truncated_normal(shape, 0., stddev,

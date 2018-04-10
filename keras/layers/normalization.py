@@ -214,7 +214,6 @@ class BatchNormalization(Layer):
                                          constraint=self.gamma_constraint)
         else:
             self.gamma = None
-
         if self.center:
             self.beta = self.add_weight(shape=shape,
                                         name='beta',
@@ -223,14 +222,16 @@ class BatchNormalization(Layer):
                                         constraint=self.beta_constraint)
         else:
             self.beta = None
-        self.moving_mean = self.add_weight(shape=shape,
-                                           name='moving_mean',
-                                           initializer=self.moving_mean_initializer,
-                                           trainable=False)
-        self.moving_variance = self.add_weight(shape=shape,
-                                               name='moving_variance',
-                                               initializer=self.moving_variance_initializer,
-                                               trainable=False)
+        self.moving_mean = self.add_weight(
+            shape=shape,
+            name='moving_mean',
+            initializer=self.moving_mean_initializer,
+            trainable=False)
+        self.moving_variance = self.add_weight(
+            shape=shape,
+            name='moving_variance',
+            initializer=self.moving_variance_initializer,
+            trainable=False)
         self.built = True
 
     def call(self, inputs, training=None):
@@ -287,6 +288,14 @@ class BatchNormalization(Layer):
                 inputs, self.gamma, self.beta, reduction_axes,
                 epsilon=self.epsilon)
 
+            if K.backend() != 'cntk':
+                sample_size = K.prod([K.shape(inputs)[axis]
+                                      for axis in reduction_axes])
+                sample_size = K.cast(sample_size, dtype=K.dtype(inputs))
+
+                # sample variance - unbiased estimator of population variance
+                variance *= sample_size / (sample_size - (1.0 + self.epsilon))
+
             self.add_update([K.moving_average_update(self.moving_mean,
                                                      mean,
                                                      self.momentum),
@@ -299,6 +308,7 @@ class BatchNormalization(Layer):
             return K.in_train_phase(normed_training,
                                     normalize_inference,
                                     training=training)
+
         elif self.mode == 1:
             # sample-wise normalization
             m = K.mean(inputs, axis=-1, keepdims=True)
@@ -317,12 +327,13 @@ class BatchNormalization(Layer):
             'scale': self.scale,
             'beta_initializer': initializers.serialize(self.beta_initializer),
             'gamma_initializer': initializers.serialize(self.gamma_initializer),
+            'moving_mean_initializer': initializers.serialize(self.moving_mean_initializer),
+            'moving_variance_initializer': initializers.serialize(self.moving_variance_initializer),
             'beta_regularizer': regularizers.serialize(self.beta_regularizer),
             'gamma_regularizer': regularizers.serialize(self.gamma_regularizer),
             'beta_constraint': constraints.serialize(self.beta_constraint),
-            'gamma_constraint': constraints.serialize(self.gamma_constraint),
-            'moving_mean_initializer': initializers.serialize(self.moving_mean_initializer),
-            'moving_variance_initializer': initializers.serialize(self.moving_variance_initializer)}
+            'gamma_constraint': constraints.serialize(self.gamma_constraint)
+        }
         base_config = super(BatchNormalization, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 

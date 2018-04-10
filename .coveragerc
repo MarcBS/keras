@@ -1,9 +1,22 @@
 [report]
-fail_under = 67
+# Regexes for lines to exclude from consideration
+exclude_lines =
+    os.remove
+    except ImportError
+    # Don't complain if tests don't hit defensive assertion code:
+    raise ImportError
+    raise NotImplementedError
+
+    # Don't complain if legacy support codes are not performed:
+    if original_keras_version == '1':
+
+fail_under = 60
 show_missing = True
 omit =
     keras/applications/*
     keras/datasets/*
+    keras/layers/cudnn_recurrent.py
+    keras/legacy/*
     keras/caffe/*
     keras/layers/attention.py
     keras/layers/googlenet_custom_layers.py

@@ -31,6 +31,7 @@ from .common import set_image_dim_ordering, image_dim_ordering
 py_all = all
 py_sum = sum
 
+
 # INTERNAL UTILS
 theano.config.floatX = floatx()
 _LEARNING_PHASE = T.scalar(dtype='uint8', name='keras_learning_phase')  # 0 = test, 1 = train
@@ -2707,6 +2708,20 @@ def _assert_has_capability(module, func):
             '--upgrade --no-deps')
 
 
+def elu(x, alpha=1.0):
+    """Exponential linear unit.
+
+    # Arguments
+        x: A tensor or variable to compute the activation function for.
+        alpha: A scalar, slope of negative section.
+
+    # Returns
+        A tensor.
+    """
+    _assert_has_capability(T.nnet, 'elu')
+    return T.nnet.elu(x, alpha)
+
+
 def relu(x, alpha=0., max_value=None):
     """Rectified linear unit.
 
@@ -2727,30 +2742,11 @@ def relu(x, alpha=0., max_value=None):
     return x
 
 
-def elu(x, alpha=1.0):
-    """Exponential linear unit.
-
-    # Arguments
-        x: A tensor or variable to compute the activation function for.
-        alpha: A scalar, slope of negative section.
-
-    # Returns
-        A tensor.
-    """
-    _assert_has_capability(T.nnet, 'elu')
-    return T.nnet.elu(x, alpha)
-
-
-def softmax(x):
-    """Softmax of a tensor.
-
-    # Arguments
-        x: A tensor or variable.
-
-    # Returns
-        A tensor.
-    """
-    return T.nnet.softmax(x)
+def softmax(x, axis=-1):
+    if axis == -1 or axis == x.ndim - 1:
+        return T.nnet.softmax(x)
+    return T.exp(x - x.max()) / T.exp(
+        x - x.max()).sum(axis=axis, keepdims=True)
 
 
 def softmax_3d(x):
@@ -3455,9 +3451,45 @@ def depthwise_conv2d(x, depthwise_kernel, strides=(1, 1), padding='valid',
         Output tensor.
 
     # Raises
-        ValueError: if `data_format` is neither `channels_last` or `channels_first`.
+        ValueError: if `data_format` is neither `"channels_last"` or `"channels_first"`.
     """
-    raise NotImplementedError
+    if data_format is None:
+        data_format = image_data_format()
+    if data_format not in {'channels_first', 'channels_last'}:
+        raise ValueError('Unknown data_format ', data_format)
+
+    if hasattr(x, '_keras_shape'):
+        image_shape = _preprocess_conv2d_image_shape(int_shape(x), data_format)
+    else:
+        image_shape = None
+    if hasattr(depthwise_kernel, '_keras_shape'):
+        depthwise_kernel_shape = depthwise_kernel._keras_shape
+    else:
+        # Will only work if `kernel` is a shared variable.
+        depthwise_kernel_shape = depthwise_kernel.eval().shape
+    depthwise_kernel_shape = _preprocess_conv2d_filter_shape(depthwise_kernel_shape, data_format)
+
+    x = _preprocess_conv2d_input(x, data_format)
+    depthwise_kernel = _preprocess_conv2d_kernel(depthwise_kernel, data_format)
+    th_padding = _preprocess_padding(padding)
+
+    input_depth = depthwise_kernel_shape[1]
+    output_depth = depthwise_kernel_shape[0]
+    depthwise_kernel_shape = (input_depth * output_depth, 1) + depthwise_kernel_shape[2:]
+    depthwise_kernel = depthwise_kernel.dimshuffle((1, 0, 2, 3))
+    depthwise_kernel = reshape(depthwise_kernel, depthwise_kernel_shape)
+    depthwise_kernel = depthwise_kernel[:, :, ::-1, ::-1]
+
+    conv_out = T.nnet.conv2d(x, depthwise_kernel,
+                             border_mode=th_padding,
+                             subsample=strides,
+                             input_shape=image_shape,
+                             filter_shape=depthwise_kernel_shape,
+                             filter_dilation=dilation_rate,
+                             num_groups=input_depth)
+    conv_out = _postprocess_conv2d_output(conv_out, x, padding,
+                                          depthwise_kernel_shape, strides, data_format)
+    return conv_out
 
 
 def conv3d(x, kernel, strides=(1, 1, 1), padding='valid',
@@ -3617,14 +3649,10 @@ def pool2d(x, pool_size, strides=(1, 1),
                                 pad=pad,
                                 mode='max')
     elif pool_mode == 'avg':
-        if padding == 'same':
-            th_avg_pool_mode = 'average_inc_pad'
-        elif padding == 'valid':
-            th_avg_pool_mode = 'average_exc_pad'
         pool_out = pool.pool_2d(x, ws=pool_size, stride=strides,
                                 ignore_border=True,
                                 pad=pad,
-                                mode=th_avg_pool_mode)
+                                mode='average_exc_pad')
     else:
         raise ValueError('Invalid pooling mode:', pool_mode)
     if padding == 'same':
@@ -3665,9 +3693,9 @@ def pool3d(x, pool_size, strides=(1, 1, 1), padding='valid',
         w_pad = pool_size[0] - 2 if pool_size[0] % 2 == 1 else pool_size[0] - 1
         h_pad = pool_size[1] - 2 if pool_size[1] % 2 == 1 else pool_size[1] - 1
         d_pad = pool_size[2] - 2 if pool_size[2] % 2 == 1 else pool_size[2] - 1
-        padding = (w_pad, h_pad, d_pad)
+        pad = (w_pad, h_pad, d_pad)
     elif padding == 'valid':
-        padding = (0, 0, 0)
+        pad = (0, 0, 0)
     else:
         raise ValueError('Invalid padding:', padding)
 
@@ -3677,12 +3705,12 @@ def pool3d(x, pool_size, strides=(1, 1, 1), padding='valid',
     if pool_mode == 'max':
         pool_out = pool.pool_3d(x, ws=pool_size, stride=strides,
                                 ignore_border=True,
-                                pad=padding,
+                                pad=pad,
                                 mode='max')
     elif pool_mode == 'avg':
         pool_out = pool.pool_3d(x, ws=pool_size, stride=strides,
                                 ignore_border=True,
-                                pad=padding,
+                                pad=pad,
                                 mode='average_exc_pad')
     else:
         raise ValueError('Invalid pooling mode:', pool_mode)

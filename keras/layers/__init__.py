@@ -10,6 +10,7 @@ from .core import *
 from .convolutional import *
 from .pooling import *
 from .local import *
+from .loss_layers import *
 from .recurrent import *
 from .cudnn_recurrent import *
 from .normalization import *
@@ -19,6 +20,7 @@ from .advanced_activations import *
 from .wrappers import *
 from .googlenet_custom_layers import *
 from .convolutional_recurrent import *
+from .uncertainty_layers import *
 # TODO: Update attention layers!
 # from .attention import *
 from ..legacy.layers import *

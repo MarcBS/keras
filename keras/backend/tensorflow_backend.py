@@ -95,7 +95,8 @@ def get_uid(prefix=''):
 
 
 def reset_uids():
-    """Reset graph identifiers."""
+    """Resets graph identifiers.
+    """
     global _GRAPH_UID_DICTS
     _GRAPH_UID_DICTS = {}
 
@@ -185,8 +186,11 @@ def get_session():
         A TensorFlow session.
     """
     global _SESSION
-    if tf.get_default_session() is not None:
-        session = tf.get_default_session()
+
+    default_session = tf.get_default_session()
+
+    if default_session is not None:
+        session = default_session
     else:
         if _SESSION is None:
             if not os.environ.get('OMP_NUM_THREADS'):
@@ -274,7 +278,7 @@ def _is_current_explicit_device(device_type):
     """
     device_type = device_type.upper()
     if device_type not in ['CPU', 'GPU']:
-        raise ValueError('device_type should be either "CPU" or "GPU".')
+        raise ValueError('`device_type` should be either "CPU" or "GPU".')
     device = _get_current_tf_device()
     return (device is not None and device.device_type == device_type.upper())
 
@@ -485,7 +489,7 @@ def is_keras_tensor(x):
                           tf_variables.Variable,
                           tf.SparseTensor)):
         raise ValueError('Unexpectedly found an instance of type `' + str(type(x)) + '`. '
-                         'Expected a symbolic tensor instance.')
+                                                                                     'Expected a symbolic tensor instance.')
     return hasattr(x, '_keras_history')
 
 
@@ -2205,7 +2209,7 @@ def arange(start, stop=None, step=1, dtype='int32'):
 
     The function arguments use the same convention as
     Theano's arange: if only one argument is provided,
-    it is in fact the "stop" argument.
+    it is in fact the "stop" argument and "start" is 0.
 
     The default type of the returned tensor is `'int32'` to
     match TensorFlow's default.
@@ -2220,7 +2224,7 @@ def arange(start, stop=None, step=1, dtype='int32'):
         An integer tensor.
 
     """
-    # Match the behavior of numpy and Theano by returning an empty seqence.
+    # Match the behavior of numpy and Theano by returning an empty sequence.
     if stop is None:
         try:
             if start < 0:
@@ -3040,7 +3044,7 @@ def switch(condition, then_expression, else_expression):
                              ' equal to rank of `then_expression` and '
                              '`else_expression`. ndim(condition)=' +
                              str(cond_ndim) + ', ndim(then_expression)'
-                             '=' + str(expr_ndim))
+                                              '=' + str(expr_ndim))
         if cond_ndim > 1:
             ndim_diff = expr_ndim - cond_ndim
             cond_shape = tf.concat([tf.shape(condition), [1] * ndim_diff], axis=0)
@@ -3159,16 +3163,22 @@ def elu(x, alpha=1.):
         return tf.where(x > 0, res, alpha * res)
 
 
-def softmax(x):
+def softmax(x, axis=-1):
     """Softmax of a tensor.
 
     # Arguments
         x: A tensor or variable.
+        axis: The dimension softmax would be performed on.
+            The default is -1 which indicates the last dimension.
 
     # Returns
         A tensor.
     """
-    return tf.nn.softmax(x)
+    try:
+        t = tf.nn.softmax(x, axis=axis)
+    except:  # tensorflow retrocompatibility
+        t = tf.nn.softmax(x)
+    return t
 
 
 def softmax_3d(x):
@@ -3409,7 +3419,7 @@ def l2_normalize(x, axis=None):
     # Returns
         A tensor.
     """
-    return tf.nn.l2_normalize(x, dim=axis)
+    return tf.nn.l2_normalize(x, axis=axis)
 
 
 def l1_normalize(x, axis):
@@ -3694,10 +3704,10 @@ def separable_conv1d(x, depthwise_kernel, pointwise_kernel, strides=1,
     padding = _preprocess_padding(padding)
     if tf_data_format == 'NHWC':
         spatial_start_dim = 1
-        strides = (1, 1) + strides + (1,)
+        strides = (1,) + strides * 2 + (1,)
     else:
         spatial_start_dim = 2
-        strides = (1, 1, 1) + strides
+        strides = (1, 1) + strides * 2
     x = tf.expand_dims(x, spatial_start_dim)
     depthwise_kernel = tf.expand_dims(depthwise_kernel, 0)
     pointwise_kernel = tf.expand_dims(pointwise_kernel, 0)
@@ -4054,7 +4064,7 @@ def bias_add(x, bias, data_format=None):
             if len(bias_shape) == 1:
                 x += reshape(bias, (1, 1, bias_shape[0]))
             else:
-                x += reshape(bias, (1, ) + bias_shape)
+                x += reshape(bias, (1,) + bias_shape)
     else:
         x = tf.nn.bias_add(x, bias)
     return x
@@ -4277,8 +4287,8 @@ def ctc_batch_cost(y_true, y_pred, input_length, label_length):
         Tensor with shape (samples,1) containing the
             CTC loss of each element.
     """
-    label_length = tf.to_int32(tf.squeeze(label_length))
-    input_length = tf.to_int32(tf.squeeze(input_length))
+    label_length = tf.to_int32(tf.squeeze(label_length, axis=-1))
+    input_length = tf.to_int32(tf.squeeze(input_length, axis=-1))
     sparse_labels = tf.to_int32(ctc_label_dense_to_sparse(y_true, label_length))
 
     y_pred = tf.log(tf.transpose(y_pred, perm=[1, 0, 2]) + epsilon())

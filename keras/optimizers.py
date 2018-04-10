@@ -130,6 +130,11 @@ class Optimizer(object):
             ValueError: in case of incompatible weight shapes.
         """
         params = self.weights
+        if len(params) != len(weights):
+            raise ValueError('Length of the specified weight list (' +
+                             str(len(weights)) +
+                             ') does not match the number of weights ' +
+                             'of the optimizer (' + str(len(params)) + ')')
         weight_value_tuples = []
         param_values = K.batch_get_value(params)
         for pv, p, w in zip(param_values, params, weights):
@@ -143,6 +148,9 @@ class Optimizer(object):
 
     def set_lr(self, lr):
         K.set_value(self.lr, lr)
+
+    def get_lr(self):
+        return K.get_value(self.lr)
 
     def get_weights(self):
         """Returns the current value of the weights of the optimizer.
