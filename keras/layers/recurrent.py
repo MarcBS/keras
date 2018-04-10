@@ -6292,7 +6292,7 @@ class AttLSTMCond(Recurrent):
         x_normed = eval('self.gamma_' + slc) * x_normed + eval('self.beta_' + slc)
         return x_normed
 
-    def call(self, x, mask=None, training=None, initial_state=None):
+    def call(self, inputs, mask=None, training=None, initial_state=None):
         # input shape: (nb_samples, time (padded with zeros), input_dim)
         # note that the .build() method of subclasses MUST define
         # self.input_spec with a complete input shape.
@@ -7127,7 +7127,7 @@ class AttConditionalLSTMCond(Recurrent):
         x_normed = eval('self.gamma_' + slc) * x_normed + eval('self.beta_' + slc)
         return x_normed
 
-    def call(self, x, mask=None, training=None, initial_state=None):
+    def call(self, inputs, mask=None, training=None, initial_state=None):
         # input shape: (nb_samples, time (padded with zeros), input_dim)
         # note that the .build() method of subclasses MUST define
         # self.input_spec with a complete input shape.
