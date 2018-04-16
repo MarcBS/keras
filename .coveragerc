@@ -20,3 +20,4 @@ omit =
     keras/caffe/*
     keras/layers/attention.py
     keras/layers/googlenet_custom_layers.py
+    keras/utils/multi_gpu_utils.py
