@@ -226,7 +226,7 @@ class TimeDistributed(Wrapper):
 
         else:
             first_input_shape = K.int_shape(inputs[0])
-            input_shape = [K.int_shape(input) for input in inputs]
+            input_shapes = [K.int_shape(input) for input in inputs]
             if first_input_shape[0]:
                 # batch size matters, use rnn-based implementation
                 def step(x, _):
@@ -249,28 +249,29 @@ class TimeDistributed(Wrapper):
                 input_length = first_input_shape[1]
                 if not input_length:
                     input_length = K.shape(inputs[0])[1]
+
                 # Shape: (num_samples * timesteps, ...). And track the
                 # transformation in self._input_map.
                 input_uid = _object_list_uid(inputs)
-
-                inputs = [K.reshape(input, (-1,) + first_input_shape[2:]) for input in inputs]
+                inputs = [K.reshape(inputs[i], (-1,) + input_shapes[i][2:]) for i in range(len(inputs))]  # (nb_samples * timesteps, ...)
+                # inputs = [K.reshape(input, (-1,) + first_input_shape[2:]) for input in inputs]
                 self._input_map[input_uid] = inputs
                 # (num_samples * timesteps, ...)
                 y = self.layer.call(inputs, **kwargs)
                 if hasattr(y, '_uses_learning_phase'):
                     uses_learning_phase = y._uses_learning_phase
                 # Shape: (num_samples, timesteps, ...)
-                output_shape = self.compute_output_shape(input_shape)
+                output_shape = self.compute_output_shape(input_shapes)
                 y = K.reshape(y, (-1, input_length) + output_shape[2:])
 
         # Apply activity regularizer if any:
-        if (hasattr(self.layer, 'activity_regularizer') and
-                self.layer.activity_regularizer is not None):
+        if (hasattr(self.layer, 'activity_regularizer') and self.layer.activity_regularizer is not None):
             regularization_loss = self.layer.activity_regularizer(y)
             self.add_loss(regularization_loss, inputs)
 
         if uses_learning_phase:
             y._uses_learning_phase = True
+
         return y
 
 

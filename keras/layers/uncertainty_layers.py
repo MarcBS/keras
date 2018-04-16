@@ -13,6 +13,12 @@ from ..engine import Layer
 
 
 class ConcatenateOutputWithSigma(Layer):
+    """
+    TODO: Write documentation.
+
+    Arguments:
+        output_dim: ...
+    """
 
     def __init__(self, output_dim, **kwargs):
         self.output_dim = output_dim

@@ -68,6 +68,16 @@ def deactivate_loss():
 
 
 def uncertainty_categorical_crossentropy(auto_weight=True, norm=False):
+    """uncertainty_categorical_crossentropy.
+        TODO: Write docs.
+
+    # Arguments
+        auto_weight: ...
+        norm: ..
+
+    # Returns
+        loss: ...
+    """
     def loss(y_true, y_pred):
         # categorical cross entropy loss (L(W) single task labels)
         y_pred_top = y_pred[:, :-1]
@@ -96,6 +106,16 @@ def uncertainty_categorical_crossentropy(auto_weight=True, norm=False):
 
 
 def uncertainty_binary_crossentropy(auto_weight=True, norm=False):
+    """uncertainty_binary_crossentropy.
+        TODO: Write docs.
+
+    # Arguments
+        auto_weight: ...
+        norm: ..
+
+    # Returns
+        loss: ...
+    """
     def loss(y_true, y_pred):
         # categorical cross entropy loss (L(W) single task labels)
         y_pred_top = y_pred[:, :-1]
