@@ -96,6 +96,7 @@ class Dropout(Layer):
     # References
         - [Dropout: A Simple Way to Prevent Neural Networks from Overfitting](http://www.cs.toronto.edu/~rsalakhu/papers/srivastava14a.pdf)
     """
+
     @interfaces.legacy_dropout_support
     def __init__(self, rate, noise_shape=None, seed=None, **kwargs):
         super(Dropout, self).__init__(**kwargs)
@@ -120,6 +121,7 @@ class Dropout(Layer):
             def dropped_inputs():
                 return K.dropout(inputs, self.rate, noise_shape,
                                  seed=self.seed)
+
             return K.in_train_phase(dropped_inputs, inputs,
                                     training=training)
         return inputs
@@ -163,9 +165,9 @@ class GuidedDropout(Layer):
 
         self.trainable = False
 
-    def call(self, x, mask=None):
-        modulated_input = x[0]
-        modulator_input = x[1]
+    def call(self, inputs, mask=None):
+        modulated_input = inputs[0]
+        modulator_input = inputs[1]
 
         modulated_output = modulated_input * self.W[K.argmax(modulator_input, axis=1), :]
 
@@ -539,8 +541,8 @@ class PermuteGeneral(Layer):
             output_shape[i] = input_shape[dim]
         return tuple(output_shape)
 
-    def call(self, x, mask=None):
-        return K.permute_dimensions(x, self.dims)
+    def call(self, inputs, mask=None):
+        return K.permute_dimensions(inputs, self.dims)
 
     def get_config(self):
         config = {'dims': self.dims}
@@ -582,9 +584,9 @@ class Flatten(Layer):
             raise ValueError('The shape of the input to "Flatten" '
                              'is not fully defined '
                              '(got ' + str(input_shape[1:]) + '. '
-                             'Make sure to pass a complete "input_shape" '
-                             'or "batch_input_shape" argument to the first '
-                             'layer in your model.')
+                                                              'Make sure to pass a complete "input_shape" '
+                                                              'or "batch_input_shape" argument to the first '
+                                                              'layer in your model.')
         return (input_shape[0], np.prod(input_shape[1:]))
 
     def call(self, inputs):
@@ -675,8 +677,8 @@ class RepeatMatrix(Layer):
     def compute_mask(self, input, input_mask=None):
         return input_mask
 
-    def call(self, x, mask=None):
-        return K.repeatRdim(x, self.n, axis=self.dim)
+    def call(self, inputs, mask=None):
+        return K.repeatRdim(inputs, self.n, axis=self.dim)
 
     def get_config(self):
         config = {'n': self.n,
@@ -1085,6 +1087,40 @@ class ActivityRegularization(Layer):
         return input_shape
 
 
+class PositionLayer(Layer):
+    """
+    This layer is returns a sequence as the input, but as a range.
+    It recieves an  input with shape: (B, N) and returns a tensor with the same
+    shape but with the content:
+    [arange(N), arange(N), ..., arange(N)]
+
+    # Input shape
+        Arbitrary. Use the keyword argument `input_shape`
+        when using this layer as the first layer in a model.
+
+    # Output shape
+        Same shape as input.
+    """
+
+    def __init__(self, **kwargs):
+        self.supports_masking = True
+        super(PositionLayer, self).__init__(**kwargs)
+
+    def call(self, inputs, mask=None):
+        outputs = K.ones_like(inputs) * K.arange(0, stop=K.shape(inputs)[1])
+        return outputs
+
+    def compute_mask(self, input_shape, input_mask=None):
+        return input_mask
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+    def get_config(self):
+        base_config = super(PositionLayer, self).get_config()
+        return dict(list(base_config.items()))
+
+
 class MaskedMean(Layer):
     """
     This layer is called after an Embedding layer.
@@ -1103,8 +1139,8 @@ class MaskedMean(Layer):
         self.supports_masking = True
         super(MaskedMean, self).__init__(**kwargs)
 
-    def call(self, x, mask=None):
-        return K.mean(K.cast(mask[:, :, None], K.dtype(x)) * x, axis=1)
+    def call(self, inputs, mask=None):
+        return K.mean(K.cast(mask[:, :, None], K.dtype(inputs)) * inputs, axis=1)
 
     def compute_mask(self, input_shape, input_mask=None):
         return None
@@ -1132,8 +1168,8 @@ class MaskLayer(Layer):
         self.supports_masking = True
         super(MaskLayer, self).__init__(**kwargs)
 
-    def call(self, x, mask=None):
-        return K.cast(mask[:, :, None], K.dtype(x)) * x
+    def call(self, inputs, mask=None):
+        return K.cast(mask[:, :, None], K.dtype(inputs)) * inputs
 
     def compute_mask(self, input_shape, input_mask=None):
         return input_mask
@@ -1166,8 +1202,8 @@ class FlatMask(Layer):
         self.axis = axis
         super(FlatMask, self).__init__(**kwargs)
 
-    def call(self, x, mask=None):
-        return x
+    def call(self, inputs, mask=None):
+        return inputs
 
     def compute_mask(self, input_shape, input_mask=None):
         return K.any(input_mask, self.axis)
@@ -1212,20 +1248,20 @@ class WeightedSum(Layer):
         assert isinstance(input_shape, list)
         assert len(input_shape) == 2
 
-    def call(self, x, mask=None):
+    def call(self, inputs, mask=None):
         # get input values and weights
-        values = x[0]
-        weights = x[1]
+        values = inputs[0]
+        weights = inputs[1]
 
         # tile weights before summing
         K.repeatRdim(weights, K.shape(values)[1], axis=1)
 
-        # x = K.dot(values, weights)
-        x = values * weights
+        # inputs = K.dot(values, weights)
+        inputs = values * weights
 
         for d in self.sum_dims:
-            x = K.sum(x, axis=d)
-        return x
+            inputs = K.sum(inputs, axis=d)
+        return inputs
 
     def compute_output_shape(self, input_shape):
         out_dim = []
@@ -1313,17 +1349,17 @@ class WeightedMerge(Layer):
             self.set_weights(self.initial_weights)
             del self.initial_weights
 
-    def call(self, x, mask=None):
-        if not isinstance(x, list):
-            x = [x]
+    def call(self, inputs, mask=None):
+        if not isinstance(inputs, list):
+            inputs = [inputs]
 
         # merge inputs after weighting by the learned lambda weights
-        s = x[0] * self.lambdas[0]
-        for i in range(1, len(x)):
+        s = inputs[0] * self.lambdas[0]
+        for i in range(1, len(inputs)):
             if self.mode == 'sum':
-                s += x[i] * self.lambdas[i]
+                s += inputs[i] * self.lambdas[i]
             elif self.mode == 'mul':
-                s *= x[i] * self.lambdas[i]
+                s *= inputs[i] * self.lambdas[i]
 
         return s
 
@@ -1373,8 +1409,8 @@ class SetSubtensor(Layer):
         assert isinstance(input_shape, list)
         assert len(input_shape) == 2
 
-    def call(self, x, mask=None):
-        return K.set_subtensor(eval('x[0]' + self.indices[0]), eval('x[1]' + self.indices[1]))
+    def call(self, inputs, mask=None):
+        return K.set_subtensor(eval('inputs[0]' + self.indices[0]), eval('inputs[1]' + self.indices[1]))
 
     def compute_mask(self, input_shape, input_mask=None):
         return input_mask[0]
@@ -1391,6 +1427,7 @@ class SetSubtensor(Layer):
 class RemoveMask(Layer):
     """Removes the mask of the Layer.
     """
+
     def __init__(self, **kwargs):
         super(RemoveMask, self).__init__(**kwargs)
 
@@ -1436,8 +1473,8 @@ class ZeroesLayer(Layer):
         assert len(input_shape) >= 2
         self.built = True
 
-    def call(self, x, mask=None):
-        initial_state = K.zeros_like(x)  # (samples, input_dim)
+    def call(self, inputs, mask=None):
+        initial_state = K.zeros_like(inputs)  # (samples, input_dim)
         initial_state = K.sum(initial_state, axis=1)  # (samples, )
         initial_state = K.expand_dims(initial_state)  # (samples, 1)
         initial_state = K.tile(initial_state, self.output_dim)  # (samples, units)
@@ -1501,8 +1538,8 @@ class EqualDimensions(Layer):
         out_dims = [input_shape[1][0], input_shape[1][1], input_shape[0][2], input_shape[0][3]]
         return tuple(out_dims)
 
-    def call(self, x, mask=None):
-        return K.equal_dimensions(x[0], x[1])
+    def call(self, inputs, mask=None):
+        return K.equal_dimensions(inputs[0], inputs[1])
 
     def get_config(self):
         config = {}
@@ -1572,13 +1609,186 @@ class Concat(Layer):
         output_shape[self.axis] = concat_size
         return tuple(output_shape)
 
-    def call(self, x, mask=None):
-        x = autocrop(x, self.cropping)
-        return K.concatenate(x, axis=self.axis)
+    def call(self, inputs, mask=None):
+        inputs = autocrop(inputs, self.cropping)
+        return K.concatenate(inputs, axis=self.axis)
 
     def get_config(self):
         config = {'axis': self.axis, 'cropping': self.cropping}
         base_config = super(Concat, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+
+class PositionwiseFeedForwardDense(Layer):
+    """Fully connected feed-forward netwok, applied to each position.
+
+    # Arguments
+        units: Positive integer, dimensionality of the output space.
+        activation: Activation function to use
+            (see [activations](../activations.md)).
+            If you don't specify anything, no activation is applied
+            (ie. "linear" activation: `a(inputs) = inputs`).
+        use_bias: Boolean, whether the layer uses a bias vector.
+        kernel_initializer: Initializer for the `kernel` weights matrix
+            (see [initializers](../initializers.md)).
+        bias_initializer: Initializer for the bias vector
+            (see [initializers](../initializers.md)).
+        kernel_regularizer: Regularizer function applied to
+            the `kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        bias_regularizer: Regularizer function applied to the bias vector
+            (see [regularizer](../regularizers.md)).
+        activity_regularizer: Regularizer function applied to
+            the output of the layer (its "activation").
+            (see [regularizer](../regularizers.md)).
+        kernel_constraint: Constraint function applied to
+            the `kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        bias_constraint: Constraint function applied to the bias vector
+            (see [constraints](../constraints.md)).
+
+    # Input shape
+        nD tensor with shape: `(batch_size, ..., input_dim)`.
+        The most common situation would be
+        a 2D input with shape `(batch_size, input_dim)`.
+
+    # Output shape
+        nD tensor with shape: `(batch_size, ..., units)`.
+        For instance, for a 2D input with shape `(batch_size, input_dim)`,
+        the output would have shape `(batch_size, units)`.
+    """
+
+    @interfaces.legacy_dense_support
+    def __init__(self, units,
+                 activation='relu',
+                 use_bias=True,
+                 kernel_initializer='glorot_uniform',
+                 bias_initializer='zeros',
+                 kernel_regularizer=None,
+                 bias_regularizer=None,
+                 activity_regularizer=None,
+                 kernel_constraint=None,
+                 bias_constraint=None,
+                 **kwargs):
+        if 'input_shape' not in kwargs and 'input_dim' in kwargs:
+            kwargs['input_shape'] = (kwargs.pop('input_dim'),)
+        super(PositionwiseFeedForwardDense, self).__init__(**kwargs)
+        self.units = units
+        self.activation = activations.get(activation)
+        self.use_bias = use_bias
+        self.kernel_initializer = initializers.get(kernel_initializer)
+        self.bias_initializer = initializers.get(bias_initializer)
+        self.kernel_regularizer = regularizers.get(kernel_regularizer)
+        self.bias_regularizer = regularizers.get(bias_regularizer)
+        self.activity_regularizer = regularizers.get(activity_regularizer)
+        self.kernel_constraint = constraints.get(kernel_constraint)
+        self.bias_constraint = constraints.get(bias_constraint)
+        self.input_spec = InputSpec(min_ndim=2)
+        self.supports_masking = True
+
+    def build(self, input_shape):
+        assert len(input_shape) >= 2
+        input_dim = input_shape[-1]
+
+        self.kernel1 = self.add_weight(shape=(input_dim, self.units),
+                                       initializer=self.kernel_initializer,
+                                       name='kernel1',
+                                       regularizer=self.kernel_regularizer,
+                                       constraint=self.kernel_constraint)
+        if self.use_bias:
+            self.bias1 = self.add_weight(shape=(self.units,),
+                                         initializer=self.bias_initializer,
+                                         name='bias1',
+                                         regularizer=self.bias_regularizer,
+                                         constraint=self.bias_constraint)
+        else:
+            self.bias_1 = None
+
+        self.kernel2 = self.add_weight(shape=(self.units, input_dim),
+                                       initializer=self.kernel_initializer,
+                                       name='kernel2',
+                                       regularizer=self.kernel_regularizer,
+                                       constraint=self.kernel_constraint)
+        if self.use_bias:
+            self.bias2 = self.add_weight(shape=(input_dim,),
+                                         initializer=self.bias_initializer,
+                                         name='bias2',
+                                         regularizer=self.bias_regularizer,
+                                         constraint=self.bias_constraint)
+        else:
+            self.bias_2 = None
+        self.input_spec = InputSpec(min_ndim=2, axes={-1: input_dim})
+        self.built = True
+
+    def call(self, inputs, mask=None):
+        intermediate_output = K.dot(inputs, self.kernel1)
+        if self.use_bias:
+            intermediate_output = K.bias_add(intermediate_output, self.bias1)
+        if self.activation is not None:
+            intermediate_output = self.activation(intermediate_output)
+        output = K.dot(intermediate_output, self.kernel2)
+        if self.use_bias:
+            output = K.bias_add(output, self.bias2)
+
+        return output
+
+    def compute_output_shape(self, input_shape):
+        assert input_shape and len(input_shape) >= 2
+        assert input_shape[-1]
+        return input_shape
+
+    def get_config(self):
+        config = {
+            'units': self.units,
+            'activation': activations.serialize(self.activation),
+            'use_bias': self.use_bias,
+            'kernel_initializer': initializers.serialize(self.kernel_initializer),
+            'bias_initializer': initializers.serialize(self.bias_initializer),
+            'kernel_regularizer': regularizers.serialize(self.kernel_regularizer),
+            'bias_regularizer': regularizers.serialize(self.bias_regularizer),
+            'activity_regularizer': regularizers.serialize(self.activity_regularizer),
+            'kernel_constraint': constraints.serialize(self.kernel_constraint),
+            'bias_constraint': constraints.serialize(self.bias_constraint)
+        }
+
+        base_config = super(PositionwiseFeedForwardDense, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+
+class Slice(Layer):
+    """Slices the input with the provided min-max indices.
+
+    # Input shape
+        2D tensor
+
+    # Output shape
+        Same shape as input.
+    """
+
+    def __init__(self, min_idx, max_idx, **kwargs):
+        self.supports_masking = True
+        super(Slice, self).__init__(**kwargs)
+        self.min_idx = min_idx
+        self.max_idx = max_idx
+
+    def call(self, inputs, mask=None):
+        return inputs[:, self.min_idx:self.max_idx]
+
+    def compute_mask(self, input_shape, input_mask=None):
+        if input_mask is not None:
+            return input_mask[:, self.min_idx:self.max_idx]
+        else:
+            return None
+
+    def compute_output_shape(self, input_shape):
+        return (input_shape[0], self.max_idx - self.min_idx)
+
+    def get_config(self):
+        config = {
+            'min_idx': self.min_idx,
+            'max_idx': self.max_idx
+        }
+        base_config = super(Slice, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
 
@@ -1721,7 +1931,7 @@ def autocrop_array_shapes(input_shapes, cropping):
             if cr is None:
                 result.append(sh)
             elif cr in {'lower', 'center', 'upper'}:
-                min_sh = None if any(x is None for x in sh) else min(sh)
+                min_sh = None if any(inputs is None for inputs in sh) else min(sh)
                 result.append([min_sh] * len(sh))
             else:
                 raise ValueError('Unknown crop mode \'{0}\''.format(cr))
