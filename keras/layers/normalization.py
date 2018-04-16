@@ -113,6 +113,37 @@ class Scale(Layer):
         return dict(list(base_config.items()) + list(config.items()))
 
 
+class SqrtScaling(Layer):
+    """Multiplies the input by Sqrt(value).
+
+    # Arguments
+        value: Positive float. Factor of the scaling.
+
+    # Returns
+        Scaled input.
+
+    """
+
+    def __init__(self, value=1., **kwargs):
+        super(SqrtScaling, self).__init__(**kwargs)
+        self.supports_masking = True
+        self.value = value
+
+    def call(self, inputs, mask=None):
+        return inputs * K.sqrt(K.cast(self.value, dtype=K.floatx()))
+
+    def compute_mask(self, inputs, mask=None):
+        return mask
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+    def get_config(self):
+        config = {"value": self.value}
+        base_config = super(SqrtScaling, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+
 class BatchNormalization(Layer):
     """Batch normalization layer (Ioffe and Szegedy, 2014).
 
@@ -161,7 +192,7 @@ class BatchNormalization(Layer):
                  axis=-1,
                  mode=0,
                  momentum=0.99,
-                 epsilon=1e-3,
+                 epsilon=1e-8,
                  center=True,
                  scale=True,
                  beta_initializer='zeros',
@@ -339,3 +370,84 @@ class BatchNormalization(Layer):
 
     def compute_output_shape(self, input_shape):
         return input_shape
+
+
+class LayerNormalization(Layer):
+    """Batch normalization layer (Ioffe and Szegedy, 2014).
+
+    Normalize the activations of the previous layer at each batch,
+    i.e. applies a transformation that maintains the mean activation
+    close to 0 and the activation standard deviation close to 1.
+
+    # Arguments
+        axis: Integer, the axis that should be normalized
+            (typically the features axis).
+            For instance, after a `Conv2D` layer with
+            `data_format="channels_first"`,
+            set `axis=1` in `BatchNormalization`.
+        momentum: Momentum for the moving mean and the moving variance.
+        epsilon: Small float added to variance to avoid dividing by zero.
+        center: If True, add offset of `beta` to normalized tensor.
+            If False, `beta` is ignored.
+        scale: If True, multiply by `gamma`.
+            If False, `gamma` is not used.
+            When the next layer is linear (also e.g. `nn.relu`),
+            this can be disabled since the scaling
+            will be done by the next layer.
+        beta_initializer: Initializer for the beta weight.
+        gamma_initializer: Initializer for the gamma weight.
+        moving_mean_initializer: Initializer for the moving mean.
+        moving_variance_initializer: Initializer for the moving variance.
+        beta_regularizer: Optional regularizer for the beta weight.
+        gamma_regularizer: Optional regularizer for the gamma weight.
+        beta_constraint: Optional constraint for the beta weight.
+        gamma_constraint: Optional constraint for the gamma weight.
+
+    # Input shape
+        Arbitrary. Use the keyword argument `input_shape`
+        (tuple of integers, does not include the samples axis)
+        when using this layer as the first layer in a model.
+
+    # Output shape
+        Same shape as input.
+
+    # References
+        - [Batch Normalization: Accelerating Deep Network Training by Reducing Internal Covariate Shift](https://arxiv.org/abs/1502.03167)
+    """
+
+    def __init__(self,
+                 epsilon=1e-8,
+                 **kwargs):
+        super(LayerNormalization, self).__init__(**kwargs)
+        self.supports_masking = True
+        self.epsilon = epsilon
+
+    def build(self, input_shape):
+        self.gamma = self.add_weight(name='gamma',
+                                     shape=input_shape[1:],
+                                     initializer=initializers.Ones(),
+                                     trainable=True)
+
+        self.beta = self.add_weight(name='beta',
+                                    shape=input_shape[1:],
+                                    initializer=initializers.Zeros(),
+                                    trainable=True)
+
+        self.built = True
+
+    def call(self, inputs, training=None):
+        mean = K.mean(x, axis=-1, keepdims=True)
+        std = K.std(x, axis=-1, keepdims=True)
+        return self.gamma * (inputs - mean) / (std + self.epsilon) + self.beta
+
+
+def compute_output_shape(self, input_shape):
+    return input_shape
+
+
+def get_config(self):
+        config = {
+            'epsilon': self.epsilon,
+        }
+        base_config = super(LayerNormalization, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
