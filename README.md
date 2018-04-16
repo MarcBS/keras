@@ -56,6 +56,10 @@ And their corresponding GRU version:
 - [ClassActivationMapping](https://github.com/MarcBS/keras/blob/4e6a8ec8a55bd0d5d091a44b058a797d3d934ce0/keras/layers/convolutional.py#L23): Class Activation Mapping computation used in [GAP networks](http://arxiv.org/pdf/1512.04150.pdf).
 - [CompactBilinearPooling](https://github.com/MarcBS/keras/blob/4e6a8ec8a55bd0d5d091a44b058a797d3d934ce0/keras/layers/convolutional.py#L1395): compact version of bilinear pooling for [merging multimodal data](http://arxiv.org/pdf/1606.01847v2.pdf).
 
+
+#### Attentional layers
+- [MultiHeadAttention](https://github.com/MarcBS/keras/blob/f7caf432dc51d90ec3bbd8b141b789bc90179292/keras/layers/attention.py#L14): Multi-head attention layer. Multi-Head Attention consists of h attention layers running in parallel. Base of the [Transformer model](https://arxiv.org/abs/1706.03762).
+
 ## Projects
 
 You can see more practical examples in projects which use this library:
