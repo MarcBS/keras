@@ -22,7 +22,7 @@ from .googlenet_custom_layers import *
 from .convolutional_recurrent import *
 from .uncertainty_layers import *
 # TODO: Update attention layers!
-# from .attention import *
+from .attention import *
 from ..legacy.layers import *
 
 

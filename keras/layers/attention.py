@@ -6,12 +6,181 @@ import numpy as np
 np.set_printoptions(threshold=np.inf)
 
 from .. import backend as K
-from .. import activations, initializations, regularizers, constraints
+from .. import activations, initializers, regularizers, constraints
 from ..engine import Layer, InputSpec
+from ..layers import Dense, Concatenate, TimeDistributed, Slice
 
 
-# Access to attention layers from recurrent.py
+class MultiHeadAttention(Layer):
+    """Multi-head attention layer. Multi-Head Attention consists of h attention layers running in parallel.
 
+    Linearly projects queries, keys and values `h` times with different, learned
+     linear projections, to the `d_k`, `d_k` and `d_v` dimensions, respectively.
+
+
+    # Arguments
+        n_heads: Number of attention layers that represent the linear projections.
+        dmodel = model size
+    # Input shape
+        3 tensors with shape: `(batch_size, input_dim)`.
+
+    # Output shape
+        The same as
+
+    # References
+        - [ Attention Is All You Need](https://arxiv.org/abs/1706.03762)
+    """
+
+    def __init__(self, n_heads,
+                 dmodel,
+                 mask_future=False,
+                 dropout=0.,
+                 activation='relu',
+                 kernel_initializer='glorot_uniform',
+                 kernel_regularizer=None,
+                 activity_regularizer=None,
+                 kernel_constraint=None,
+                 **kwargs):
+        super(MultiHeadAttention, self).__init__(**kwargs)
+        self.supports_masking = True
+        assert dmodel % n_heads == 0, 'dmodel should be a multiple of the head number'
+        self.n_heads = n_heads
+        self.dmodel = dmodel
+        self.dk = dmodel // n_heads
+        self.dv = dmodel // n_heads
+        self.dropout = dropout
+        self.activation = activations.get(activation)
+        self.kernel_initializer = initializers.get(kernel_initializer)
+        self.kernel_regularizer = regularizers.get(kernel_regularizer)
+        self.kernel_constraint = constraints.get(kernel_constraint)
+        self.activity_regularizer = regularizers.get(activity_regularizer)
+        self.linear_v = None
+        self.linear_k = None
+        self.linear_q = None
+        self.linear_o = None
+        self.mask_future = mask_future  # If mask_future,  units that reference the future are masked.
+
+    def build(self, input_shape):
+        assert len(input_shape) == 2, 'You should pass two inputs to ScaledDotAttention: ' \
+                                      'queries and keys.'
+        query_dim = input_shape[0][2]
+        key_dim = input_shape[1][2]
+
+        self.linear_q = self.add_weight(shape=(query_dim,
+                                               self.dk * self.n_heads),
+                                        initializer=self.kernel_initializer,
+                                        name='linear_q',
+                                        regularizer=self.kernel_regularizer,
+                                        constraint=self.kernel_constraint)
+
+        self.linear_k = self.add_weight(shape=(key_dim,
+                                               self.dk * self.n_heads),
+                                        initializer=self.kernel_initializer,
+                                        name='linear_k',
+                                        regularizer=self.kernel_regularizer,
+                                        constraint=self.kernel_constraint)
+
+        self.linear_v = self.add_weight(shape=(key_dim,
+                                               self.dv * self.n_heads),
+                                        initializer=self.kernel_initializer,
+                                        name='linear_v',
+                                        regularizer=self.kernel_regularizer,
+                                        constraint=self.kernel_constraint)
+
+        self.linear_o = self.add_weight(shape=(self.dv * self.n_heads,
+                                               self.dmodel),
+                                        initializer=self.kernel_initializer,
+                                        name='linear_o',
+                                        regularizer=self.kernel_regularizer,
+                                        constraint=self.kernel_constraint)
+
+        self.built = True
+
+    def call(self, inputs, mask=None, training=None):
+        query = inputs[0]
+        key = inputs[1]
+
+        # Do linear projections. Shapes: batch_size, timesteps, dmodel*n_heads
+        queries, keys, values = [self.activation(K.dot_product(x, l))
+                                 for l, x in zip([self.linear_q, self.linear_k, self.linear_v], (query, key, key))]
+
+        queries_ = K.concatenate([queries[:, :, i * self.dk: (i + 1) * self.dk] for i in range(self.n_heads)], axis=0)  # batch_size * n_heads, timesteps, dmodel/h
+        keys_ = K.concatenate([keys[:, :, i * self.dk: (i + 1) * self.dk] for i in range(self.n_heads)], axis=0)  # batch_size * n_heads, timesteps, dmodel/h
+        values_ = K.concatenate([values[:, :, i * self.dv: (i + 1) * self.dv] for i in range(self.n_heads)], axis=0)  # batch_size * n_heads, timesteps, dmodel/h
+
+        # Scaled-Dot-Product Attention
+
+        # Compute MatMul
+        matmul = K.batch_dot(queries_, K.permute_dimensions(keys_, (0, 2, 1)), axes=[2, 1])
+
+        # Scale it (denominator)
+        scale = K.sqrt(K.cast(self.dk, K.floatx()))
+
+        attended_heads = matmul / scale
+
+        # Key Masking
+        key_masks = K.sign(K.abs(K.sum(key, axis=-1)))  # (N, T_k)
+        key_masks = K.tile(key_masks, [self.n_heads, 1])  # (h*N, T_k)
+        key_masks = K.tile(K.expand_dims(key_masks, 1), [1, K.shape(query)[1], 1])  # (h*N, T_q, T_k)
+        paddings = K.ones_like(attended_heads) * K.variable(-2 ** 32 + 1, dtype=K.floatx())
+        attended_heads = K.switch(K.equal(key_masks, 0), paddings, attended_heads)  # (h*N, T_q, T_k)
+
+        if self.mask_future:
+            diag_vals = K.ones_like(attended_heads[0, :, :])  # (T_q, T_k)
+            tril = K.tril(diag_vals)  # (T_q, T_k)
+            masks = K.tile(K.expand_dims(tril, 0), [K.shape(attended_heads)[0], 1, 1])  # (h*N, T_q, T_k)
+            paddings = K.ones_like(masks) * K.variable(-2 ** 32 + 1, dtype=K.floatx())
+            attended_heads = K.switch(K.equal(masks, 0), paddings, attended_heads)  # (h*N, T_q, T_k)
+
+        # Activation (softmax)
+        alphas = K.softmax_3d(attended_heads)
+
+        # Query Masking
+        query_masks = K.sign(K.abs(K.sum(query, axis=-1)))  # (N, T_q)
+        query_masks = K.tile(query_masks, [self.n_heads, 1])  # (h*N, T_q)
+        query_masks = K.tile(K.expand_dims(query_masks, -1), [1, 1, K.shape(key)[1]])  # (h*N, T_q, T_k)
+        attended_heads = alphas * query_masks  # broadcasting. (N, T_q, C)
+
+        # Matmul with V
+        attended_heads = K.batch_dot(attended_heads, values_, axes=[2, 1])
+
+        # Restore shape
+        nb_samples = K.shape(attended_heads)[0] / self.n_heads
+        attended_heads = K.concatenate([attended_heads[i * nb_samples: (i + 1) * nb_samples, :, :] for i in range(self.n_heads)], axis=2)  # batch_size, timesteps, dmodel
+
+        # Apply the final linear
+        output = self.activation(K.dot_product(attended_heads, self.linear_o))
+        return output
+
+    def compute_mask(self, inputs, mask=None):
+        return mask
+
+    def compute_output_shape(self, input_shape):
+        assert input_shape[0] and len(input_shape[0]) >= 3
+        assert input_shape[0][-1]
+        output_shape = list(input_shape[0])
+        output_shape[-1] = self.dmodel
+        return tuple(output_shape)
+
+    def get_config(self):
+        config = {
+            'n_heads': self.n_heads,
+            'dmodel': self.dmodel,
+            'dk': self.dk,
+            'dv': self.dv,
+            'activation': activations.serialize(self.activation),
+            'kernel_initializer': initializers.serialize(self.kernel_initializer),
+            'kernel_regularizer': regularizers.serialize(self.kernel_regularizer),
+            'kernel_constraint': constraints.serialize(self.kernel_constraint),
+            'activity_regularizer': regularizers.serialize(self.activity_regularizer),
+            'dropout': self.dropout,
+            'mask_future': self.mask_future
+        }
+        base_config = super(MultiHeadAttention, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+
+# TODO: Deprecated layers. Need to update!
 
 class Attention(Layer):
     """ Attention layer that does not depend on temporal information. The output information
@@ -146,7 +315,6 @@ class Attention(Layer):
         beta = K.sigmoid(K.dot(x * B_Wa, self.Wa) + self.ba)
 
         # TODO: complete formulas in class description
-
         return beta
 
     def get_constants(self, x):
