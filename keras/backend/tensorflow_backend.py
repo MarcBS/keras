@@ -55,7 +55,7 @@ _MANUAL_VAR_INIT = False
 _LOCAL_DEVICES = None
 
 
-def printing(x, string=''):
+def printing(x, string='', summarize=None):
     """Prints `message` and the tensor value when evaluated.
 
      Note that `printing` returns a new tensor identical to `x`
@@ -70,11 +70,13 @@ def printing(x, string=''):
     # Arguments
         x: Tensor to print.
         string: Message to print jointly with the tensor.
+        summarize: Only print this many entries of each tensor. If None, then a
+               maximum of 3 elements are printed per input tensor.
 
     # Returns
         The same tensor `x`, unchanged.
     """
-    return tf.Print(x, [x], message=string)
+    return tf.Print(x, [x], message=string, summarize=summarize)
 
 
 def get_uid(prefix=''):
@@ -2409,6 +2411,28 @@ def spatial_3d_padding(x, padding=((1, 1), (1, 1), (1, 1)), data_format=None):
             [0, 0]
         ]
     return tf.pad(x, pattern)
+
+
+def tril(x):
+    """ Computes a [batch] square lower triangular matrix.
+        This operator acts like a [batch] lower triangular
+        matrix A with shape [B1,...,Bb, N, N]
+        for some b >= 0.
+        The first b indices index a batch member.
+        For every batch index (i1,...,ib), A[i1,...,ib, : :] is an N x N matrix.
+
+    # Arguments
+        x: Tensor or variable.
+
+    # Returns
+        Lower triangle of an x.
+    """
+    try:
+        from tf.contrib.linalg import LinearOperatorTriL as tril
+    except:
+        from tensorflow.contrib.linalg import LinearOperatorLowerTriangular as tril
+
+    return tril(x).to_dense()
 
 
 def stack(x, axis=0):

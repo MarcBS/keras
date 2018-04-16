@@ -31,14 +31,13 @@ from .common import set_image_dim_ordering, image_dim_ordering
 py_all = all
 py_sum = sum
 
-
 # INTERNAL UTILS
 theano.config.floatX = floatx()
 _LEARNING_PHASE = T.scalar(dtype='uint8', name='keras_learning_phase')  # 0 = test, 1 = train
 _UID_PREFIXES = defaultdict(int)
 
 
-def printing(x, string=''):
+def printing(x, string='', summarize=None):
     """Prints `message` and the tensor value when evaluated.
 
      Note that `printing` returns a new tensor identical to `x`
@@ -53,6 +52,7 @@ def printing(x, string=''):
     # Arguments
         x: Tensor to print.
         string: Message to print jointly with the tensor.
+        summarize: Argument included for TF compatibility. Ignored by Theano
 
     # Returns
         The same tensor `x`, unchanged.
@@ -2199,6 +2199,18 @@ def spatial_3d_padding(x, padding=((1, 1), (1, 1), (1, 1)), data_format=None):
                    slice(padding[2][0], input_shape[3] + padding[2][0]),
                    slice(None))
     return T.set_subtensor(output[indices], x)
+
+
+def tril(x):
+    """ Computes a [batch] square lower triangular matrix.
+
+    # Arguments
+        x: Tensor or variable.
+
+    # Returns
+        Lower triangle of an x.
+    """
+    return T.tril(x)
 
 
 def stack(x, axis=0):
