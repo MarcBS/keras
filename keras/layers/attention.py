@@ -166,8 +166,6 @@ class MultiHeadAttention(Layer):
         config = {
             'n_heads': self.n_heads,
             'dmodel': self.dmodel,
-            'dk': self.dk,
-            'dv': self.dv,
             'activation': activations.serialize(self.activation),
             'kernel_initializer': initializers.serialize(self.kernel_initializer),
             'kernel_regularizer': regularizers.serialize(self.kernel_regularizer),
