@@ -100,6 +100,12 @@ class MultiHeadAttention(Layer):
         query = inputs[0]
         key = inputs[1]
 
+        mask_query = K.cast(mask[0], K.dtype(query)) if mask[0] is not None else K.ones_like(query[:, :, 0])
+        mask_key = K.cast(mask[1], K.dtype(key)) if mask[1] is not None else K.ones_like(key[:, :, 0])
+
+        query *= mask_query[:, :, None]
+        key *= mask_key[:, :, None]
+
         # Do linear projections. Shapes: batch_size, timesteps, dmodel*n_heads
         queries, keys, values = [self.activation(K.dot_product(x, l))
                                  for l, x in zip([self.linear_q, self.linear_k, self.linear_v], (query, key, key))]
@@ -119,8 +125,7 @@ class MultiHeadAttention(Layer):
         attended_heads = matmul / scale
 
         # Key Masking
-        key_masks = K.sign(K.abs(K.sum(key, axis=-1)))  # (N, T_k)
-        key_masks = K.tile(key_masks, [self.n_heads, 1])  # (h*N, T_k)
+        key_masks = K.tile(mask_key, [self.n_heads, 1])  # (h*N, T_k)
         key_masks = K.tile(K.expand_dims(key_masks, 1), [1, K.shape(query)[1], 1])  # (h*N, T_q, T_k)
         paddings = K.ones_like(attended_heads) * K.variable(-2 ** 32 + 1, dtype=K.floatx())
         attended_heads = K.switch(K.equal(key_masks, 0), paddings, attended_heads)  # (h*N, T_q, T_k)
@@ -136,8 +141,8 @@ class MultiHeadAttention(Layer):
         alphas = K.softmax_3d(attended_heads)
 
         # Query Masking
-        query_masks = K.sign(K.abs(K.sum(query, axis=-1)))  # (N, T_q)
-        query_masks = K.tile(query_masks, [self.n_heads, 1])  # (h*N, T_q)
+        # query_masks = K.sign(K.abs(K.sum(query, axis=-1)))  # (N, T_q)
+        query_masks = K.tile(mask_query, [self.n_heads, 1])  # (h*N, T_q)
         query_masks = K.tile(K.expand_dims(query_masks, -1), [1, 1, K.shape(key)[1]])  # (h*N, T_q, T_k)
         attended_heads = alphas * query_masks  # broadcasting. (N, T_q, C)
 
