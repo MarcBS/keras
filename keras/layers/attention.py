@@ -100,8 +100,17 @@ class MultiHeadAttention(Layer):
         query = inputs[0]
         key = inputs[1]
 
-        mask_query = K.cast(mask[0], K.dtype(query)) if mask[0] is not None else K.ones_like(query[:, :, 0])
-        mask_key = K.cast(mask[1], K.dtype(key)) if mask[1] is not None else K.ones_like(key[:, :, 0])
+        if mask[0] is not None:
+            mask_query = K.cast(mask[0], K.dtype(query))
+        else:
+            mask_query = K.not_equal(K.sum(query, axis=2), 0)
+            mask_query = K.cast(mask_query, K.dtype(query))
+
+        if mask[1] is not None:
+            mask_key = K.cast(mask[1], K.dtype(key))
+        else:
+            mask_key = K.not_equal(K.sum(key, axis=2), 0)
+            mask_key = K.cast(mask_key, K.dtype(key))
 
         query *= mask_query[:, :, None]
         key *= mask_key[:, :, None]
@@ -125,7 +134,8 @@ class MultiHeadAttention(Layer):
         attended_heads = matmul / scale
 
         # Key Masking
-        key_masks = K.tile(mask_key, [self.n_heads, 1])  # (h*N, T_k)
+        key_masks = K.sign(K.abs(K.sum(key, axis=-1)))  # (N, T_q)
+        key_masks = K.tile(key_masks, [self.n_heads, 1])  # (h*N, T_k)
         key_masks = K.tile(K.expand_dims(key_masks, 1), [1, K.shape(query)[1], 1])  # (h*N, T_q, T_k)
         paddings = K.ones_like(attended_heads) * K.variable(-2 ** 32 + 1, dtype=K.floatx())
         attended_heads = K.switch(K.equal(key_masks, 0), paddings, attended_heads)  # (h*N, T_q, T_k)
@@ -141,8 +151,8 @@ class MultiHeadAttention(Layer):
         alphas = K.softmax_3d(attended_heads)
 
         # Query Masking
-        # query_masks = K.sign(K.abs(K.sum(query, axis=-1)))  # (N, T_q)
-        query_masks = K.tile(mask_query, [self.n_heads, 1])  # (h*N, T_q)
+        query_masks = K.sign(K.abs(K.sum(query, axis=-1)))  # (N, T_q)
+        query_masks = K.tile(query_masks, [self.n_heads, 1])  # (h*N, T_q)
         query_masks = K.tile(K.expand_dims(query_masks, -1), [1, 1, K.shape(key)[1]])  # (h*N, T_q, T_k)
         attended_heads = alphas * query_masks  # broadcasting. (N, T_q, C)
 
@@ -158,7 +168,13 @@ class MultiHeadAttention(Layer):
         return output
 
     def compute_mask(self, inputs, mask=None):
-        return mask
+        query = inputs[0]
+        if mask[0] is not None:
+            mask_query = K.cast(mask[0], K.dtype(query))
+        else:
+            mask_query = K.not_equal(K.sum(query, axis=2), 0)
+            mask_query = K.cast(mask_query, K.dtype(query))
+        return mask_query
 
     def compute_output_shape(self, input_shape):
         assert input_shape[0] and len(input_shape[0]) >= 3
