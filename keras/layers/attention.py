@@ -160,7 +160,7 @@ class MultiHeadAttention(Layer):
         attended_heads = K.batch_dot(attended_heads, values_, axes=[2, 1])
 
         # Restore shape
-        nb_samples = K.shape(attended_heads)[0] / self.n_heads
+        nb_samples = K.shape(attended_heads)[0] // self.n_heads
         attended_heads = K.concatenate([attended_heads[i * nb_samples: (i + 1) * nb_samples, :, :] for i in range(self.n_heads)], axis=2)  # batch_size, timesteps, dmodel
 
         # Apply the final linear
