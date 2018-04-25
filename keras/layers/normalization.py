@@ -192,7 +192,7 @@ class BatchNormalization(Layer):
                  axis=-1,
                  mode=0,
                  momentum=0.99,
-                 epsilon=1e-8,
+                 epsilon=1e-3,
                  center=True,
                  scale=True,
                  beta_initializer='zeros',
