@@ -4514,6 +4514,7 @@ def _generate_dropout_mask(ones, rate, training=None, count=1):
         ones,
         training=training)
 
+
 def _standardize_args(inputs, initial_state, constants, num_constants):
     """Standardize `__call__` to a single list of tensor inputs.
 
