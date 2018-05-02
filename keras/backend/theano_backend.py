@@ -3395,21 +3395,6 @@ def conv2d_transpose(x, kernel, output_shape, strides=(1, 1),
     conv_out = _postprocess_conv2d_output(conv_out, x, padding,
                                           kernel_shape, strides, data_format)
 
-    # TODO: Check this (from v1.2)
-    """
-    # Compute output width/height if None
-    output_size = [None] * 2
-    for i in [-2, -1]:
-        if output_shape[i] is None:
-            output_size[i] = conv_input_length(x.shape[i], filter_shape[i],
-                                               border_mode, strides[i])
-        else:
-            output_size[i] = output_shape[i]
-
-    conv_out = op(kernel, x, output_size)
-    conv_out = _postprocess_conv2d_output(conv_out, x, border_mode, np_kernel,
-                                          strides, dim_ordering)
-    """
     return conv_out
 
 
