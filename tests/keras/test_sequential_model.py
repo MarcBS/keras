@@ -381,7 +381,6 @@ def test_sequential_update_disabling():
 
     model.compile('sgd', 'mse')
     assert not model.updates
-    assert not model.model.updates
 
     x1 = model.predict(val_a)
     model.train_on_batch(val_a, val_out)
@@ -391,7 +390,6 @@ def test_sequential_update_disabling():
     model.trainable = True
     model.compile('sgd', 'mse')
     assert model.updates
-    assert model.model.updates
 
     model.train_on_batch(val_a, val_out)
     x2 = model.predict(val_a)

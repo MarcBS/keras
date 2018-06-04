@@ -10,9 +10,9 @@ from keras import optimizers
 from keras import initializers
 from keras import callbacks
 from keras.models import Sequential, Model
-from keras.layers import Input, Dense, Dropout, add
+from keras.layers import Input, Dense, Dropout, add, dot, Lambda
 from keras.layers.convolutional import Conv2D
-from keras.layers.pooling import MaxPooling2D, GlobalAveragePooling2D
+from keras.layers.pooling import MaxPooling2D, GlobalAveragePooling1D, GlobalAveragePooling2D
 from keras.utils.test_utils import get_test_data
 from keras.utils.test_utils import keras_test
 from keras import backend as K
@@ -285,6 +285,35 @@ def test_EarlyStopping_patience():
             break
 
     assert epochs_trained == 3
+
+
+@keras_test
+def test_EarlyStopping_baseline():
+    class DummyModel(object):
+        def __init__(self):
+            self.stop_training = False
+
+    def baseline_tester(acc_levels):
+        early_stop = callbacks.EarlyStopping(monitor='val_acc', baseline=0.75, patience=2)
+        early_stop.model = DummyModel()
+        epochs_trained = 0
+        early_stop.on_train_begin()
+        for epoch in range(len(acc_levels)):
+            epochs_trained += 1
+            early_stop.on_epoch_end(epoch, logs={'val_acc': acc_levels[epoch]})
+            if early_stop.model.stop_training:
+                break
+        return epochs_trained
+
+    acc_levels = [0.55, 0.76, 0.81, 0.81]
+    baseline_met = baseline_tester(acc_levels)
+    acc_levels = [0.55, 0.74, 0.81, 0.81]
+    baseline_not_met = baseline_tester(acc_levels)
+
+    # All epochs should run because baseline was met in second epoch
+    assert baseline_met == 4
+    # Baseline was not met by second epoch and should stop
+    assert baseline_not_met == 2
 
 
 @keras_test
@@ -595,7 +624,7 @@ def test_TensorBoard_multi_input_output(tmpdir):
     (X_train, y_train), (X_test, y_test) = get_test_data(
         num_train=train_samples,
         num_test=test_samples,
-        input_shape=(input_dim,),
+        input_shape=(input_dim, input_dim),
         classification=True,
         num_classes=num_classes)
     y_test = np_utils.to_categorical(y_test)
@@ -618,10 +647,13 @@ def test_TensorBoard_multi_input_output(tmpdir):
             i += 1
             i = i % max_batch_index
 
-    inp1 = Input((input_dim,))
-    inp2 = Input((input_dim,))
-    inp = add([inp1, inp2])
-    hidden = Dense(num_hidden, activation='relu')(inp)
+    inp1 = Input((input_dim, input_dim))
+    inp2 = Input((input_dim, input_dim))
+    inp_3d = add([inp1, inp2])
+    inp_2d = GlobalAveragePooling1D()(inp_3d)
+    inp_pair = Lambda(lambda x: x)([inp_3d, inp_2d])  # test a layer with a list of output tensors
+    hidden = dot(inp_pair, axes=-1)
+    hidden = Dense(num_hidden, activation='relu')(hidden)
     hidden = Dropout(0.1)(hidden)
     output1 = Dense(num_classes, activation='softmax')(hidden)
     output2 = Dense(num_classes, activation='softmax')(hidden)

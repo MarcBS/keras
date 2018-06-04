@@ -249,9 +249,6 @@ class TerminateOnNaN(Callback):
     """Callback that terminates training when a NaN loss is encountered.
     """
 
-    def __init__(self):
-        super(TerminateOnNaN, self).__init__()
-
     def on_batch_end(self, batch, logs=None):
         logs = logs or {}
         loss = logs.get('loss')
@@ -476,13 +473,22 @@ class EarlyStopping(Callback):
             monitored has stopped increasing; in `auto`
             mode, the direction is automatically inferred
             from the name of the monitored quantity.
+        baseline: Baseline value for the monitored quantity to reach.
+            Training will stop if the model doesn't show improvement
+            over the baseline.
     """
 
-    def __init__(self, monitor='val_loss',
-                 min_delta=0, patience=0, verbose=0, mode='auto'):
+    def __init__(self,
+                 monitor='val_loss',
+                 min_delta=0,
+                 patience=0,
+                 verbose=0,
+                 mode='auto',
+                 baseline=None):
         super(EarlyStopping, self).__init__()
 
         self.monitor = monitor
+        self.baseline = baseline
         self.patience = patience
         self.verbose = verbose
         self.min_delta = min_delta
@@ -514,7 +520,10 @@ class EarlyStopping(Callback):
         # Allow instances to be re-used
         self.wait = 0
         self.stopped_epoch = 0
-        self.best = np.Inf if self.monitor_op == np.less else -np.Inf
+        if self.baseline is not None:
+            self.best = self.baseline
+        else:
+            self.best = np.Inf if self.monitor_op == np.less else -np.Inf
 
     def on_epoch_end(self, epoch, logs=None):
         current = logs.get(self.monitor)
@@ -616,7 +625,7 @@ class LearningRateScheduler(Callback):
             raise ValueError('Optimizer must have a "lr" attribute.')
         lr = float(K.get_value(self.model.optimizer.lr))
         try:  # new API
-            lr = self.schedule(epoch, lr=lr)
+            lr = self.schedule(epoch, lr)
         except TypeError:  # old API for backward compatibility
             lr = self.schedule(epoch)
         if not isinstance(lr, (float, np.float32, np.float64)):
@@ -777,8 +786,12 @@ class TensorBoard(Callback):
                         tf.summary.image(mapped_weight_name, w_img)
 
                 if hasattr(layer, 'output'):
-                    tf.summary.histogram('{}_out'.format(layer.name),
-                                         layer.output)
+                    if isinstance(layer.output, list):
+                        for i, output in enumerate(layer.output):
+                            tf.summary.histogram('{}_out_{}'.format(layer.name, i), output)
+                    else:
+                        tf.summary.histogram('{}_out'.format(layer.name),
+                                             layer.output)
         self.merged = tf.summary.merge_all()
 
         if self.write_graph:
@@ -925,7 +938,7 @@ class ReduceLROnPlateau(Callback):
         if 'epsilon' in kwargs:
             min_delta = kwargs.pop('epsilon')
             warnings.warn('`epsilon` argument is deprecated and '
-                          'will be removed, use `min_delta` insted.')
+                          'will be removed, use `min_delta` instead.')
         self.factor = factor
         self.min_lr = min_lr
         self.min_delta = min_delta

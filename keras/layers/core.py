@@ -60,7 +60,8 @@ class Masking(Layer):
         self.mask_value = mask_value
 
     def compute_mask(self, inputs, mask=None):
-        return K.any(K.not_equal(inputs, self.mask_value), axis=-1)
+        output_mask = K.any(K.not_equal(inputs, self.mask_value), axis=-1)
+        return output_mask
 
     def call(self, inputs):
         boolean_mask = K.any(K.not_equal(inputs, self.mask_value),
@@ -554,11 +555,18 @@ class Flatten(Layer):
     """Flattens the input. Does not affect the batch size.
 
     # Arguments
-        data_format: A string, one of `channels_last` (default) or `channels_first`.
-          The ordering of the dimensions in the inputs.
-          `channels_last` corresponds to inputs with shape
-          `(batch, ..., channels)` while `channels_first` corresponds to
-          inputs with shape `(batch, channels, ...)`.
+        data_format: A string,
+            one of `channels_last` (default) or `channels_first`.
+            The ordering of the dimensions in the inputs.
+            The purpose of this argument is to preserve weight
+            ordering when switching a model from one data format
+            to another.
+            `channels_last` corresponds to inputs with shape
+            `(batch, ..., channels)` while `channels_first` corresponds to
+            inputs with shape `(batch, channels, ...)`.
+            It defaults to the `image_data_format` value found in your
+            Keras config file at `~/.keras/keras.json`.
+            If you never set it, then it will be "channels_last".
 
     # Example
 
@@ -574,7 +582,7 @@ class Flatten(Layer):
     ```
     """
 
-    def __init__(self, data_format='channels_last', **kwargs):
+    def __init__(self, data_format=None, **kwargs):
         super(Flatten, self).__init__(**kwargs)
         self.input_spec = InputSpec(min_ndim=3)
         self.data_format = conv_utils.normalize_data_format(data_format)
