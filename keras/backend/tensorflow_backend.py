@@ -2834,6 +2834,10 @@ class Function(object):
         return updated[:len(self.outputs)]
 
     def __call__(self, inputs):
+        return self._legacy_call(inputs)
+        # TODO: Here we must rely on the legacy_call for optimized_cond models. Otherwise, the error
+        # "tensorflow.python.framework.errors_impl.InvalidArgumentError: preprocessed_input:0 is both fed and fetched." is raised
+
         if hasattr(get_session(), '_make_callable_from_options'):
             if py_any(is_sparse(x) for x in self.inputs):
                 if py_any(is_tensor(x) for x in inputs):
@@ -2935,6 +2939,7 @@ def rnn(step_function, inputs, initial_states,
         unroll: Whether to unroll the RNN or to use a symbolic loop
             (`while_loop` or `scan` depending on backend).
         input_length: Static number of timesteps in the input.
+        pos_extra_outputs_states: Positions that extra_output_states will have.
 
     # Returns
         A tuple, `(last_output, outputs, new_states)`.
