@@ -335,7 +335,7 @@ class Concatenate(_Merge):
         self.axis = axis
         self.supports_masking = True
         self._reshape_required = False
-        
+
         if cropping is not None:
             # If cropping is enabled, don't crop on the selected axis
             cropping = list(cropping)
@@ -725,8 +725,7 @@ def autocrop(inputs, cropping):
         if not all(K.ndim(input) == ndim for input in inputs):
             raise ValueError("Not all inputs are of the same ",
                              "dimensionality. Got {0} inputs of "
-                             "dimensionalities {1}.".format(
-                             len(inputs), [K.ndim(input) for input in inputs]))
+                             "dimensionalities {1}.".format(len(inputs), [K.ndim(input) for input in inputs]))
 
         # Get the shape of each input
         shapes = [K.shape(input) for input in inputs]
@@ -743,8 +742,7 @@ def autocrop(inputs, cropping):
         # the cropping
         cropping = list(cropping)
         if ndim > len(cropping):
-            cropping = list(cropping) + \
-                         [None] * (ndim - len(cropping))
+            cropping = list(cropping) + [None] * (ndim - len(cropping))
 
         # For each dimension
         for dim, cr in enumerate(cropping):
@@ -771,14 +769,12 @@ def autocrop(inputs, cropping):
                     # Choose `sz` elements from the center
                     for sh, slices in zip(shapes, slices_by_input):
                         offset = (sh[dim] - sz) // 2
-                        slices.append(slice(offset, offset+sz))
+                        slices.append(slice(offset, offset + sz))
                 else:
-                    raise ValueError(
-                        'Unknown crop mode \'{0}\''.format(cr))
+                    raise ValueError('Unknown crop mode \'{0}\''.format(cr))
 
         return [input[slices] for input, slices in
                 zip(inputs, slices_by_input)]
-
 
 
 def autocrop_array_shapes(input_shapes, cropping):
@@ -807,9 +803,7 @@ def autocrop_array_shapes(input_shapes, cropping):
         if not all(len(sh) == ndim for sh in input_shapes):
             raise ValueError("Not all inputs are of the same "
                              "dimensionality. Got {0} inputs of "
-                             "dimensionalities {1}.".format(
-                                len(input_shapes),
-                                [len(sh) for sh in input_shapes]))
+                             "dimensionalities {1}.".format(len(input_shapes), [len(sh) for sh in input_shapes]))
 
         result = []
 
@@ -817,8 +811,7 @@ def autocrop_array_shapes(input_shapes, cropping):
         # the cropping
         cropping = list(cropping)
         if ndim > len(cropping):
-            cropping = list(cropping) + \
-                         [None] * (ndim - len(cropping))
+            cropping = list(cropping) + [None] * (ndim - len(cropping))
 
         for sh, cr in zip(zip(*input_shapes), cropping):
             if cr is None:

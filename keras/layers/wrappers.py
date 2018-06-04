@@ -264,69 +264,69 @@ class TimeDistributed(Wrapper):
             y._uses_learning_phase = True
         return y
 
-    def compute_mask(self, inputs, mask=None):
-        """Computes an output mask tensor for Embedding layer
-        based on the inputs, mask, and the inner layer.
-
-        If batch size is specified:
-        Simply return the input `mask`. (An rnn-based implementation with
-        more than one rnn inputs is required but not supported in Keras yet.)
-
-        Otherwise we call `compute_mask` of the inner layer at each time step.
-        If the output mask at each time step is not `None`:
-        (E.g., inner layer is Masking or RNN)
-        Concatenate all of them and return the concatenation.
-        If the output mask at each time step is `None` and the input mask is not `None`:
-        (E.g., inner layer is Dense)
-        Reduce the input_mask to 2 dimensions and return it.
-        Otherwise (both the output mask and the input mask are `None`):
-        (E.g., `mask` is not used at all)
-        Return `None`.
-
-        # Arguments
-            inputs: Tensor
-            mask: Tensor
-        # Returns
-            None or a tensor
-        """
-        # cases need to call the layer.compute_mask when input_mask is None:
-        # Masking layer and Embedding layer with mask_zero
-        input_shape = K.int_shape(inputs)
-        if input_shape[0]:
-            # batch size matters, we currently do not handle mask explicitly
-            return mask
-        inner_mask = mask
-        if inner_mask is not None:
-            inner_mask_shape = self._get_shape_tuple((-1,), mask, 2)
-            inner_mask = K.reshape(inner_mask, inner_mask_shape)
-        input_uid = object_list_uid(inputs)
-        inner_inputs = self._input_map[input_uid]
-        output_mask = self.layer.compute_mask(inner_inputs, inner_mask)
-        if output_mask is None:
-            if mask is None:
-                return None
-            # input_mask is not None, and output_mask is None:
-            # we should return a not-None mask
-            output_mask = mask
-            for _ in range(2, len(K.int_shape(mask))):
-                output_mask = K.any(output_mask, axis=-1)
-        else:
-            # output_mask is not None. We need to reshape it
-            input_length = input_shape[1]
-            if not input_length:
-                input_length = K.shape(inputs)[1]
-            output_mask_int_shape = K.int_shape(output_mask)
-            if output_mask_int_shape is None:
-                # if the output_mask does not have a static shape,
-                # its shape must be the same as mask's
-                if mask is not None:
-                    output_mask_int_shape = K.int_shape(mask)
-                else:
-                    output_mask_int_shape = K.compute_output_shape(input_shape)[:-1]
-            output_mask_shape = self._get_shape_tuple(
-                (-1, input_length), output_mask, 1, output_mask_int_shape[1:])
-            output_mask = K.reshape(output_mask, output_mask_shape)
-        return output_mask
+    # def compute_mask(self, inputs, mask=None):
+    #     """Computes an output mask tensor for Embedding layer
+    #     based on the inputs, mask, and the inner layer.
+    #
+    #     If batch size is specified:
+    #     Simply return the input `mask`. (An rnn-based implementation with
+    #     more than one rnn inputs is required but not supported in Keras yet.)
+    #
+    #     Otherwise we call `compute_mask` of the inner layer at each time step.
+    #     If the output mask at each time step is not `None`:
+    #     (E.g., inner layer is Masking or RNN)
+    #     Concatenate all of them and return the concatenation.
+    #     If the output mask at each time step is `None` and the input mask is not `None`:
+    #     (E.g., inner layer is Dense)
+    #     Reduce the input_mask to 2 dimensions and return it.
+    #     Otherwise (both the output mask and the input mask are `None`):
+    #     (E.g., `mask` is not used at all)
+    #     Return `None`.
+    #
+    #     # Arguments
+    #         inputs: Tensor
+    #         mask: Tensor
+    #     # Returns
+    #         None or a tensor
+    #     """
+    #     # cases need to call the layer.compute_mask when input_mask is None:
+    #     # Masking layer and Embedding layer with mask_zero
+    #     input_shape = K.int_shape(inputs)
+    #     if input_shape[0]:
+    #         # batch size matters, we currently do not handle mask explicitly
+    #         return mask
+    #     inner_mask = mask
+    #     if inner_mask is not None:
+    #         inner_mask_shape = self._get_shape_tuple((-1,), mask, 2)
+    #         inner_mask = K.reshape(inner_mask, inner_mask_shape)
+    #     input_uid = object_list_uid(inputs)
+    #     inner_inputs = self._input_map[input_uid]
+    #     output_mask = self.layer.compute_mask(inner_inputs, inner_mask)
+    #     if output_mask is None:
+    #         if mask is None:
+    #             return None
+    #         # input_mask is not None, and output_mask is None:
+    #         # we should return a not-None mask
+    #         output_mask = mask
+    #         for _ in range(2, len(K.int_shape(mask))):
+    #             output_mask = K.any(output_mask, axis=-1)
+    #     else:
+    #         # output_mask is not None. We need to reshape it
+    #         input_length = input_shape[1]
+    #         if not input_length:
+    #             input_length = K.shape(inputs)[1]
+    #         output_mask_int_shape = K.int_shape(output_mask)
+    #         if output_mask_int_shape is None:
+    #             # if the output_mask does not have a static shape,
+    #             # its shape must be the same as mask's
+    #             if mask is not None:
+    #                 output_mask_int_shape = K.int_shape(mask)
+    #             else:
+    #                 output_mask_int_shape = K.compute_output_shape(input_shape)[:-1]
+    #         output_mask_shape = self._get_shape_tuple(
+    #             (-1, input_length), output_mask, 1, output_mask_int_shape[1:])
+    #         output_mask = K.reshape(output_mask, output_mask_shape)
+    #     return output_mask
 
 
 class Bidirectional(Wrapper):

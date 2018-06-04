@@ -1493,6 +1493,7 @@ def not_equal(x, y):
         z._keras_shape = y._keras_shape
     return z
 
+
 def greater(x, y):
     """Element-wise truth value of (x > y).
 
