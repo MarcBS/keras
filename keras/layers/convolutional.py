@@ -199,6 +199,7 @@ class _Conv(Layer):
         """
 
     def build(self, input_shape):
+
         if self.data_format == 'channels_first':
             channel_axis = 1
         else:
