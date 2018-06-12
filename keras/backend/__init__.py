@@ -12,6 +12,9 @@ from .common import cast_to_floatx
 from .common import image_data_format
 from .common import set_image_data_format
 
+# Set Keras' recursion limit high enough.
+sys.setrecursionlimit(10000)
+
 # Set Keras base dir path given KERAS_HOME env variable, if applicable.
 # Otherwise either ~/.keras or /tmp.
 if 'KERAS_HOME' in os.environ:

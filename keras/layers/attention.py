@@ -3,8 +3,6 @@ from __future__ import absolute_import
 
 import numpy as np
 
-np.set_printoptions(threshold=np.inf)
-
 from .. import backend as K
 from .. import activations, initializers, regularizers, constraints
 from ..engine import Layer, InputSpec
