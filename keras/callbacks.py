@@ -809,35 +809,39 @@ class TensorBoard(Callback):
         else:
             self.writer = tf.summary.FileWriter(self.log_dir)
 
-        if self.embeddings_freq and self.embeddings_data is not None:
-            self.embeddings_data = standardize_input_data(self.embeddings_data, model.input_names)
-
+        if self.embeddings_freq:
             embeddings_layer_names = self.embeddings_layer_names
-
             if not embeddings_layer_names:
                 embeddings_layer_names = [layer.name for layer in self.model.layers
                                           if type(layer).__name__ == 'Embedding']
-            self.assign_embeddings = []
-            embeddings_vars = {}
 
-            self.batch_id = batch_id = tf.placeholder(tf.int32)
-            self.step = step = tf.placeholder(tf.int32)
+            if self.embeddings_data is not None:
+                self.embeddings_data = standardize_input_data(self.embeddings_data, model.input_names)
+                self.assign_embeddings = []
+                embeddings_vars = {}
 
-            for layer in self.model.layers:
-                if layer.name in embeddings_layer_names:
-                    embedding_input = self.model.get_layer(layer.name).output
-                    embedding_size = np.prod(embedding_input.shape[1:])
-                    embedding_input = tf.reshape(embedding_input,
-                                                 (step, int(embedding_size)))
-                    shape = (self.embeddings_data[0].shape[0], int(embedding_size))
-                    embedding = tf.Variable(tf.zeros(shape),
-                                            name=layer.name + '_embedding')
-                    embeddings_vars[layer.name] = embedding
-                    batch = tf.assign(embedding[batch_id:batch_id + step],
-                                      embedding_input)
-                    self.assign_embeddings.append(batch)
+                self.batch_id = batch_id = tf.placeholder(tf.int32)
+                self.step = step = tf.placeholder(tf.int32)
 
-            self.saver = tf.train.Saver(list(embeddings_vars.values()))
+                for layer in self.model.layers:
+                    if layer.name in embeddings_layer_names:
+                        embedding_input = self.model.get_layer(layer.name).output
+                        embedding_size = np.prod(embedding_input.shape[1:])
+                        embedding_input = tf.reshape(embedding_input,
+                                                     (step, int(embedding_size)))
+                        shape = (self.embeddings_data[0].shape[0], int(embedding_size))
+                        embedding = tf.Variable(tf.zeros(shape),
+                                                name=layer.name + '_embedding')
+                        embeddings_vars[layer.name] = embedding
+                        batch = tf.assign(embedding[batch_id:batch_id + step],
+                                          embedding_input)
+                        self.assign_embeddings.append(batch)
+                self.saver = tf.train.Saver(list(embeddings_vars.values()))
+            else:
+                embeddings_vars = {layer.name: layer.weights[0]
+                              for layer in self.model.layers
+                              if layer.name in embeddings_layer_names}
+                self.saver = tf.train.Saver(list(embeddings_vars.values()))
 
             embeddings_metadata = {}
 
@@ -864,9 +868,9 @@ class TensorBoard(Callback):
         if not self.validation_data and self.histogram_freq:
             raise ValueError("If printing histograms, validation_data must be "
                              "provided, and cannot be a generator.")
-        if self.embeddings_data is None and self.embeddings_freq:
-            raise ValueError("To visualize embeddings, embeddings_data must "
-                             "be provided.")
+        # if self.embeddings_data is None and self.embeddings_freq:
+        #     raise ValueError("To visualize embeddings, embeddings_data must "
+        #                      "be provided.")
         if self.validation_data and self.histogram_freq:
             if epoch % self.histogram_freq == 0:
 
@@ -933,6 +937,12 @@ class TensorBoard(Callback):
                                     epoch)
 
                     i += self.batch_size
+        elif self.embeddings_data is None:
+            if epoch % self.embeddings_freq == 0:
+                self.saver.save(self.sess,
+                                os.path.join(self.log_dir, 'keras_embedding.ckpt'),
+                                epoch)
+
 
         for name, value in logs.items():
             if name in ['batch', 'size']:
