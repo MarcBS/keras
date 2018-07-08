@@ -1742,8 +1742,10 @@ class PositionwiseFeedForwardDense(Layer):
 
     def compute_output_shape(self, input_shape):
         assert input_shape and len(input_shape) >= 2
-        assert input_shape[-1]
         return input_shape
+
+    def compute_mask(self, input_shape, input_mask=None):
+        return input_mask
 
     def get_config(self):
         config = {

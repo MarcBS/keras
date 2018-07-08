@@ -101,13 +101,13 @@ class MultiHeadAttention(Layer):
         if mask[0] is not None:
             mask_query = K.cast(mask[0], K.dtype(query))
         else:
-            mask_query = K.not_equal(K.sum(query, axis=2), 0)
+            mask_query = K.not_equal(K.sum(K.abs(query), axis=2), 0)
             mask_query = K.cast(mask_query, K.dtype(query))
 
         if mask[1] is not None:
             mask_key = K.cast(mask[1], K.dtype(key))
         else:
-            mask_key = K.not_equal(K.sum(key, axis=2), 0)
+            mask_key = K.not_equal(K.sum(K.abs(key), axis=2), 0)
             mask_key = K.cast(mask_key, K.dtype(key))
 
         query *= mask_query[:, :, None]
@@ -141,9 +141,9 @@ class MultiHeadAttention(Layer):
         if self.mask_future:
             diag_vals = K.ones_like(attended_heads[0, :, :])  # (T_q, T_k)
             tril = K.tril(diag_vals)  # (T_q, T_k)
-            masks = K.tile(K.expand_dims(tril, 0), [K.shape(attended_heads)[0], 1, 1])  # (h*N, T_q, T_k)
-            paddings = K.ones_like(masks) * K.variable(-2 ** 32 + 1, dtype=K.floatx())
-            attended_heads = K.switch(K.equal(masks, 0), paddings, attended_heads)  # (h*N, T_q, T_k)
+            future_masks = K.tile(K.expand_dims(tril, 0), [K.shape(attended_heads)[0], 1, 1])  # (h*N, T_q, T_k)
+            paddings = K.ones_like(future_masks) * K.variable(-2 ** 32 + 1, dtype=K.floatx())
+            attended_heads = K.switch(K.equal(future_masks, 0), paddings, attended_heads)  # (h*N, T_q, T_k)
 
         # Activation (softmax)
         alphas = K.softmax_3d(attended_heads)
@@ -170,7 +170,7 @@ class MultiHeadAttention(Layer):
         if mask[0] is not None:
             mask_query = K.cast(mask[0], K.dtype(query))
         else:
-            mask_query = K.not_equal(K.sum(query, axis=2), 0)
+            mask_query = K.not_equal(K.sum(K.abs(query), axis=2), 0)
             mask_query = K.cast(mask_query, K.dtype(query))
         return mask_query
 
