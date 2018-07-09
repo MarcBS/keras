@@ -839,8 +839,8 @@ class TensorBoard(Callback):
                 self.saver = tf.train.Saver(list(embeddings_vars.values()))
             else:
                 embeddings_vars = {layer.name: layer.weights[0]
-                              for layer in self.model.layers
-                              if layer.name in embeddings_layer_names}
+                                   for layer in self.model.layers
+                                   if layer.name in embeddings_layer_names}
                 self.saver = tf.train.Saver(list(embeddings_vars.values()))
 
             embeddings_metadata = {}
@@ -942,7 +942,6 @@ class TensorBoard(Callback):
                 self.saver.save(self.sess,
                                 os.path.join(self.log_dir, 'keras_embedding.ckpt'),
                                 epoch)
-
 
         for name, value in logs.items():
             if name in ['batch', 'size']:
