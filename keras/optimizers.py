@@ -18,6 +18,17 @@ if K.backend() == 'tensorflow':
 
 
 def clip_norm(g, c, n):
+    """Clip the gradient `g` if the L2 norm `n` exceeds `c`.
+
+    # Arguments
+        g: Tensor, the gradient tensor
+        c: float >= 0. Gradients will be clipped
+            when their L2 norm exceeds this value.
+        n: Tensor, actual norm of `g`.
+
+    # Returns
+        Tensor, the gradient clipped if required.
+    """
     if c <= 0:  # if clipnorm == 0 no need to add ops to the graph
         return g
 
@@ -430,11 +441,16 @@ class RMSprop(Optimizer):
 class Adagrad(Optimizer):
     """Adagrad optimizer.
 
+    Adagrad is an optimizer with parameter-specific learning rates,
+    which are adapted relative to how frequently a parameter gets
+    updated during training. The more updates a parameter receives,
+    the smaller the updates.
+
     It is recommended to leave the parameters of this optimizer
     at their default values.
 
     # Arguments
-        lr: float >= 0. Learning rate.
+        lr: float >= 0. Initial learning rate.
         epsilon: float >= 0. If `None`, defaults to `K.epsilon()`.
         decay: float >= 0. Learning rate decay over each update.
 
@@ -489,15 +505,24 @@ class Adagrad(Optimizer):
 class Adadelta(Optimizer):
     """Adadelta optimizer.
 
+    Adadelta is a more robust extension of Adagrad
+    that adapts learning rates based on a moving window of gradient updates,
+    instead of accumulating all past gradients. This way, Adadelta continues
+    learning even when many updates have been done. Compared to Adagrad, in the
+    original version of Adadelta you don't have to set an initial learning
+    rate. In this version, initial learning rate and decay factor can
+    be set, as in most other Keras optimizers.
+
     It is recommended to leave the parameters of this optimizer
     at their default values.
 
     # Arguments
-        lr: float >= 0. Learning rate.
+        lr: float >= 0. Initial learning rate, defaults to 1.
             It is recommended to leave it at the default value.
-        rho: float >= 0.
+        rho: float >= 0. Adadelta decay factor, corresponding to fraction of
+            gradient to keep at each time step.
         epsilon: float >= 0. Fuzz factor. If `None`, defaults to `K.epsilon()`.
-        decay: float >= 0. Learning rate decay over each update.
+        decay: float >= 0. Initial learning rate decay.
 
     # References
         - [Adadelta - an adaptive learning rate method](http://arxiv.org/abs/1212.5701)

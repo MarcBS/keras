@@ -1937,7 +1937,7 @@ def batch_normalization(x, mean, var, beta, gamma, axis=-1, epsilon=1e-3):
     """Applies batch normalization on x given mean, var, beta and gamma.
 
     I.e. returns:
-    `output = (x - mean) / (sqrt(var) + epsilon) * gamma + beta`
+    `output = (x - mean) / sqrt(var + epsilon) * gamma + beta`
 
     # Arguments
         x: Input tensor or variable.
@@ -2795,12 +2795,12 @@ class Function(object):
                 # `callable_fn` only supports exact matches.
                 array_vals.append(
                     np.asarray(value,
-                               dtype=tensor.dtype.base_dtype.name))
+                               dtype=tf.as_dtype(tensor.dtype).as_numpy_dtype))
         if self.feed_dict:
             for key in sorted(self.feed_dict.keys()):
                 array_vals.append(
                     np.asarray(self.feed_dict[key],
-                               dtype=key.dtype.base_dtype.name))
+                               dtype=tf.as_dtype(key.dtype).as_numpy_dtype))
 
         # Refresh callable if anything has changed.
         if (self._callable_fn is None or
@@ -2924,7 +2924,7 @@ def rnn(step_function, inputs, initial_states,
                 states: List of tensors.
             Returns:
                 outputs: Tensor with shape (samples, ...) (no time dimension),
-                new_states: Tist of tensors, same length and shapes
+                new_states: List of tensors, same length and shapes
                     as 'states'.
         inputs: Tensor of temporal data of shape (samples, time, ...)
             (at least 3D).

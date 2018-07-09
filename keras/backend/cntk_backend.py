@@ -109,11 +109,12 @@ def in_test_phase(x, alt, training=None):
 
 
 def _convert_string_dtype(dtype):
-    # cntk only support float32 and float64
     if dtype == 'float32':
         return np.float32
     elif dtype == 'float64':
         return np.float64
+    elif dtype == 'float16':
+        return np.float16
     else:
         # cntk only running with float,
         # try to cast to float to run the model
@@ -125,10 +126,12 @@ def _convert_dtype_string(dtype):
         return 'float32'
     elif dtype == np.float64:
         return 'float64'
+    elif dtype == np.float16:
+        return 'float16'
     else:
         raise ValueError('CNTK Backend: Unsupported dtype: %s. '
-                         'CNTK only supports float32 and '
-                         'float64.' % dtype)
+                         'CNTK only supports float32, float64, and '
+                         'float16.' % dtype)
 
 
 def variable(value, dtype=None, name=None, constraint=None):
@@ -366,27 +369,21 @@ def constant(value, dtype=None, shape=None, name=None):
 
 
 def random_binomial(shape, p=0.0, dtype=None, seed=None):
-    # use numpy workaround now
     if seed is None:
         # ensure that randomness is conditioned by the Numpy RNG
         seed = np.random.randint(10e7)
-        np.random.seed(seed)
     if dtype is None:
         dtype = np.float32
     else:
         dtype = _convert_string_dtype(dtype)
 
-    size = 1
     for _ in shape:
         if _ is None:
             raise ValueError('CNTK Backend: randomness op with '
                              'dynamic shape is not supported now. '
                              'Please provide fixed dimension '
                              'instead of `None`.')
-        size *= _
-
-    binomial = np.random.binomial(1, p, size).astype(dtype).reshape(shape)
-    return variable(value=binomial, dtype=dtype)
+    return C.random.bernoulli(shape=shape, dtype=dtype, mean=p, seed=seed)
 
 
 def random_uniform(shape, minval=0.0, maxval=1.0, dtype=None, seed=None):
@@ -397,7 +394,10 @@ def random_uniform(shape, minval=0.0, maxval=1.0, dtype=None, seed=None):
                              'Please provide fixed dimension '
                              'instead of `None`.')
 
-    return random_uniform_variable(shape, minval, maxval, dtype, seed)
+    if seed is None:
+        # ensure that randomness is conditioned by the Numpy RNG
+        seed = np.random.randint(10e3)
+    return C.random.uniform(shape=shape, dtype=dtype, low=minval, high=maxval, seed=seed)
 
 
 def random_uniform_variable(shape, low, high,
@@ -447,13 +447,14 @@ def random_normal_variable(
     if name is None:
         name = ''
 
-    return C.parameter(
+    p = C.parameter(
         shape=shape,
         init=C.initializer.normal(
             scale=scale,
             seed=seed),
         dtype=dtype,
         name=name)
+    return variable(value=p.value + mean)
 
 
 def random_normal(shape, mean=0.0, stddev=1.0, dtype=None, seed=None):
@@ -465,8 +466,10 @@ def random_normal(shape, mean=0.0, stddev=1.0, dtype=None, seed=None):
                              'dynamic shape is not supported now. '
                              'Please provide fixed dimension '
                              'instead of `None`.')
-    # how to apply mean and stddev
-    return random_normal_variable(shape=shape, mean=mean, scale=1.0, seed=seed)
+    if seed is None:
+        # ensure that randomness is conditioned by the Numpy RNG
+        seed = np.random.randint(10e3)
+    return C.random.normal(shape=shape, mean=mean, scale=stddev, seed=seed, dtype=dtype)
 
 
 def truncated_normal(shape, mean=0.0, stddev=1.0, dtype=None, seed=None):
@@ -1082,7 +1085,7 @@ def batch_normalization(x, mean, var, beta, gamma, axis=-1, epsilon=1e-3):
     elif ndim(beta) == ndim(x) and shape(beta)[0] == 1:
         beta = _reshape_dummy_dim(beta, [0])
 
-    return (x - mean) / (C.sqrt(var) + epsilon) * gamma + beta
+    return (x - mean) / C.sqrt(var + epsilon) * gamma + beta
 
 
 def concatenate(tensors, axis=-1):

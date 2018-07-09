@@ -573,7 +573,7 @@ class Flatten(Layer):
     ```python
         model = Sequential()
         model.add(Conv2D(64, 3, 3,
-                         border_mode='same',
+                         padding='same',
                          input_shape=(3, 32, 32)))
         # now: model.output_shape == (None, 64, 32, 32)
 
@@ -1024,7 +1024,7 @@ class Dense(Layer):
     def call(self, inputs):
         output = K.dot(inputs, self.kernel)
         if self.use_bias:
-            output = K.bias_add(output, self.bias)
+            output = K.bias_add(output, self.bias, data_format='channels_last')
         if self.activation is not None:
             output = self.activation(output)
         return output

@@ -532,6 +532,16 @@ class TestBackend(object):
         assert output == [21.]
         assert KTF.get_session().run(fetches=[x, y]) == [30., 40.]
 
+    def test_function_tf_string_input(self):
+        # Test functions with string inputs.
+
+        x_placeholder = KTF.placeholder(shape=(), dtype="string")
+        x_identity = KTF.identity(x_placeholder)
+
+        f = KTF.function(inputs=[x_placeholder], outputs=[x_identity])
+        output = f([b'test'])
+        assert output == [b'test']
+
     def test_rnn(self):
         # implement a simple RNN
         num_samples = 4
@@ -1154,13 +1164,19 @@ class TestBackend(object):
                                       strides=(1, 1, 1), padding='same', pool_mode='avg')
 
     def test_random_normal(self):
-        mean = 0.
-        std = 1.
+        # test standard normal as well as a normal with a different set of parameters
         for k in BACKENDS:
-            rand = k.eval(k.random_normal((300, 200), mean=mean, stddev=std, seed=1337))
-            assert rand.shape == (300, 200)
-            assert np.abs(np.mean(rand) - mean) < 0.015
-            assert np.abs(np.std(rand) - std) < 0.015
+            for mean, std in [(0., 1.), (-10., 5.)]:
+                rand = k.eval(k.random_normal((300, 200), mean=mean, stddev=std, seed=1337))
+                assert rand.shape == (300, 200)
+                assert np.abs(np.mean(rand) - mean) < std * 0.015
+                assert np.abs(np.std(rand) - std) < std * 0.015
+
+                # test that random_normal also generates different values when used within a function
+                r = k.random_normal((1,), mean=mean, stddev=std, seed=1337)
+                samples = [k.eval(r) for _ in range(60000)]
+                assert np.abs(np.mean(samples) - mean) < std * 0.015
+                assert np.abs(np.std(samples) - std) < std * 0.015
 
     def test_random_uniform(self):
         min_val = -1.
@@ -1169,8 +1185,14 @@ class TestBackend(object):
             rand = k.eval(k.random_uniform((200, 100), min_val, max_val))
             assert rand.shape == (200, 100)
             assert np.abs(np.mean(rand)) < 0.015
-            assert np.max(rand) <= max_val
-            assert np.min(rand) >= min_val
+            assert max_val - 0.015 < np.max(rand) <= max_val
+            assert min_val + 0.015 > np.min(rand) >= min_val
+
+            r = k.random_uniform((1,), minval=min_val, maxval=max_val)
+            samples = [k.eval(r) for _ in range(20000)]
+            assert np.abs(np.mean(samples)) < 0.015
+            assert max_val - 0.015 < np.max(samples) <= max_val
+            assert min_val + 0.015 > np.min(samples) >= min_val
 
     def test_random_binomial(self):
         p = 0.5
@@ -1180,6 +1202,12 @@ class TestBackend(object):
             assert np.abs(np.mean(rand) - p) < 0.015
             assert np.max(rand) == 1
             assert np.min(rand) == 0
+
+            r = k.random_binomial((1,), p)
+            samples = [k.eval(r) for _ in range(20000)]
+            assert np.abs(np.mean(samples) - p) < 0.015
+            assert np.max(samples) == 1
+            assert np.min(samples) == 0
 
     def test_truncated_normal(self):
         mean = 0.
@@ -1769,11 +1797,7 @@ class TestBackend(object):
     def test_dtype(self):
         assert K.dtype(K.variable(1, dtype='float64')) == 'float64'
         assert K.dtype(K.variable(1, dtype='float32')) == 'float32'
-        if K.backend() == 'cntk':
-            with pytest.raises(ValueError):
-                K.variable(1, dtype='float16')
-        else:
-            assert K.dtype(K.variable(1, dtype='float16')) == 'float16'
+        assert K.dtype(K.variable(1, dtype='float16')) == 'float16'
 
     def test_variable_support_bool_dtype(self):
         # Github issue: 7819
