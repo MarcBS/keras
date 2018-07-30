@@ -23,7 +23,9 @@ except ImportError:
     from theano.sandbox.softsign import softsign as T_softsign
 
 import numpy as np
-from .common import floatx, epsilon, image_data_format
+from .common import floatx
+from .common import epsilon
+from .common import normalize_data_format
 from ..utils.generic_utils import has_arg
 # Legacy functions
 from .common import set_image_dim_ordering, image_dim_ordering
@@ -2130,10 +2132,7 @@ def spatial_2d_padding(x, padding=((1, 1), (1, 1)), data_format=None):
     assert len(padding[1]) == 2
     top_pad, bottom_pad = padding[0]
     left_pad, right_pad = padding[1]
-    if data_format is None:
-        data_format = image_data_format()
-    if data_format not in {'channels_first', 'channels_last'}:
-        raise ValueError('Unknown data_format ' + str(data_format))
+    data_format = normalize_data_format(data_format)
 
     input_shape = x.shape
     if data_format == 'channels_first':
@@ -2185,10 +2184,7 @@ def spatial_3d_padding(x, padding=((1, 1), (1, 1), (1, 1)), data_format=None):
         ValueError: if `data_format` is neither `"channels_last"` or `"channels_first"`.
 
     """
-    if data_format is None:
-        data_format = image_data_format()
-    if data_format not in {'channels_first', 'channels_last'}:
-        raise ValueError('Unknown data_format ' + str(data_format))
+    data_format = normalize_data_format(data_format)
 
     input_shape = x.shape
     if data_format == 'channels_first':
@@ -3296,10 +3292,7 @@ def conv1d(x, kernel, strides=1, padding='valid',
     # Raises
         ValueError: if `data_format` is neither `channels_last` or `channels_first`.
     """
-    if data_format is None:
-        data_format = image_data_format()
-    if data_format not in {'channels_first', 'channels_last'}:
-        raise ValueError('Unknown data_format ', data_format)
+    data_format = normalize_data_format(data_format)
 
     kernel_shape = int_shape(kernel)
     if padding == 'causal':
@@ -3361,10 +3354,7 @@ def conv2d(x, kernel, strides=(1, 1), padding='valid',
     # Raises
         ValueError: if `data_format` is neither `channels_last` or `channels_first`.
     """
-    if data_format is None:
-        data_format = image_data_format()
-    if data_format not in {'channels_first', 'channels_last'}:
-        raise ValueError('Unknown data_format ', data_format)
+    data_format = normalize_data_format(data_format)
 
     image_shape = _preprocess_conv2d_image_shape(int_shape(x), data_format)
     kernel_shape = int_shape(kernel)
@@ -3408,10 +3398,7 @@ def conv2d_transpose(x, kernel, output_shape, strides=(1, 1),
         ValueError: if `data_format` is neither `channels_last` or `channels_first`.
     """
     flip_filters = False
-    if data_format is None:
-        data_format = image_data_format()
-    if data_format not in {'channels_first', 'channels_last'}:
-        raise ValueError('Unknown data_format ' + data_format)
+    data_format = normalize_data_format(data_format)
 
     if data_format == 'channels_last':
         output_shape = (output_shape[0],
@@ -3465,10 +3452,7 @@ def separable_conv1d(x, depthwise_kernel, pointwise_kernel, strides=1,
     # Raises
         ValueError: if `data_format` is neither `"channels_last"` or `"channels_first"`.
     """
-    if data_format is None:
-        data_format = image_data_format()
-    if data_format not in {'channels_first', 'channels_last'}:
-        raise ValueError('Unknown data_format ', data_format)
+    data_format = normalize_data_format(data_format)
     if isinstance(strides, int):
         strides = (strides,)
     if isinstance(dilation_rate, int):
@@ -3539,10 +3523,7 @@ def separable_conv2d(x, depthwise_kernel, pointwise_kernel, strides=(1, 1),
     # Raises
         ValueError: if `data_format` is neither `"channels_last"` or `"channels_first"`.
     """
-    if data_format is None:
-        data_format = image_data_format()
-    if data_format not in {'channels_first', 'channels_last'}:
-        raise ValueError('Unknown data_format ', data_format)
+    data_format = normalize_data_format(data_format)
 
     image_shape = _preprocess_conv2d_image_shape(int_shape(x), data_format)
     depthwise_kernel_shape = int_shape(depthwise_kernel)
@@ -3597,10 +3578,7 @@ def depthwise_conv2d(x, depthwise_kernel, strides=(1, 1), padding='valid',
     # Raises
         ValueError: if `data_format` is neither `"channels_last"` or `"channels_first"`.
     """
-    if data_format is None:
-        data_format = image_data_format()
-    if data_format not in {'channels_first', 'channels_last'}:
-        raise ValueError('Unknown data_format ', data_format)
+    data_format = normalize_data_format(data_format)
 
     image_shape = _preprocess_conv2d_image_shape(int_shape(x), data_format)
     depthwise_kernel_shape = int_shape(depthwise_kernel)
@@ -3645,10 +3623,7 @@ def conv3d(x, kernel, strides=(1, 1, 1),
     # Raises
         ValueError: if `data_format` is neither `channels_last` or `channels_first`.
     """
-    if data_format is None:
-        data_format = image_data_format()
-    if data_format not in {'channels_first', 'channels_last'}:
-        raise ValueError('Unknown data_format:', data_format)
+    data_format = normalize_data_format(data_format)
 
     volume_shape = _preprocess_conv3d_volume_shape(int_shape(x), data_format)
     kernel_shape = int_shape(kernel)
@@ -3692,10 +3667,7 @@ def conv3d_transpose(x, kernel, output_shape, strides=(1, 1, 1),
         ValueError: if `data_format` is neither `channels_last` or `channels_first`.
     """
     flip_filters = False
-    if data_format is None:
-        data_format = image_data_format()
-    if data_format not in {'channels_first', 'channels_last'}:
-        raise ValueError('Unknown data_format ' + data_format)
+    data_format = normalize_data_format(data_format)
 
     if data_format == 'channels_last':
         output_shape = (output_shape[0],
@@ -3749,10 +3721,7 @@ def pool2d(x, pool_size, strides=(1, 1), padding='valid',
         ValueError: if `data_format` is neither `"channels_last"` or `"channels_first"`.
         ValueError: if `pool_mode` is neither `"max"` or `"avg"`.
     """
-    if data_format is None:
-        data_format = image_data_format()
-    if data_format not in {'channels_first', 'channels_last'}:
-        raise ValueError('Unknown data_format:', data_format)
+    data_format = normalize_data_format(data_format)
 
     assert pool_size[0] >= 1 and pool_size[1] >= 1
 
@@ -3811,10 +3780,7 @@ def pool3d(x, pool_size, strides=(1, 1, 1), padding='valid',
         ValueError: if `data_format` is neither `"channels_last"` or `"channels_first"`.
         ValueError: if `pool_mode` is neither `"max"` or `"avg"`.
     """
-    if data_format is None:
-        data_format = image_data_format()
-    if data_format not in {'channels_first', 'channels_last'}:
-        raise ValueError('Unknown data_format:', data_format)
+    data_format = normalize_data_format(data_format)
 
     if padding == 'same':
         w_pad = pool_size[0] - 2 if pool_size[0] % 2 == 1 else pool_size[0] - 1
@@ -3875,10 +3841,7 @@ def bias_add(x, bias, data_format=None):
                        the bias should be either a vector or
                        a tensor with ndim(x) - 1 dimension
     """
-    if data_format is None:
-        data_format = image_data_format()
-    if data_format not in {'channels_first', 'channels_last'}:
-        raise ValueError('Unknown data_format ' + str(data_format))
+    data_format = normalize_data_format(data_format)
     if ndim(bias) != 1 and ndim(bias) != ndim(x) - 1:
         raise ValueError('Unexpected bias dimensions %d, '
                          'expect to be 1 or %d dimensions'
@@ -4294,10 +4257,7 @@ def local_conv1d(inputs, kernel, kernel_size, strides, data_format=None):
     # Raises
         ValueError: if `data_format` is neither `channels_last` or `channels_first`.
     """
-    if data_format is None:
-        data_format = image_data_format()
-    if data_format not in {'channels_first', 'channels_last'}:
-        raise ValueError('Unknown data_format ' + str(data_format))
+    data_format = normalize_data_format(data_format)
 
     stride = strides[0]
     kernel_shape = int_shape(kernel)
@@ -4346,10 +4306,7 @@ def local_conv2d(inputs, kernel, kernel_size, strides, output_shape, data_format
         ValueError: if `data_format` is neither
                     `channels_last` or `channels_first`.
     """
-    if data_format is None:
-        data_format = image_data_format()
-    if data_format not in {'channels_first', 'channels_last'}:
-        raise ValueError('Unknown data_format ' + str(data_format))
+    data_format = normalize_data_format(data_format)
 
     stride_row, stride_col = strides
     output_row, output_col = output_shape
