@@ -937,7 +937,7 @@ class TensorBoard(Callback):
                                     epoch)
 
                     i += self.batch_size
-        elif self.embeddings_data is None:
+        elif self.embeddings_data is None and self.embeddings_freq != 0:
             if epoch % self.embeddings_freq == 0:
                 self.saver.save(self.sess,
                                 os.path.join(self.log_dir, 'keras_embedding.ckpt'),

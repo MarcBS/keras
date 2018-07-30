@@ -30,7 +30,8 @@ def test_temporal_classification():
 
     model = Sequential()
     model.add(layers.GRU(8,
-                         input_shape=(x_train.shape[1], x_train.shape[2])))
+                         input_shape=(x_train.shape[1], x_train.shape[2]),
+                         implementation=1))
     model.add(layers.Dense(y_train.shape[-1], activation='softmax'))
     model.compile(loss='categorical_crossentropy',
                   optimizer='rmsprop',
@@ -145,8 +146,8 @@ def test_stacked_lstm_char_prediction():
 
     # learn the alphabet with stacked LSTM
     model = Sequential([
-        layers.LSTM(16, return_sequences=True, input_shape=(sequence_length, number_of_chars)),
-        layers.LSTM(16, return_sequences=False),
+        layers.LSTM(32, return_sequences=True, input_shape=(sequence_length, number_of_chars), implementation=1),
+        layers.LSTM(32, return_sequences=False, implementation=1),
         layers.Dense(number_of_chars, activation='softmax')
     ])
     model.compile(loss='categorical_crossentropy', optimizer='adam')
