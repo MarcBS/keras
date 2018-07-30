@@ -37,7 +37,7 @@ from keras.layers import *
 from keras.datasets import imdb
 
 max_features = 20000
-maxlen = 20  # cut texts after this number of words (among top max_features most common words)
+maxlen = 20  # cut texts after this number of words
 batch_size = 32
 
 print('Loading data...')

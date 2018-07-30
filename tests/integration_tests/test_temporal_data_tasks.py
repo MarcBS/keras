@@ -39,7 +39,7 @@ def test_temporal_classification():
     history = model.fit(x_train, y_train, epochs=4, batch_size=10,
                         validation_data=(x_test, y_test),
                         verbose=0)
-    assert (history.history['acc'][-1] >= 0.79)
+    assert(history.history['acc'][-1] >= 0.8)
     config = model.get_config()
     model = Sequential.from_config(config)
 
@@ -71,7 +71,7 @@ def test_temporal_classification_functional():
     history = model.fit(x_train, y_train, epochs=4, batch_size=10,
                         validation_data=(x_test, y_test),
                         verbose=0)
-    assert (history.history['acc'][-1] >= 0.8)
+    assert(history.history['acc'][-1] >= 0.8)
 
 
 @keras_test
@@ -92,7 +92,7 @@ def test_temporal_regression():
     model.compile(loss='hinge', optimizer='adam')
     history = model.fit(x_train, y_train, epochs=5, batch_size=16,
                         validation_data=(x_test, y_test), verbose=0)
-    assert (history.history['loss'][-1] < 1.)
+    assert(history.history['loss'][-1] < 1.)
 
 
 @keras_test
@@ -116,7 +116,7 @@ def test_3d_to_3d():
     model.compile(loss='hinge', optimizer='rmsprop')
     history = model.fit(x_train, y_train, epochs=20, batch_size=16,
                         validation_data=(x_test, y_test), verbose=0)
-    assert (history.history['loss'][-1] < 1.)
+    assert(history.history['loss'][-1] < 1.)
 
 
 @keras_test
@@ -165,7 +165,7 @@ def test_stacked_lstm_char_prediction():
         sentence = sentence[1:] + next_char
 
     # check that it did generate the alphabet correctly
-    assert (generated == alphabet)
+    assert(generated == alphabet)
 
 
 @keras_test
@@ -203,7 +203,7 @@ def test_masked_temporal():
     history = model.fit(x, ys, validation_split=0.05, batch_size=10,
                         verbose=0, epochs=3)
     ground_truth = -np.log(0.5)
-    assert (np.abs(history.history['loss'][-1] - ground_truth) < 0.06)
+    assert(np.abs(history.history['loss'][-1] - ground_truth) < 0.06)
 
 
 @pytest.mark.skipif(K.backend() != 'tensorflow', reason='Requires TensorFlow backend')
@@ -213,7 +213,6 @@ def test_embedding_with_clipnorm():
     model.add(layers.Embedding(input_dim=1, output_dim=1))
     model.compile(optimizer=optimizers.SGD(clipnorm=0.1), loss='mse')
     model.fit(np.array([[0]]), np.array([[[0.5]]]), epochs=1)
-
 
 if __name__ == '__main__':
     pytest.main([__file__])

@@ -57,30 +57,6 @@ def clip_norm(g, c, n):
     return g
 
 
-def optimizer_from_config(config, custom_objects={}):
-    all_classes = {
-        'sgd': SGD,
-        'pas': PAS,
-        'ppas': PPAS,
-        'pas2': PAS2,
-        'rmsprop': RMSprop,
-        'adagrad': Adagrad,
-        'adadelta': Adadelta,
-        'adam': Adam,
-        'adamax': Adamax,
-        'nadam': Nadam,
-        'tfoptimizer': TFOptimizer,
-    }
-    class_name = config['class_name']
-    if class_name in custom_objects:
-        cls = custom_objects[class_name]
-    else:
-        if class_name.lower() not in all_classes:
-            raise ValueError('Optimizer class not found:', class_name)
-        cls = all_classes[class_name.lower()]
-    return cls.from_config(config['config'])
-
-
 class Optimizer(object):
     """Abstract optimizer base class.
 
@@ -471,7 +447,13 @@ class Adagrad(Optimizer):
 
     @interfaces.legacy_get_updates_support
     def get_updates(self, loss, params, learning_rate_multipliers):
+
+        # The comments are taken from Fig. 1 from the AdaGrad paper.
+
+        # 0. Suffer lox f_1(x_t) -> loss
+        # 1. Recieve subgradient g_t
         grads = self.get_gradients(loss, params)
+
         shapes = [K.int_shape(p) for p in params]
         accumulators = [K.zeros(shape) for shape in shapes]
         self.weights = accumulators
@@ -483,7 +465,7 @@ class Adagrad(Optimizer):
                                                       K.dtype(self.decay))))
 
         for p, g, a, lmul in zip(params, grads, accumulators, learning_rate_multipliers):
-            new_a = a + K.square(g)  # update accumulator
+            new_a = a + K.square(g)  # update accumulator G_t
             self.updates.append(K.update(a, new_a))
             new_p = p - lr * lmul * g / (K.sqrt(new_a) + self.epsilon)
 

@@ -3156,7 +3156,10 @@ def rnn(step_function, inputs, initial_states,
                     tiled_mask_t = tf.tile(mask_t,
                                            tf.stack([1, tf.shape(output)[1]]))
                     output = tf.where(tiled_mask_t, output, states[0])
-                    new_states = [tf.where(tiled_mask_t, new_states[i], states[i]) for i in range(len(states))]
+                    new_states = [
+                        tf.where(tf.tile(mask_t, tf.stack([1, tf.shape(new_states[i])[1]])),
+                                 new_states[i], states[i]) for i in range(len(states))
+                    ]
                     output_ta_t = output_ta_t.write(time, output)
                     return (time + 1, output_ta_t) + tuple(new_states)
         else:
@@ -3198,18 +3201,18 @@ def rnn(step_function, inputs, initial_states,
             non_extra_states = [final_outputs[i + 3] for i in range(len(final_outputs[3:]))
                                 if i not in pos_extra_outputs_states]
             states = non_extra_states + final_outputs[2]
-        else:
-            new_states = final_outputs[2:]
-        if pos_extra_outputs_states is not None:
             new_states = []
             for i_s, state in enumerate(states):
                 if i_s in pos_extra_outputs_states:  # This +1 accounts for the last_output
                     new_states.append(state.stack())
                 else:
                     new_states.append(state)
+        else:
+            new_states = final_outputs[2:]
 
         outputs = output_ta.stack()
         last_output = output_ta.read(last_time - 1)
+
     axes = [1, 0] + list(range(2, len(outputs.get_shape())))
     outputs = tf.transpose(outputs, axes)
     last_output._uses_learning_phase = uses_learning_phase

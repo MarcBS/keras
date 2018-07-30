@@ -30,7 +30,8 @@ class ConcatenateOutputWithSigma(Layer):
                                       name='sigma',
                                       initializer='zeros',
                                       trainable=True)
-        super(ConcatenateOutputWithSigma, self).build(input_shape)  # Be sure to call this somewhere!
+        # Be sure to call this somewhere!
+        super(ConcatenateOutputWithSigma, self).build(input_shape)
 
     def call(self, x):
         input_ones_matrix = ((K.abs(x) + 1) / (K.abs(x) + 1))
