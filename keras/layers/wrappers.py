@@ -242,7 +242,7 @@ class TimeDistributed(Wrapper):
             inputs = K.reshape(inputs, inner_input_shape)
             self._input_map[input_uid] = inputs
             # (num_samples * timesteps, ...)
-            if has_arg(self.layer.call, 'mask') and mask is not None:
+            if has_arg(self.layer.call, 'mask') and mask is not None and K.ndim(mask) > 2:
                 inner_mask_shape = self._get_shape_tuple((-1,), mask, 2)
                 kwargs['mask'] = K.reshape(mask, inner_mask_shape)
             y = self.layer.call(inputs, **kwargs)
