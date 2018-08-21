@@ -21,6 +21,7 @@ import os
 from .common import floatx
 from .common import epsilon
 from .common import normalize_data_format
+from ..utils.generic_utils import transpose_shape
 from ..utils.generic_utils import has_arg
 
 # Legacy functions
@@ -2400,15 +2401,11 @@ def spatial_2d_padding(x, padding=((1, 1), (1, 1)), data_format=None):
     assert len(padding[1]) == 2
     data_format = normalize_data_format(data_format)
 
-    if data_format == 'channels_first':
-        pattern = [[0, 0],
-                   [0, 0],
-                   list(padding[0]),
-                   list(padding[1])]
-    else:
-        pattern = [[0, 0],
-                   list(padding[0]), list(padding[1]),
-                   [0, 0]]
+    pattern = [[0, 0],
+               list(padding[0]),
+               list(padding[1]),
+               [0, 0]]
+    pattern = transpose_shape(pattern, data_format, spatial_axes=(1, 2))
     return tf.pad(x, pattern)
 
 
@@ -2441,22 +2438,15 @@ def spatial_3d_padding(x, padding=((1, 1), (1, 1), (1, 1)), data_format=None):
     assert len(padding[2]) == 2
     data_format = normalize_data_format(data_format)
 
-    if data_format == 'channels_first':
-        pattern = [
-            [0, 0],
-            [0, 0],
-            [padding[0][0], padding[0][1]],
-            [padding[1][0], padding[1][1]],
-            [padding[2][0], padding[2][1]]
-        ]
-    else:
-        pattern = [
-            [0, 0],
-            [padding[0][0], padding[0][1]],
-            [padding[1][0], padding[1][1]],
-            [padding[2][0], padding[2][1]],
-            [0, 0]
-        ]
+    pattern = [
+        [0, 0],
+        [padding[0][0], padding[0][1]],
+        [padding[1][0], padding[1][1]],
+        [padding[2][0], padding[2][1]],
+        [0, 0]
+    ]
+    pattern = transpose_shape(pattern, data_format, spatial_axes=(1, 2, 3))
+
     return tf.pad(x, pattern)
 
 
@@ -4271,16 +4261,12 @@ def bias_add(x, bias, data_format=None):
         raise ValueError('Unexpected bias dimensions %d, expect to be 1 or %d dimensions'
                          % (len(bias_shape), ndim(x)))
     if ndim(x) == 5:
-        if data_format == 'channels_first':
-            if len(bias_shape) == 1:
-                x += reshape(bias, (1, bias_shape[0], 1, 1, 1))
-            else:
-                x += reshape(bias, (1, bias_shape[3]) + bias_shape[:3])
-        elif data_format == 'channels_last':
-            if len(bias_shape) == 1:
-                x += reshape(bias, (1, 1, 1, bias_shape[0]))
-            else:
-                x += reshape(bias, (1,) + bias_shape)
+        if len(bias_shape) == 1:
+            new_shape = (1, 1, 1, 1, bias_shape[0])
+        else:
+            new_shape = (1,) + bias_shape
+        new_shape = transpose_shape(new_shape, data_format, spatial_axes=(1, 2, 3))
+        x += reshape(bias, new_shape)
     elif ndim(x) == 4:
         if data_format == 'channels_first':
             if len(bias_shape) == 1:
@@ -4298,16 +4284,12 @@ def bias_add(x, bias, data_format=None):
             else:
                 x += reshape(bias, (1,) + bias_shape)
     elif ndim(x) == 3:
-        if data_format == 'channels_first':
-            if len(bias_shape) == 1:
-                x += reshape(bias, (1, bias_shape[0], 1))
-            else:
-                x += reshape(bias, (1, bias_shape[1], bias_shape[0]))
-        elif data_format == 'channels_last':
-            if len(bias_shape) == 1:
-                x += reshape(bias, (1, 1, bias_shape[0]))
-            else:
-                x += reshape(bias, (1, ) + bias_shape)
+        if len(bias_shape) == 1:
+            new_shape = (1, 1, bias_shape[0])
+        else:
+            new_shape = (1,) + bias_shape
+        new_shape = transpose_shape(new_shape, data_format, spatial_axes=(1,))
+        x += reshape(bias, new_shape)
     else:
         x = tf.nn.bias_add(x, bias)
     return x

@@ -163,7 +163,8 @@ def test_TimeDistributed_with_masked_embedding_and_unspecified_shape():
     # test with unspecified shape and Embeddings with mask_zero
     model = Sequential()
     model.add(wrappers.TimeDistributed(layers.Embedding(5, 6, mask_zero=True),
-                                       input_shape=(None, None)))  # N by t_1 by t_2 by 6
+                                       input_shape=(None, None)))
+    # the shape so far: (N, t_1, t_2, 6)
     model.add(wrappers.TimeDistributed(layers.SimpleRNN(7, return_sequences=True)))
     model.add(wrappers.TimeDistributed(layers.SimpleRNN(8, return_sequences=False)))
     model.add(layers.SimpleRNN(1, return_sequences=False))
@@ -336,10 +337,12 @@ def test_Bidirectional_merged_value(merge_mode):
 
     # basic case
     inputs = Input((timesteps, dim))
-    layer = wrappers.Bidirectional(rnn(units, return_sequences=True), merge_mode=merge_mode)
+    layer = wrappers.Bidirectional(rnn(units, return_sequences=True),
+                                   merge_mode=merge_mode)
     f_merged = K.function([inputs], to_list(layer(inputs)))
     f_forward = K.function([inputs], [layer.forward_layer.call(inputs)])
-    f_backward = K.function([inputs], [K.reverse(layer.backward_layer.call(inputs), 1)])
+    f_backward = K.function([inputs],
+                            [K.reverse(layer.backward_layer.call(inputs), 1)])
 
     y_merged = f_merged(X)
     y_expected = to_list(merge_func(f_forward(X)[0], f_backward(X)[0]))
@@ -349,7 +352,8 @@ def test_Bidirectional_merged_value(merge_mode):
 
     # test return_state
     inputs = Input((timesteps, dim))
-    layer = wrappers.Bidirectional(rnn(units, return_state=True), merge_mode=merge_mode)
+    layer = wrappers.Bidirectional(rnn(units, return_state=True),
+                                   merge_mode=merge_mode)
     f_merged = K.function([inputs], layer(inputs))
     f_forward = K.function([inputs], layer.forward_layer.call(inputs))
     f_backward = K.function([inputs], layer.backward_layer.call(inputs))
@@ -411,7 +415,8 @@ def test_Bidirectional_state_reuse():
     units = 3
 
     input1 = Input((timesteps, dim))
-    layer = wrappers.Bidirectional(rnn(units, return_state=True, return_sequences=True))
+    layer = wrappers.Bidirectional(rnn(units, return_state=True,
+                                       return_sequences=True))
     state = layer(input1)[1:]
 
     # test passing invalid initial_state: passing a tensor
@@ -565,7 +570,8 @@ def test_Bidirectional_with_constants_layer_passing_initial_state():
     model = Model([x, s_for, s_bac, c], y)
     model.compile(optimizer='rmsprop', loss='mse')
     model.train_on_batch(
-        [np.zeros((6, 5, 5)), np.zeros((6, 32)), np.zeros((6, 32)), np.zeros((6, 3))],
+        [np.zeros((6, 5, 5)), np.zeros((6, 32)),
+         np.zeros((6, 32)), np.zeros((6, 3))],
         np.zeros((6, 64))
     )
 
