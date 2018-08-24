@@ -10,7 +10,8 @@ def test_convertGoogleNet():
     caffemodel = 'bvlc_googlenet.caffemodel'
 
     # Convert model from caffe to keras
-    # model = convert.caffe_to_keras(load_path+'/'+prototxt, load_path+'/'+caffemodel, debug=False)
+    # model = convert.caffe_to_keras(load_path+'/'+prototxt,
+    #                               load_path+'/'+caffemodel, debug=False)
     # assert(model.__class__.__name__ == 'Model')
 
     # Save converted model structure

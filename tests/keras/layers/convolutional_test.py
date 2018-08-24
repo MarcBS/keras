@@ -752,8 +752,8 @@ def test_zero_padding_3d():
     input_len_dim3 = 3
 
     inputs = np.ones((num_samples,
-                      input_len_dim1, input_len_dim2, input_len_dim3,
-                      stack_size))
+                     input_len_dim1, input_len_dim2, input_len_dim3,
+                     stack_size))
 
     # basic test
     for data_format in ['channels_first', 'channels_last']:
@@ -957,9 +957,15 @@ def test_cropping_2d():
         np_output = K.eval(outputs)
         # compare with numpy
         if data_format == 'channels_first':
-            expected_out = inputs[:, :, cropping[0][0]: -cropping[0][1], cropping[1][0]: -cropping[1][1]]
+            expected_out = inputs[:,
+                                  :,
+                                  cropping[0][0]: -cropping[0][1],
+                                  cropping[1][0]: -cropping[1][1]]
         else:
-            expected_out = inputs[:, cropping[0][0]: -cropping[0][1], cropping[1][0]: -cropping[1][1], :]
+            expected_out = inputs[:,
+                                  cropping[0][0]: -cropping[0][1],
+                                  cropping[1][0]: -cropping[1][1],
+                                  :]
         assert_allclose(np_output, expected_out)
 
     for data_format in ['channels_first', 'channels_last']:
@@ -1016,9 +1022,17 @@ def test_cropping_3d():
         np_output = K.eval(outputs)
         # compare with numpy
         if data_format == 'channels_first':
-            expected_out = inputs[:, :, cropping[0][0]: -cropping[0][1], cropping[1][0]: -cropping[1][1], cropping[2][0]: -cropping[2][1]]
+            expected_out = inputs[:,
+                                  :,
+                                  cropping[0][0]: -cropping[0][1],
+                                  cropping[1][0]: -cropping[1][1],
+                                  cropping[2][0]: -cropping[2][1]]
         else:
-            expected_out = inputs[:, cropping[0][0]: -cropping[0][1], cropping[1][0]: -cropping[1][1], cropping[2][0]: -cropping[2][1], :]
+            expected_out = inputs[:,
+                                  cropping[0][0]: -cropping[0][1],
+                                  cropping[1][0]: -cropping[1][1],
+                                  cropping[2][0]: -cropping[2][1],
+                                  :]
         assert_allclose(np_output, expected_out)
 
     for data_format in ['channels_last', 'channels_first']:

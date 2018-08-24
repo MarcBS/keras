@@ -177,10 +177,10 @@ def test_TimeDistributed_with_masked_embedding_and_unspecified_shape():
     mask_outputs = [model.layers[0].compute_mask(model.input,
                                                  compute_mask=True)]
     for layer in model.layers[1:-1]:
-        mask_outputs.append(layer.compute_mask(layer.input, mask_outputs[-1], compute_mask=True))
+        mask_outputs.append(layer.compute_mask(layer.input, mask_outputs[-1],
+                                               compute_mask=True))
     for layer in [model.layers[-1]]:
         mask_outputs.append(layer.compute_mask(layer.input, mask_outputs[-1]))
-
     func = K.function([model.input], mask_outputs[:-1])
     mask_outputs_val = func([model_input])
     ref_mask_val_0 = model_input > 0         # embedding layer
@@ -207,7 +207,9 @@ def test_TimeDistributed_with_masking_layer():
     model.fit(model_input,
               np.random.random((10, 3, 5)), epochs=1, batch_size=6)
     mask_outputs = [model.layers[0].compute_mask(model.input, compute_mask=True)]
-    mask_outputs += [model.layers[1].compute_mask(model.layers[1].input, mask_outputs[-1], compute_mask=True)]
+    mask_outputs += [model.layers[1].compute_mask(model.layers[1].input,
+                                                  mask_outputs[-1],
+                                                  compute_mask=True)]
     func = K.function([model.input], mask_outputs)
     mask_outputs_val = func([model_input])
     assert np.array_equal(mask_outputs_val[0], np.any(model_input, axis=-1))

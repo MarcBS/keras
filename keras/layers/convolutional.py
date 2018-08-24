@@ -2691,7 +2691,6 @@ class CountSketch(Layer):
         return shapes
 
 
-
 class _Cropping(Layer):
     """Abstract nD copping layer (private, used as implementation base).
 
