@@ -9,7 +9,6 @@ from tensorflow.python.ops import tensor_array_ops
 from tensorflow.python.ops import control_flow_ops
 from tensorflow.python.ops import functional_ops
 from tensorflow.python.ops import ctc_ops as ctc
-from tensorflow.python.ops import variables as tf_variables
 from tensorflow.python.client import device_lib
 from tensorflow.core.protobuf import config_pb2
 
@@ -727,10 +726,6 @@ def zeros(shape, dtype=None, name=None):
     if py_all(v.get_shape().as_list()):
         return variable(v, dtype=dtype, name=name)
     return v
-
-
-# Aliases
-zeros_symbolic = zeros
 
 
 def ones(shape, dtype=None, name=None):
@@ -2829,10 +2824,6 @@ class Function(object):
         return updated[:len(self.outputs)]
 
     def __call__(self, inputs):
-        return self._legacy_call(inputs)
-        # TODO: Here we must rely on the legacy_call for optimized_cond models. Otherwise, the error
-        # "tensorflow.python.framework.errors_impl.InvalidArgumentError: preprocessed_input:0 is both fed and fetched." is raised
-
         if hasattr(get_session(), '_make_callable_from_options'):
             if py_any(is_sparse(x) for x in self.inputs):
                 if py_any(is_tensor(x) for x in inputs):
@@ -3387,11 +3378,7 @@ def softmax(x, axis=-1):
     # Returns
         A tensor.
     """
-    try:
-        t = tf.nn.softmax(x, axis=axis)
-    except:  # tensorflow retrocompatibility
-        t = tf.nn.softmax(x)
-    return t
+    return tf.nn.softmax(x, axis=axis)
 
 
 def softmax_3d(x):
