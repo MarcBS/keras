@@ -1312,6 +1312,7 @@ def test_pandas_dataframe():
 
 @keras_test
 @pytest.mark.skipif(K.backend() != 'tensorflow', reason='Requires TensorFlow')
+@pytest.mark.skipif(K.backend() == 'tensorflow', reason='We rely on legacy __call__')
 @pytest.mark.skipif((K.backend() == 'tensorflow' and
                      not hasattr(K.get_session(),
                                  '_make_callable_from_options')),
@@ -1341,6 +1342,7 @@ def test_training_and_eval_methods_on_symbolic_tensors_single_io():
 
 @keras_test
 @pytest.mark.skipif(K.backend() != 'tensorflow', reason='Requires TensorFlow')
+@pytest.mark.skipif(K.backend() == 'tensorflow', reason='We rely on legacy __call__')
 @pytest.mark.skipif((K.backend() == 'tensorflow' and
                      not hasattr(K.get_session(),
                                  '_make_callable_from_options')),

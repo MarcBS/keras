@@ -2824,6 +2824,10 @@ class Function(object):
         return updated[:len(self.outputs)]
 
     def __call__(self, inputs):
+        return self._legacy_call(inputs)
+        # TODO: Here we must rely on the legacy_call for optimized_cond models. Otherwise, the error
+        # "tensorflow.python.framework.errors_impl.InvalidArgumentError: preprocessed_input:0 is both fed and fetched." is raised
+
         if hasattr(get_session(), '_make_callable_from_options'):
             if py_any(is_sparse(x) for x in self.inputs):
                 if py_any(is_tensor(x) for x in inputs):
