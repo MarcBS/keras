@@ -2827,22 +2827,22 @@ class Function(object):
         return self._legacy_call(inputs)
         # TODO: Here we must rely on the legacy_call for optimized_cond models. Otherwise, the error
         # "tensorflow.python.framework.errors_impl.InvalidArgumentError: preprocessed_input:0 is both fed and fetched." is raised
-
-        if hasattr(get_session(), '_make_callable_from_options'):
-            if py_any(is_sparse(x) for x in self.inputs):
-                if py_any(is_tensor(x) for x in inputs):
-                    raise ValueError(
-                        'Feeding from symbolic tensors is not '
-                        'supported with sparse inputs.')
-                return self._legacy_call(inputs)
-
-            return self._call(inputs)
-        else:
-            if py_any(is_tensor(x) for x in inputs):
-                raise ValueError(
-                    'In order to feed symbolic tensors to a Keras model '
-                    'in TensorFlow, you need tensorflow 1.8 or higher.')
-            return self._legacy_call(inputs)
+        #
+        # if hasattr(get_session(), '_make_callable_from_options'):
+        #     if py_any(is_sparse(x) for x in self.inputs):
+        #         if py_any(is_tensor(x) for x in inputs):
+        #             raise ValueError(
+        #                 'Feeding from symbolic tensors is not '
+        #                 'supported with sparse inputs.')
+        #         return self._legacy_call(inputs)
+        #
+        #     return self._call(inputs)
+        # else:
+        #     if py_any(is_tensor(x) for x in inputs):
+        #         raise ValueError(
+        #             'In order to feed symbolic tensors to a Keras model '
+        #             'in TensorFlow, you need tensorflow 1.8 or higher.')
+        #     return self._legacy_call(inputs)
 
 
 def function(inputs, outputs, updates=None, **kwargs):
