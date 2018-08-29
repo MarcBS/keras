@@ -40,7 +40,9 @@ def compute_attention(h_tm1, pctx_, context, att_dp_mask, attention_recurrent_ke
             - 'add'/'bahdanau':
                e_i(t) = wa' * tanh( Wa * x_i  +  Ua * h_tm1 +  ba ),
             - 'dot'/'luong':
-               e_i(t) = h_tm1' · Ua * x_i
+               e_i(t) = h_tm1' · x_i # Requires the dimensions to be the same
+            - 'scale-dot':
+               e_i(t) = (h_tm1' · x_i) / \sqrt(|x_i|) # Requires the dimensions to be the same
 
     # Arguments
         h_tm1: Last decoder state.
@@ -73,6 +75,9 @@ def compute_attention(h_tm1, pctx_, context, att_dp_mask, attention_recurrent_ke
 
     elif attention_mode == 'dot' or attention_mode == 'luong':
         pctx_ = K.batch_dot(p_state_[:, :, None], pctx_, axes=[1, 2])
+        e = K.squeeze(pctx_, 1)
+    elif attention_mode == 'scaled-dot':
+        pctx_ = K.batch_dot(p_state_[:, :, None], pctx_, axes=[1, 2]) / K.sqrt(K.cast(K.shape(pctx_)[-1], K.floatx()))
         e = K.squeeze(pctx_, 1)
     elif hasattr(attention_mode, '__call__'):
         e = attention_mode(h_tm1, pctx_, context, att_dp_mask, attention_recurrent_kernel,
@@ -2430,12 +2435,15 @@ class AttGRU(Recurrent):
             regularizer=self.attention_context_regularizer,
             constraint=self.attention_context_constraint)
 
-        self.attention_context_wa = self.add_weight(
-            shape=(self.att_units,),
-            name='attention_context_wa',
-            initializer=self.attention_context_wa_initializer,
-            regularizer=self.attention_context_wa_regularizer,
-            constraint=self.attention_context_wa_constraint)
+        if self.attention_mode == 'add' or self.attention_mode == 'bahdanau':
+            self.attention_context_wa = self.add_weight(
+                shape=(self.att_units,),
+                name='attention_context_wa',
+                initializer=self.attention_context_wa_initializer,
+                regularizer=self.attention_context_wa_regularizer,
+                constraint=self.attention_context_wa_constraint)
+        else:
+            self.attention_context_wa = None
 
         if self.use_bias:
             self.bias = self.add_weight(shape=(self.units * 3,),
@@ -2451,12 +2459,15 @@ class AttGRU(Recurrent):
                                        initializer=self.bias_ba_initializer,
                                        regularizer=self.bias_ba_regularizer,
                                        constraint=self.bias_ba_constraint)
-        bias_ca_shape = self.context_steps if self.context_steps is None else (self.context_steps,)
-        self.bias_ca = self.add_weight(shape=bias_ca_shape,
-                                       name='bias_ca',
-                                       initializer=self.bias_ca_initializer,
-                                       regularizer=self.bias_ca_regularizer,
-                                       constraint=self.bias_ca_constraint)
+        if self.attention_mode == 'add' or self.attention_mode == 'bahdanau':
+            bias_ca_shape = self.context_steps if self.context_steps is None else (self.context_steps,)
+            self.bias_ca = self.add_weight(shape=bias_ca_shape,
+                                           name='bias_ca',
+                                           initializer=self.bias_ca_initializer,
+                                           regularizer=self.bias_ca_regularizer,
+                                           constraint=self.bias_ca_constraint)
+        else:
+            self.bias_ca = None
 
         self.built = True
 
@@ -3020,13 +3031,15 @@ class AttGRUCond(Recurrent):
             initializer=self.attention_context_initializer,
             regularizer=self.attention_context_regularizer,
             constraint=self.attention_context_constraint)
-
-        self.attention_context_wa = self.add_weight(
-            shape=(self.att_units,),
-            name='attention_context_wa',
-            initializer=self.attention_context_wa_initializer,
-            regularizer=self.attention_context_wa_regularizer,
-            constraint=self.attention_context_wa_constraint)
+        if self.attention_mode == 'add' or self.attention_mode == 'bahdanau':
+            self.attention_context_wa = self.add_weight(
+                shape=(self.att_units,),
+                name='attention_context_wa',
+                initializer=self.attention_context_wa_initializer,
+                regularizer=self.attention_context_wa_regularizer,
+                constraint=self.attention_context_wa_constraint)
+        else:
+            self.attention_context_wa = None
 
         if self.use_bias:
             self.bias = self.add_weight(shape=(self.units * 3,),
@@ -3042,12 +3055,15 @@ class AttGRUCond(Recurrent):
                                        initializer=self.bias_ba_initializer,
                                        regularizer=self.bias_ba_regularizer,
                                        constraint=self.bias_ba_constraint)
-        bias_ca_shape = self.context_steps if self.context_steps is None else (self.context_steps,)
-        self.bias_ca = self.add_weight(shape=bias_ca_shape,
-                                       name='bias_ca',
-                                       initializer=self.bias_ca_initializer,
-                                       regularizer=self.bias_ca_regularizer,
-                                       constraint=self.bias_ca_constraint)
+        if self.attention_mode == 'add' or self.attention_mode == 'bahdanau':
+            bias_ca_shape = self.context_steps if self.context_steps is None else (self.context_steps,)
+            self.bias_ca = self.add_weight(shape=bias_ca_shape,
+                                           name='bias_ca',
+                                           initializer=self.bias_ca_initializer,
+                                           regularizer=self.bias_ca_regularizer,
+                                           constraint=self.bias_ca_constraint)
+        else:
+            self.bias_ca = None
         self.built = True
 
     def reset_states(self, states=None):
@@ -3630,13 +3646,15 @@ class AttConditionalGRUCond(Recurrent):
             initializer=self.attention_context_initializer,
             regularizer=self.attention_context_regularizer,
             constraint=self.attention_context_constraint)
-
-        self.attention_context_wa = self.add_weight(
-            shape=(self.att_units,),
-            name='attention_context_wa',
-            initializer=self.attention_context_wa_initializer,
-            regularizer=self.attention_context_wa_regularizer,
-            constraint=self.attention_context_wa_constraint)
+        if self.attention_mode == 'add' or self.attention_mode == 'bahdanau':
+            self.attention_context_wa = self.add_weight(
+                shape=(self.att_units,),
+                name='attention_context_wa',
+                initializer=self.attention_context_wa_initializer,
+                regularizer=self.attention_context_wa_regularizer,
+                constraint=self.attention_context_wa_constraint)
+        else:
+            self.attention_context_wa = None
 
         if self.use_bias:
             self.bias = self.add_weight(shape=(self.units * 3,),
@@ -3659,12 +3677,16 @@ class AttConditionalGRUCond(Recurrent):
                                        initializer=self.bias_ba_initializer,
                                        regularizer=self.bias_ba_regularizer,
                                        constraint=self.bias_ba_constraint)
-        bias_ca_shape = self.context_steps if self.context_steps is None else (self.context_steps,)
-        self.bias_ca = self.add_weight(shape=bias_ca_shape,
-                                       name='bias_ca',
-                                       initializer=self.bias_ca_initializer,
-                                       regularizer=self.bias_ca_regularizer,
-                                       constraint=self.bias_ca_constraint)
+        if self.attention_mode == 'add' or self.attention_mode == 'bahdanau':
+            bias_ca_shape = self.context_steps if self.context_steps is None else (self.context_steps,)
+            self.bias_ca = self.add_weight(shape=bias_ca_shape,
+                                           name='bias_ca',
+                                           initializer=self.bias_ca_initializer,
+                                           regularizer=self.bias_ca_regularizer,
+                                           constraint=self.bias_ca_constraint)
+        else:
+            self.bias_ca = None
+
         self.built = True
 
     def reset_states(self, states=None):
@@ -5270,12 +5292,15 @@ class AttLSTM(Recurrent):
             regularizer=self.attention_context_regularizer,
             constraint=self.attention_context_constraint)
 
-        self.attention_context_wa = self.add_weight(
-            shape=(self.att_units,),
-            name='attention_context_wa',
-            initializer=self.attention_context_wa_initializer,
-            regularizer=self.attention_context_wa_regularizer,
-            constraint=self.attention_context_wa_constraint)
+        if self.attention_mode == 'add' or self.attention_mode == 'bahdanau':
+            self.attention_context_wa = self.add_weight(
+                shape=(self.att_units,),
+                name='attention_context_wa',
+                initializer=self.attention_context_wa_initializer,
+                regularizer=self.attention_context_wa_regularizer,
+                constraint=self.attention_context_wa_constraint)
+        else:
+            self.attention_context_wa = None
 
         if self.use_bias:
             if self.unit_forget_bias:
@@ -5300,12 +5325,15 @@ class AttLSTM(Recurrent):
                                        initializer=self.bias_ba_initializer,
                                        regularizer=self.bias_ba_regularizer,
                                        constraint=self.bias_ba_constraint)
-        bias_ca_shape = self.context_steps if self.context_steps is None else (self.context_steps,)
-        self.bias_ca = self.add_weight(shape=bias_ca_shape,
-                                       name='bias_ca',
-                                       initializer=self.bias_ca_initializer,
-                                       regularizer=self.bias_ca_regularizer,
-                                       constraint=self.bias_ca_constraint)
+        if self.attention_mode == 'add' or self.attention_mode == 'bahdanau':
+            bias_ca_shape = self.context_steps if self.context_steps is None else (self.context_steps,)
+            self.bias_ca = self.add_weight(shape=bias_ca_shape,
+                                           name='bias_ca',
+                                           initializer=self.bias_ca_initializer,
+                                           regularizer=self.bias_ca_regularizer,
+                                           constraint=self.bias_ca_constraint)
+        else:
+            self.bias_ca = None
 
         self.built = True
 
@@ -5853,7 +5881,7 @@ class AttLSTMCond(Recurrent):
             regularizer=self.attention_context_regularizer,
             constraint=self.attention_context_constraint)
 
-        if self.attention_mode != 'dot':
+        if self.attention_mode == 'add' or self.attention_mode == 'bahdanau':
             self.attention_context_wa = self.add_weight(
                 shape=(self.att_units,),
                 name='attention_context_wa',
@@ -5887,7 +5915,7 @@ class AttLSTMCond(Recurrent):
                                        initializer=self.bias_ba_initializer,
                                        regularizer=self.bias_ba_regularizer,
                                        constraint=self.bias_ba_constraint)
-        if self.attention_mode != 'dot':
+        if self.attention_mode == 'add' or self.attention_mode == 'bahdanau':
             bias_ca_shape = self.context_steps if self.context_steps is None else (self.context_steps,)
             self.bias_ca = self.add_weight(shape=bias_ca_shape,
                                            name='bias_ca',
@@ -6505,12 +6533,15 @@ class AttConditionalLSTMCond(Recurrent):
             regularizer=self.attention_context_regularizer,
             constraint=self.attention_context_constraint)
 
-        self.attention_context_wa = self.add_weight(
-            shape=(self.att_units,),
-            name='attention_context_wa',
-            initializer=self.attention_context_wa_initializer,
-            regularizer=self.attention_context_wa_regularizer,
-            constraint=self.attention_context_wa_constraint)
+        if self.attention_mode == 'add' or self.attention_mode == 'bahdanau':
+            self.attention_context_wa = self.add_weight(
+                shape=(self.att_units,),
+                name='attention_context_wa',
+                initializer=self.attention_context_wa_initializer,
+                regularizer=self.attention_context_wa_regularizer,
+                constraint=self.attention_context_wa_constraint)
+        else:
+            self.attention_context_wa = None
 
         if self.use_bias:
             if self.unit_forget_bias:
@@ -6547,12 +6578,16 @@ class AttConditionalLSTMCond(Recurrent):
                                            initializer=self.bias_ba_initializer,
                                            regularizer=self.bias_ba_regularizer,
                                            constraint=self.bias_ba_constraint)
-            bias_ca_shape = self.context_steps if self.context_steps is None else (self.context_steps,)
-            self.bias_ca = self.add_weight(shape=bias_ca_shape,
-                                           name='bias_ca',
-                                           initializer=self.bias_ca_initializer,
-                                           regularizer=self.bias_ca_regularizer,
-                                           constraint=self.bias_ca_constraint)
+
+            if self.attention_mode == 'add' or self.attention_mode == 'bahdanau':
+                bias_ca_shape = self.context_steps if self.context_steps is None else (self.context_steps,)
+                self.bias_ca = self.add_weight(shape=bias_ca_shape,
+                                               name='bias_ca',
+                                               initializer=self.bias_ca_initializer,
+                                               regularizer=self.bias_ca_regularizer,
+                                               constraint=self.bias_ca_constraint)
+            else:
+                self.bias_ca = None
 
         else:
             self.bias = None
@@ -7244,24 +7279,29 @@ class AttLSTMCond2Inputs(Recurrent):
                                                         name='attention_context_kernel',
                                                         regularizer=self.attention_context_regularizer,
                                                         constraint=self.attention_context_constraint)
-
-        self.attention_context_wa = self.add_weight(shape=(self.att_units1,),
-                                                    initializer=self.attention_context_wa_initializer,
-                                                    name='attention_context_wa',
-                                                    regularizer=self.attention_context_wa_regularizer,
-                                                    constraint=self.attention_context_wa_constraint)
-
+        if self.attention_mode == 'add' or self.attention_mode == 'bahdanau':
+            self.attention_context_wa = self.add_weight(shape=(self.att_units1,),
+                                                        initializer=self.attention_context_wa_initializer,
+                                                        name='attention_context_wa',
+                                                        regularizer=self.attention_context_wa_regularizer,
+                                                        constraint=self.attention_context_wa_constraint)
+        else:
+            self.attention_context_wa = None
         self.bias_ba = self.add_weight(shape=(self.att_units1,),
                                        initializer=self.bias_ba_initializer,
                                        name='bias_ba',
                                        regularizer=self.bias_ba_regularizer,
                                        constraint=self.bias_ba_constraint)
-        bias_ca_shape = self.context1_steps if self.context1_steps is None else (self.context1_steps,)
-        self.bias_ca = self.add_weight(shape=bias_ca_shape,
-                                       initializer=self.bias_ca_initializer,
-                                       name='bias_ca',
-                                       regularizer=self.bias_ca_regularizer,
-                                       constraint=self.bias_ca_constraint)
+        if self.attention_mode == 'add' or self.attention_mode == 'bahdanau':
+
+            bias_ca_shape = self.context1_steps if self.context1_steps is None else (self.context1_steps,)
+            self.bias_ca = self.add_weight(shape=bias_ca_shape,
+                                           initializer=self.bias_ca_initializer,
+                                           name='bias_ca',
+                                           regularizer=self.bias_ca_regularizer,
+                                           constraint=self.bias_ca_constraint)
+        else:
+            self.bias_ca = None
 
         if self.use_bias:
             if self.unit_forget_bias:
@@ -7296,25 +7336,29 @@ class AttLSTMCond2Inputs(Recurrent):
                                                              name='attention_context_kernel2',
                                                              regularizer=self.attention_context_regularizer2,
                                                              constraint=self.attention_context_constraint2)
-
-            self.attention_context_wa2 = self.add_weight(shape=(self.att_units2,),
-                                                         initializer=self.attention_context_wa_initializer2,
-                                                         name='attention_context_wa2',
-                                                         regularizer=self.attention_context_wa_regularizer2,
-                                                         constraint=self.attention_context_wa_constraint2)
+            if self.attention_mode == 'add' or self.attention_mode == 'bahdanau':
+                self.attention_context_wa2 = self.add_weight(shape=(self.att_units2,),
+                                                             initializer=self.attention_context_wa_initializer2,
+                                                             name='attention_context_wa2',
+                                                             regularizer=self.attention_context_wa_regularizer2,
+                                                             constraint=self.attention_context_wa_constraint2)
+            else:
+                self.attention_context_wa2 = None
 
             self.bias_ba2 = self.add_weight(shape=(self.att_units2,),
                                             initializer=self.bias_ba_initializer2,
                                             name='bias_ba2',
                                             regularizer=self.bias_ba_regularizer2,
                                             constraint=self.bias_ba_constraint2)
-            bias_ca_shape = self.context2_steps if self.context2_steps is None else (self.context2_steps,)
-            self.bias_ca2 = self.add_weight(shape=bias_ca_shape,
-                                            initializer=self.bias_ca_initializer2,
-                                            name='bias_ca2',
-                                            regularizer=self.bias_ca_regularizer2,
-                                            constraint=self.bias_ca_constraint2)
-
+            if self.attention_mode == 'add' or self.attention_mode == 'bahdanau':
+                bias_ca_shape = self.context2_steps if self.context2_steps is None else (self.context2_steps,)
+                self.bias_ca2 = self.add_weight(shape=bias_ca_shape,
+                                                initializer=self.bias_ca_initializer2,
+                                                name='bias_ca2',
+                                                regularizer=self.bias_ca_regularizer2,
+                                                constraint=self.bias_ca_constraint2)
+            else:
+                self.bias_ca2 = None
             if self.use_bias:
                 if self.unit_forget_bias:
                     def bias_initializer2(shape, *args, **kwargs):
@@ -8145,25 +8189,30 @@ class AttConditionalLSTMCond2Inputs(Recurrent):
                                                         name='attention_context_kernel',
                                                         regularizer=self.attention_context_regularizer,
                                                         constraint=self.attention_context_constraint)
-
-        self.attention_context_wa = self.add_weight(shape=(self.att_units1,),
-                                                    initializer=self.attention_context_wa_initializer,
-                                                    name='attention_context_wa',
-                                                    regularizer=self.attention_context_wa_regularizer,
-                                                    constraint=self.attention_context_wa_constraint)
+        if self.attention_mode == 'add' or self.attention_mode == 'bahdanau':
+            self.attention_context_wa = self.add_weight(shape=(self.att_units1,),
+                                                        initializer=self.attention_context_wa_initializer,
+                                                        name='attention_context_wa',
+                                                        regularizer=self.attention_context_wa_regularizer,
+                                                        constraint=self.attention_context_wa_constraint)
+        else:
+            self.attention_context_wa = None
 
         self.bias_ba = self.add_weight(shape=(self.att_units1,),
                                        initializer=self.bias_ba_initializer,
                                        name='bias_ba',
                                        regularizer=self.bias_ba_regularizer,
                                        constraint=self.bias_ba_constraint)
-        bias_ca_shape = self.context1_steps if self.context1_steps is None else (self.context1_steps,)
-        self.bias_ca = self.add_weight(shape=bias_ca_shape,
-                                       initializer=self.bias_ca_initializer,
-                                       name='bias_ca',
-                                       regularizer=self.bias_ca_regularizer,
-                                       constraint=self.bias_ca_constraint)
+        if self.attention_mode == 'add' or self.attention_mode == 'bahdanau':
 
+            bias_ca_shape = self.context1_steps if self.context1_steps is None else (self.context1_steps,)
+            self.bias_ca = self.add_weight(shape=bias_ca_shape,
+                                           initializer=self.bias_ca_initializer,
+                                           name='bias_ca',
+                                           regularizer=self.bias_ca_regularizer,
+                                           constraint=self.bias_ca_constraint)
+        else:
+            self.bias_ca = None
         if self.use_bias:
             if self.unit_forget_bias:
                 def bias_initializer(shape, *args, **kwargs):
@@ -8213,24 +8262,29 @@ class AttConditionalLSTMCond2Inputs(Recurrent):
                                                              name='attention_context_kernel2',
                                                              regularizer=self.attention_context_regularizer2,
                                                              constraint=self.attention_context_constraint2)
-
-            self.attention_context_wa2 = self.add_weight(shape=(self.att_units2,),
-                                                         initializer=self.attention_context_wa_initializer2,
-                                                         name='attention_context_wa2',
-                                                         regularizer=self.attention_context_wa_regularizer2,
-                                                         constraint=self.attention_context_wa_constraint2)
-
+            if self.attention_mode == 'add' or self.attention_mode == 'bahdanau':
+                self.attention_context_wa2 = self.add_weight(shape=(self.att_units2,),
+                                                             initializer=self.attention_context_wa_initializer2,
+                                                             name='attention_context_wa2',
+                                                             regularizer=self.attention_context_wa_regularizer2,
+                                                             constraint=self.attention_context_wa_constraint2)
+            else:
+                self.attention_context_wa2 = None
             self.bias_ba2 = self.add_weight(shape=(self.att_units2,),
                                             initializer=self.bias_ba_initializer2,
                                             name='bias_ba2',
                                             regularizer=self.bias_ba_regularizer2,
                                             constraint=self.bias_ba_constraint2)
-            bias_ca_shape = self.context2_steps if self.context2_steps is None else (self.context2_steps,)
-            self.bias_ca2 = self.add_weight(shape=bias_ca_shape,
-                                            initializer=self.bias_ca_initializer2,
-                                            name='bias_ca2',
-                                            regularizer=self.bias_ca_regularizer2,
-                                            constraint=self.bias_ca_constraint2)
+            if self.attention_mode == 'add' or self.attention_mode == 'bahdanau':
+
+                bias_ca_shape = self.context2_steps if self.context2_steps is None else (self.context2_steps,)
+                self.bias_ca2 = self.add_weight(shape=bias_ca_shape,
+                                                initializer=self.bias_ca_initializer2,
+                                                name='bias_ca2',
+                                                regularizer=self.bias_ca_regularizer2,
+                                                constraint=self.bias_ca_constraint2)
+            else:
+                self.bias_ca2
 
             if self.use_bias:
                 if self.unit_forget_bias:
@@ -9145,24 +9199,29 @@ class AttLSTMCond3Inputs(Recurrent):
                                                         name='attention_context_kernel',
                                                         regularizer=self.attention_context_regularizer,
                                                         constraint=self.attention_context_constraint)
-
-        self.attention_context_wa = self.add_weight(shape=(self.att_units1,),
-                                                    initializer=self.attention_context_wa_initializer,
-                                                    name='attention_context_wa',
-                                                    regularizer=self.attention_context_wa_regularizer,
-                                                    constraint=self.attention_context_wa_constraint)
+        if self.attention_mode == 'add' or self.attention_mode == 'bahdanau':
+            self.attention_context_wa = self.add_weight(shape=(self.att_units1,),
+                                                        initializer=self.attention_context_wa_initializer,
+                                                        name='attention_context_wa',
+                                                        regularizer=self.attention_context_wa_regularizer,
+                                                        constraint=self.attention_context_wa_constraint)
+        else:
+            self.attention_context_wa = None
 
         self.bias_ba = self.add_weight(shape=(self.att_units1,),
                                        initializer=self.bias_ba_initializer,
                                        name='bias_ba',
                                        regularizer=self.bias_ba_regularizer,
                                        constraint=self.bias_ba_constraint)
-        bias_ca_shape = self.context1_steps if self.context1_steps is None else (self.context1_steps,)
-        self.bias_ca = self.add_weight(shape=bias_ca_shape,
-                                       initializer=self.bias_ca_initializer,
-                                       name='bias_ca',
-                                       regularizer=self.bias_ca_regularizer,
-                                       constraint=self.bias_ca_constraint)
+        if self.attention_mode == 'add' or self.attention_mode == 'bahdanau':
+            bias_ca_shape = self.context1_steps if self.context1_steps is None else (self.context1_steps,)
+            self.bias_ca = self.add_weight(shape=bias_ca_shape,
+                                           initializer=self.bias_ca_initializer,
+                                           name='bias_ca',
+                                           regularizer=self.bias_ca_regularizer,
+                                           constraint=self.bias_ca_constraint)
+        else:
+            self.bias_ca = None
 
         if self.use_bias:
             if self.unit_forget_bias:
@@ -9182,7 +9241,8 @@ class AttLSTMCond3Inputs(Recurrent):
         else:
             self.bias = None
 
-        if self.attend_on_both:
+        if self.attend_on_both and self.attention_mode == 'add' or self.attention_mode == 'bahdanau':
+
             # Initialize Att model params (following the same format for any option of self.consume_less)
             self.wa2 = self.add_weight((self.att_units2,),
                                        initializer=self.init,
@@ -9231,61 +9291,17 @@ class AttLSTMCond3Inputs(Recurrent):
                                        name='{}_ca3'.format(self.name),
                                        initializer='zero',
                                        regularizer=self.ca3_regularizer)
-
-        if self.consume_less == 'gpu':
-
-            self.T = self.add_weight(shape=(self.context1_dim, 4 * self.units),
-                                     initializer=self.init,
-                                     name='{}_T'.format(self.name),
-                                     regularizer=self.W_regularizer)
-            self.W = self.add_weight(shape=(self.context2_dim, 4 * self.units),
-                                     initializer=self.init,
-                                     name='{}_W'.format(self.name),
-                                     regularizer=self.W_regularizer)
-            self.S = self.add_weight(shape=(self.context3_dim, 4 * self.units),
-                                     initializer=self.init,
-                                     name='{}_S'.format(self.name),
-                                     regularizer=self.S_regularizer)
-
-            self.U = self.add_weight(shape=(self.units, 4 * self.units),
-                                     initializer=self.inner_init,
-                                     name='{}_U'.format(self.name),
-                                     regularizer=self.U_regularizer)
-            self.V = self.add_weight(shape=(self.input_dim, 4 * self.units),
-                                     initializer=self.init,
-                                     name='{}_V'.format(self.name),
-                                     regularizer=self.V_regularizer)
-
-            '''
-            def b_reg(shape, name=None):
-                return K.variable(np.hstack((np.zeros(self.units),
-                                             K.get_value(self.forget_bias_init((self.units,))),
-                                             np.zeros(self.units),
-                                             np.zeros(self.units))),
-                                  name='{}_b'.format(self.name))
-            '''
-
-            self.b = self.add_weight(shape=(self.units * 4,),
-                                     initializer='zero',
-                                     name='{}_b'.format(self.name),
-                                     regularizer=self.b_regularizer)
-
-            """
-            self.trainable_weights = [self.wa, self.Wa, self.Ua, self.ba, self.ca,  # AttModel parameters
-                                      self.S,
-                                      self.T,
-                                      self.W,
-                                      self.U,
-                                      self.V,
-                                      self.b]
-            if self.attend_on_both:
-                self.trainable_weights += [self.wa2, self.Wa2, self.Ua2, self.ba2, self.ca2,  # AttModel2 parameters)
-                                           self.wa3, self.Wa3, self.Ua3, self.ba3, self.ca3  # AttModel3 parameters)
-                                           ]
-            """
-
         else:
-            raise NotImplementedError
+            self.wa2 = None
+            self.Wa2 = None
+            self.Ua2 = None
+            self.ba2 = None
+            self.ca2 = None
+            self.wa3 = None
+            self.Wa3 = None
+            self.Ua3 = None
+            self.ba3 = None
+            self.ca3 = None
 
         if self.initial_weights is not None:
             self.set_weights(self.initial_weights)
