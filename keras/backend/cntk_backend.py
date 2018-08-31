@@ -1156,17 +1156,20 @@ def permute_dimensions(x, pattern):
     return C.transpose(x, axis)
 
 
-def resize_images(x, height_factor, width_factor, data_format):
-    if data_format == 'channels_first':
-        output = repeat_elements(x, height_factor, axis=2)
-        output = repeat_elements(output, width_factor, axis=3)
-        return output
-    elif data_format == 'channels_last':
-        output = repeat_elements(x, height_factor, axis=1)
-        output = repeat_elements(output, width_factor, axis=2)
-        return output
+def resize_images(x, height_factor, width_factor, data_format, interpolation='nearest'):
+    if interpolation == 'nearest':
+        if data_format == 'channels_first':
+            output = repeat_elements(x, height_factor, axis=2)
+            output = repeat_elements(output, width_factor, axis=3)
+            return output
+        elif data_format == 'channels_last':
+            output = repeat_elements(x, height_factor, axis=1)
+            output = repeat_elements(output, width_factor, axis=2)
+            return output
+        else:
+            raise ValueError('CNTK Backend: Invalid data_format: %s' % data_format)
     else:
-        raise ValueError('CNTK Backend: Invalid data_format:', data_format)
+        raise NotImplementedError('CNTK only supports `nearest` interpolation.')
 
 
 def resize_volumes(x, depth_factor, height_factor, width_factor, data_format):
@@ -1181,7 +1184,7 @@ def resize_volumes(x, depth_factor, height_factor, width_factor, data_format):
         output = repeat_elements(output, width_factor, axis=3)
         return output
     else:
-        raise ValueError('CNTK Backend: Invalid data_format:', data_format)
+        raise ValueError('CNTK Backend: Invalid data_format: %s' % data_format)
 
 
 def repeat_elements(x, rep, axis):
@@ -1494,14 +1497,17 @@ def conv1d(x, kernel, strides=1, padding='valid',
         kernel = C.swapaxes(kernel, 0, 2)
 
     padding = _preprocess_border_mode(padding)
-    strides = [strides]
+
+    if dev.type() == 0 and dilation_rate != 1:
+        raise ValueError('Dilated convolution on CPU is not supported by CNTK backend. '
+                         'Please set `dilation_rate` to 1. You passed: %s' % (dilation_rate,))
+
     x = C.convolution(
         kernel,
         x,
-        strides=tuple(strides),
-        auto_padding=[
-            False,
-            padding])
+        strides=strides,
+        auto_padding=[False, padding],
+        dilation=dilation_rate)
 
     if data_format == 'channels_last':
         x = C.swapaxes(x, 0, 1)
@@ -1517,8 +1523,9 @@ def conv2d(x, kernel, strides=(1, 1), padding='valid',
     padding = _preprocess_border_mode(padding)
 
     if dev.type() == 0 and dilation_rate != (1, 1):
-        raise ValueError('Dilated convolution on CPU is not supported by CNTK backend. ' +
-                         'Please set dilation_rate with (1, 1).')
+        raise ValueError('Dilated convolution on CPU is not supported by CNTK backend. '
+                         'Please set `dilation_rate` to (1, 1). '
+                         'You passed: %s' % (dilation_rate,))
 
     x = C.convolution(kernel,
                       x,
@@ -1649,17 +1656,19 @@ def conv3d(x, kernel, strides=(1, 1, 1), padding='valid',
     x = _preprocess_conv3d_input(x, data_format)
     kernel = _preprocess_conv3d_kernel(kernel, data_format)
     padding = _preprocess_border_mode(padding)
-    strides = strides + (strides[0],)
+
+    if dev.type() == 0 and dilation_rate != (1, 1, 1):
+        raise ValueError('Dilated convolution on CPU is not supported by CNTK backend. '
+                         'Please set `dilation_rate` to (1, 1, 1). '
+                         'You passed: %s' % (dilation_rate,))
 
     x = C.convolution(
         kernel,
         x,
         strides,
-        auto_padding=[
-            False,
-            padding,
-            padding,
-            padding])
+        auto_padding=[False, padding, padding, padding],
+        dilation=dilation_rate)
+
     return _postprocess_conv3d_output(x, data_format)
 
 

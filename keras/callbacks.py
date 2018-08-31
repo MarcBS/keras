@@ -534,14 +534,10 @@ class EarlyStopping(Callback):
             self.best = np.Inf if self.monitor_op == np.less else -np.Inf
 
     def on_epoch_end(self, epoch, logs=None):
-        current = logs.get(self.monitor)
+        current = self.get_monitor_value(logs)
         if current is None:
-            warnings.warn(
-                'Early stopping conditioned on metric `%s` '
-                'which is not available. Available metrics are: %s' %
-                (self.monitor, ','.join(list(logs.keys()))), RuntimeWarning
-            )
             return
+
         if self.monitor_op(current - self.min_delta, self.best):
             self.best = current
             self.wait = 0
@@ -560,6 +556,16 @@ class EarlyStopping(Callback):
     def on_train_end(self, logs=None):
         if self.stopped_epoch > 0 and self.verbose > 0:
             print('Epoch %05d: early stopping' % (self.stopped_epoch + 1))
+
+    def get_monitor_value(self, logs):
+        monitor_value = logs.get(self.monitor)
+        if monitor_value is None:
+            warnings.warn(
+                'Early stopping conditioned on metric `%s` '
+                'which is not available. Available metrics are: %s' %
+                (self.monitor, ','.join(list(logs.keys()))), RuntimeWarning
+            )
+        return monitor_value
 
 
 class RemoteMonitor(Callback):
@@ -965,7 +971,10 @@ class TensorBoard(Callback):
                 continue
             summary = tf.Summary()
             summary_value = summary.value.add()
-            summary_value.simple_value = value.item()
+            if isinstance(value, np.ndarray):
+                summary_value.simple_value = value.item()
+            else:
+                summary_value.simple_value = value
             summary_value.tag = name
             self.writer.add_summary(summary, epoch)
         self.writer.flush()
