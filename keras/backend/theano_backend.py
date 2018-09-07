@@ -12,7 +12,6 @@ from theano.tensor.fft import rfft, irfft
 from theano.printing import Print
 from theano.tensor.signal.conv import conv2d as vec_conv
 from theano.ifelse import ifelse
-
 try:
     import theano.sparse as th_sparse_module
 except ImportError:
@@ -3505,21 +3504,19 @@ def conv2d(x, kernel, strides=(1, 1), padding='valid',
 
 
 def conv2d_transpose(x, kernel, output_shape, strides=(1, 1),
-                     padding='valid', data_format=None):
-    """2D deconvolution (i.e. transposed convolution).
+                     padding='valid', data_format=None, dilation_rate=(1, 1)):
+    """2D deconvolution (transposed convolution).
 
     # Arguments
         x: Tensor or variable.
         kernel: kernel tensor.
         output_shape: 1D int tensor for the output shape.
         strides: strides tuple.
-        padding: string, `"same"` or `"valid"`.
-        data_format: string, `"channels_last"` or `"channels_first"`.
-            Whether to use Theano or TensorFlow/CNTK data format
-            for inputs/kernels/outputs.
-
-    # Returns
-        A tensor, result of transposed 2D convolution.
+        padding: string, "same" or "valid".
+        data_format: "channels_last" or "channels_first".
+            Whether to use Theano or TensorFlow data format
+            in inputs/kernels/outputs.
+        dilation_rate: tuple of 2 integers.
 
     # Raises
         ValueError: if `data_format` is neither `channels_last` or `channels_first`.
@@ -3552,7 +3549,8 @@ def conv2d_transpose(x, kernel, output_shape, strides=(1, 1),
                                                         kshp=kernel_shape,
                                                         subsample=strides,
                                                         border_mode=th_padding,
-                                                        filter_flip=not flip_filters)
+                                                        filter_flip=not flip_filters,
+                                                        filter_dilation=dilation_rate)
     conv_out = op(kernel, x, output_shape[2:])
     conv_out = _postprocess_conv2d_output(conv_out, x, padding,
                                           kernel_shape, strides, data_format)
