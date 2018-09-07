@@ -97,7 +97,6 @@ class Dropout(Layer):
     # References
         - [Dropout: A Simple Way to Prevent Neural Networks from Overfitting](http://www.cs.toronto.edu/~rsalakhu/papers/srivastava14a.pdf)
     """
-
     @interfaces.legacy_dropout_support
     def __init__(self, rate, noise_shape=None, seed=None, **kwargs):
         super(Dropout, self).__init__(**kwargs)
@@ -122,7 +121,6 @@ class Dropout(Layer):
             def dropped_inputs():
                 return K.dropout(inputs, self.rate, noise_shape,
                                  seed=self.seed)
-
             return K.in_train_phase(dropped_inputs, inputs,
                                     training=training)
         return inputs
@@ -1564,9 +1562,9 @@ class ZeroesLayer(Layer):
 
     def call(self, inputs, mask=None):
         initial_state = K.zeros_like(inputs)  # (samples, input_dim)
-        initial_state = K.sum(initial_state, axis=1)  # (samples, )
+        initial_state = K.sum(initial_state, axis=(1,))  # (samples,)
         initial_state = K.expand_dims(initial_state)  # (samples, 1)
-        initial_state = K.tile(initial_state, self.output_dim)  # (samples, units)
+        initial_state = K.tile(initial_state, [1, self.output_dim])
         return initial_state
 
     def compute_output_shape(self, input_shape):
