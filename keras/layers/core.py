@@ -1150,6 +1150,40 @@ class MaskedMean(Layer):
         return dict(list(base_config.items()))
 
 
+class ApplyMask(Layer):
+    """
+    This layer is called after an Embedding layer.
+    It averages all of the masked-out embeddings.
+    The mask is discarded.
+
+    # Input shape
+        Arbitrary. Use the keyword argument `input_shape`
+        when using this layer as the first layer in a model.
+
+    # Output shape
+        Same shape as input.
+    """
+
+    def __init__(self, **kwargs):
+        self.supports_masking = True
+        super(ApplyMask, self).__init__(**kwargs)
+
+    def call(self, inputs, mask=None):
+        mask = inputs[1]
+        inputs = inputs[0]
+        return K.cast(mask[:, :, None], K.dtype(inputs)) * inputs
+
+    def compute_mask(self, inputs, mask=None):
+        return inputs[1]
+
+    def compute_output_shape(self, input_shape):
+        return input_shape[0]
+
+    def get_config(self):
+        base_config = super(ApplyMask, self).get_config()
+        return dict(list(base_config.items()))
+
+
 class MaskLayer(Layer):
     """Applies to the input its mask. The mask is kept.
 
@@ -1176,6 +1210,79 @@ class MaskLayer(Layer):
 
     def get_config(self):
         base_config = super(MaskLayer, self).get_config()
+        return dict(list(base_config.items()))
+
+
+class MaskAndRemoveMask(Layer):
+    """Applies to the input its mask. The mask is removed.
+
+    # Input shape
+        Arbitrary. Use the keyword argument `input_shape`
+        when using this layer as the first layer in a model.
+
+    # Output shape
+        Same shape as input.
+    """
+
+    def __init__(self, **kwargs):
+        self.supports_masking = True
+        super(MaskAndRemoveMask, self).__init__(**kwargs)
+
+    def call(self, inputs, mask=None):
+        return K.cast(mask[:, :, None], K.dtype(inputs)) * inputs
+
+    def compute_mask(self, input_shape, input_mask=None):
+        return None
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+    def get_config(self):
+        base_config = super(MaskAndRemoveMask, self).get_config()
+        return dict(list(base_config.items()))
+
+
+class RemoveMask(Layer):
+    """Removes the mask of the Layer.
+    """
+
+    def __init__(self, **kwargs):
+        super(RemoveMask, self).__init__(**kwargs)
+
+    def compute_mask(self, input, input_mask=None):
+        return None
+
+    def get_config(self):
+        base_config = super(RemoveMask, self).get_config()
+        return dict(list(base_config.items()))
+
+
+class GetMask(Layer):
+    """Gets the mask of a layer.
+
+    # Input shape
+        Arbitrary. Use the keyword argument `input_shape`
+        when using this layer as the first layer in a model.
+
+    # Output shape
+        Same shape as input.
+    """
+
+    def __init__(self, **kwargs):
+        self.supports_masking = True
+        super(GetMask, self).__init__(**kwargs)
+
+    def call(self, inputs, mask=None):
+        return mask
+
+    def compute_mask(self, input_shape, input_mask=None):
+        return None
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+    def get_config(self):
+        base_config = super(GetMask, self).get_config()
         return dict(list(base_config.items()))
 
 
@@ -1419,21 +1526,6 @@ class SetSubtensor(Layer):
         config = {'indices': self.indices}
         base_config = super(SetSubtensor, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
-
-
-class RemoveMask(Layer):
-    """Removes the mask of the Layer.
-    """
-
-    def __init__(self, **kwargs):
-        super(RemoveMask, self).__init__(**kwargs)
-
-    def compute_mask(self, input, input_mask=None):
-        return None
-
-    def get_config(self):
-        base_config = super(RemoveMask, self).get_config()
-        return dict(list(base_config.items()))
 
 
 class ZeroesLayer(Layer):
