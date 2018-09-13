@@ -1300,7 +1300,9 @@ def max(x, axis=None, keepdims=False):
 
     # Arguments
         x: A tensor or variable.
-        axis: An integer, the axis to find maximum values.
+        axis: An integer or list of integers in [-rank(x), rank(x)),
+            the axes to find maximum values. If `None` (default), finds the
+            maximum over all dimensions.
         keepdims: A boolean, whether to keep the dimensions or not.
             If `keepdims` is `False`, the rank of the tensor is reduced
             by 1. If `keepdims` is `True`,
@@ -1317,7 +1319,9 @@ def min(x, axis=None, keepdims=False):
 
     # Arguments
         x: A tensor or variable.
-        axis: An integer, the axis to find minimum values.
+        axis: An integer or list of integers in [-rank(x), rank(x)),
+            the axes to find minimum values. If `None` (default), finds the
+            minimum over all dimensions.
         keepdims: A boolean, whether to keep the dimensions or not.
             If `keepdims` is `False`, the rank of the tensor is reduced
             by 1. If `keepdims` is `True`,
@@ -1334,7 +1338,9 @@ def sum(x, axis=None, keepdims=False):
 
     # Arguments
         x: A tensor or variable.
-        axis: An integer, the axis to sum over.
+        axis: An integer or list of integers in [-rank(x), rank(x)),
+            the axes to sum over. If `None` (default), sums over all
+            dimensions.
         keepdims: A boolean, whether to keep the dimensions or not.
             If `keepdims` is `False`, the rank of the tensor is reduced
             by 1. If `keepdims` is `True`,
@@ -1351,7 +1357,9 @@ def prod(x, axis=None, keepdims=False):
 
     # Arguments
         x: A tensor or variable.
-        axis: An integer, the axis to compute the product.
+        axis: An integer or list of integers in [-rank(x), rank(x)),
+            the axes to compute the product. If `None` (default), computes
+            the product over all dimensions.
         keepdims: A boolean, whether to keep the dimensions or not.
             If `keepdims` is `False`, the rank of the tensor is reduced
             by 1. If `keepdims` is `True`,
@@ -1394,7 +1402,9 @@ def var(x, axis=None, keepdims=False):
 
     # Arguments
         x: A tensor or variable.
-        axis: An integer, the axis to compute the variance.
+        axis: An integer or list of integers in [-rank(x), rank(x)),
+            the axes to compute the variance. If `None` (default), computes
+            the variance over all dimensions.
         keepdims: A boolean, whether to keep the dimensions or not.
             If `keepdims` is `False`, the rank of the tensor is reduced
             by 1. If `keepdims` is `True`,
@@ -1417,7 +1427,9 @@ def std(x, axis=None, keepdims=False):
 
     # Arguments
         x: A tensor or variable.
-        axis: An integer, the axis to compute the standard deviation.
+        axis: An integer or list of integers in [-rank(x), rank(x)),
+            the axes to compute the standard deviation. If `None` (default),
+            computes the standard deviation over all dimensions.
         keepdims: A boolean, whether to keep the dimensions or not.
             If `keepdims` is `False`, the rank of the tensor is reduced
             by 1. If `keepdims` is `True`,
@@ -1434,7 +1446,9 @@ def mean(x, axis=None, keepdims=False):
 
     # Arguments
         x: A tensor or variable.
-        axis: A list of integer. Axes to compute the mean.
+        axis: An integer or list of integers in [-rank(x), rank(x)),
+            the axes to compute the mean. If `None` (default), computes
+            the mean over all dimensions.
         keepdims: A boolean, whether to keep the dimensions or not.
             If `keepdims` is `False`, the rank of the tensor is reduced
             by 1 for each entry in `axis`. If `keepdims` is `True`,
@@ -1453,7 +1467,9 @@ def any(x, axis=None, keepdims=False):
 
     # Arguments
         x: Tensor or variable.
-        axis: axis along which to perform the reduction.
+        axis: An integer or list of integers in [-rank(x), rank(x)),
+            the axes to compute the logical or. If `None` (default), computes
+            the logical or over all dimensions.
         keepdims: whether the drop or broadcast the reduction axes.
 
     # Returns
@@ -1468,7 +1484,9 @@ def all(x, axis=None, keepdims=False):
 
     # Arguments
         x: Tensor or variable.
-        axis: axis along which to perform the reduction.
+        axis: An integer or list of integers in [-rank(x), rank(x)),
+            the axes to compute the logical and. If `None` (default), computes
+            the logical and over all dimensions.
         keepdims: whether the drop or broadcast the reduction axes.
 
     # Returns
@@ -1590,7 +1608,9 @@ def logsumexp(x, axis=None, keepdims=False):
 
     # Arguments
         x: A tensor or variable.
-        axis: An integer, the axis to reduce over.
+        axis: axis: An integer or list of integers in [-rank(x), rank(x)),
+            the axes to compute the logsumexp. If `None` (default), computes
+            the logsumexp over all dimensions.
         keepdims: A boolean, whether to keep the dimensions or not.
             If `keepdims` is `False`, the rank of the tensor is reduced
             by 1. If `keepdims` is `True`, the reduced dimension is
@@ -1963,17 +1983,17 @@ def batch_normalization(x, mean, var, beta, gamma, axis=-1, epsilon=1e-3):
             # The mean / var / beta / gamma may be processed by broadcast
             # so it may have extra axes with 1, it is not needed and should be removed
             if ndim(mean) > 1:
-                mean = tf.squeeze(mean)
+                mean = tf.reshape(mean, (-1))
             if ndim(var) > 1:
-                var = tf.squeeze(var)
+                var = tf.reshape(var, (-1))
             if beta is None:
                 beta = zeros_like(mean)
             elif ndim(beta) > 1:
-                beta = tf.squeeze(beta)
+                beta = tf.reshape(beta, (-1))
             if gamma is None:
                 gamma = ones_like(mean)
             elif ndim(gamma) > 1:
-                gamma = tf.squeeze(gamma)
+                gamma = tf.reshape(gamma, (-1))
             y, _, _ = tf.nn.fused_batch_norm(
                 x,
                 gamma,
@@ -2724,7 +2744,10 @@ class Function(object):
         # (since the outputs of fetches are never returned).
         # This requires us to wrap fetches in `identity` ops.
         self.fetches = [tf.identity(x) for x in self.fetches]
-        self.session_kwargs = session_kwargs
+        # self.session_kwargs is used for _legacy_call
+        self.session_kwargs = session_kwargs.copy()
+        self.run_options = session_kwargs.pop('options', None)
+        self.run_metadata = session_kwargs.pop('run_metadata', None)
         if session_kwargs:
             raise ValueError('Some keys in session_kwargs are not '
                              'supported at this '
@@ -2772,6 +2795,9 @@ class Function(object):
             callable_opts.fetch.append(x.name)
         # Handle updates.
         callable_opts.target.append(self.updates_op.name)
+        # Handle run_options.
+        if self.run_options:
+            callable_opts.run_options.CopyFrom(self.run_options)
         # Create callable.
         callable_fn = session._make_callable_from_options(callable_opts)
         # Cache parameters corresponding to the generated callable, so that
@@ -2822,7 +2848,10 @@ class Function(object):
                                 feed_symbols,
                                 symbol_vals,
                                 session)
-        fetched = self._callable_fn(*array_vals)
+        if self.run_metadata:
+            fetched = self._callable_fn(*array_vals, run_metadata=self.run_metadata)
+        else:
+            fetched = self._callable_fn(*array_vals)
         return fetched[:len(self.outputs)]
 
     def _legacy_call(self, inputs):
@@ -2844,25 +2873,31 @@ class Function(object):
         return updated[:len(self.outputs)]
 
     def __call__(self, inputs):
-        return self._legacy_call(inputs)
-        # TODO: Here we must rely on the legacy_call for optimized_cond models. Otherwise, the error
-        # "tensorflow.python.framework.errors_impl.InvalidArgumentError: preprocessed_input:0 is both fed and fetched." is raised
-        #
-        # if hasattr(get_session(), '_make_callable_from_options'):
-        #     if py_any(is_sparse(x) for x in self.inputs):
-        #         if py_any(is_tensor(x) for x in inputs):
-        #             raise ValueError(
-        #                 'Feeding from symbolic tensors is not '
-        #                 'supported with sparse inputs.')
-        #         return self._legacy_call(inputs)
-        #
-        #     return self._call(inputs)
-        # else:
-        #     if py_any(is_tensor(x) for x in inputs):
-        #         raise ValueError(
-        #             'In order to feed symbolic tensors to a Keras model '
-        #             'in TensorFlow, you need tensorflow 1.8 or higher.')
-        #     return self._legacy_call(inputs)
+        if hasattr(get_session(), '_make_callable_from_options'):
+            if py_any(is_sparse(x) for x in self.inputs):
+                if py_any(is_tensor(x) for x in inputs):
+                    raise ValueError(
+                        'Feeding from symbolic tensors is not '
+                        'supported with sparse inputs.')
+                return self._legacy_call(inputs)
+
+            # callable generated by Session._make_callable_from_options accepts
+            # `run_metadata` keyword argument since TF 1.10
+            if (self.run_metadata and
+                    StrictVersion(tf.__version__.split('-')[0]) < StrictVersion('1.10.0')):
+                if py_any(is_tensor(x) for x in inputs):
+                    raise ValueError(
+                        'In order to feed symbolic tensors to a Keras model and set '
+                        '`run_metadata`, you need tensorflow 1.10 or higher.')
+                return self._legacy_call(inputs)
+
+            return self._call(inputs)
+        else:
+            if py_any(is_tensor(x) for x in inputs):
+                raise ValueError(
+                    'In order to feed symbolic tensors to a Keras model '
+                    'in TensorFlow, you need tensorflow 1.8 or higher.')
+            return self._legacy_call(inputs)
 
 
 def function(inputs, outputs, updates=None, **kwargs):
