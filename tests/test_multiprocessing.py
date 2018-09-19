@@ -9,7 +9,7 @@ from keras.utils import Sequence
 from keras import backend as K
 
 pytestmark = pytest.mark.skipif(
-    K.backend() == 'tensorflow',
+    K.backend() == 'tensorflow' or K.backend() == 'theano',
     reason='Temporarily disabled until the use_multiprocessing problem is solved')
 
 STEPS_PER_EPOCH = 100
@@ -90,7 +90,7 @@ def test_multiprocessing_training():
 
     # Build a NN
     model = Sequential()
-    model.add(Dense(1, input_shape=(2,)))
+    model.add(Dense(1, input_shape=(2, )))
     model.compile(loss='mse', optimizer='adadelta')
 
     # - Produce data on 4 worker processes, consume on main process:
@@ -297,7 +297,7 @@ def test_multiprocessing_training_from_file(in_tmpdir):
 
     # Build a NN
     model = Sequential()
-    model.add(Dense(1, input_shape=(2,)))
+    model.add(Dense(1, input_shape=(2, )))
     model.compile(loss='mse', optimizer='adadelta')
 
     # - Produce data on 4 worker processes, consume on main process:
@@ -411,7 +411,7 @@ def test_multiprocessing_predicting():
 
     # Build a NN
     model = Sequential()
-    model.add(Dense(1, input_shape=(2,)))
+    model.add(Dense(1, input_shape=(2, )))
     model.compile(loss='mse', optimizer='adadelta')
 
     # - Produce data on 4 worker processes, consume on main process:
@@ -501,7 +501,7 @@ def test_multiprocessing_evaluating():
 
     # Build a NN
     model = Sequential()
-    model.add(Dense(1, input_shape=(2,)))
+    model.add(Dense(1, input_shape=(2, )))
     model.compile(loss='mse', optimizer='adadelta')
 
     # - Produce data on 4 worker processes, consume on main process:
@@ -593,7 +593,7 @@ def test_multiprocessing_fit_error():
         raise RuntimeError
 
     model = Sequential()
-    model.add(Dense(1, input_shape=(2,)))
+    model.add(Dense(1, input_shape=(2, )))
     model.compile(loss='mse', optimizer='adadelta')
 
     samples = batch_size * (good_batches + 1)
@@ -705,7 +705,7 @@ def test_multiprocessing_evaluate_error():
         raise RuntimeError
 
     model = Sequential()
-    model.add(Dense(1, input_shape=(2,)))
+    model.add(Dense(1, input_shape=(2, )))
     model.compile(loss='mse', optimizer='adadelta')
 
     # - Produce data on 4 worker processes, consume on main process:
@@ -806,7 +806,7 @@ def test_multiprocessing_predict_error():
         raise RuntimeError
 
     model = Sequential()
-    model.add(Dense(1, input_shape=(2,)))
+    model.add(Dense(1, input_shape=(2, )))
     model.compile(loss='mse', optimizer='adadelta')
 
     # - Produce data on 4 worker processes, consume on main process:
