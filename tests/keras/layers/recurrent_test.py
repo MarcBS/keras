@@ -18,7 +18,6 @@ num_samples, timesteps, embedding_dim, units = 2, 5, 4, 3
 embedding_num = 12
 
 
-@keras_test
 def rnn_test(f):
     """
     All the recurrent layers share the same interface,
@@ -32,7 +31,6 @@ def rnn_test(f):
     ])(f)
 
 
-@keras_test
 def rnn_cell_test(f):
     f = keras_test(f)
     return pytest.mark.parametrize('cell_class', [
@@ -239,7 +237,6 @@ def test_trainability(layer_class):
     assert len(layer.non_trainable_weights) == 0
 
 
-@keras_test
 def test_masking_layer():
     ''' This test based on a previously failing issue here:
     https://github.com/keras-team/keras/issues/1567
@@ -430,7 +427,6 @@ def test_state_reuse_with_dropout(layer_class):
     outputs = model.predict(inputs)
 
 
-@keras_test
 def test_minimal_rnn_cell_non_layer():
     class MinimalRNNCell(object):
         def __init__(self, units, input_dim):
@@ -464,7 +460,6 @@ def test_minimal_rnn_cell_non_layer():
     model.train_on_batch(np.zeros((6, 5, 5)), np.zeros((6, 32)))
 
 
-@keras_test
 def test_minimal_rnn_cell_non_layer_multiple_states():
     class MinimalRNNCell(object):
         def __init__(self, units, input_dim):
@@ -502,7 +497,6 @@ def test_minimal_rnn_cell_non_layer_multiple_states():
     model.train_on_batch(np.zeros((6, 5, 5)), np.zeros((6, 32)))
 
 
-@keras_test
 def test_minimal_rnn_cell_layer():
     class MinimalRNNCell(keras.layers.Layer):
         def __init__(self, units, **kwargs):
@@ -626,7 +620,6 @@ def test_builtin_rnn_cell_layer(cell_class):
     assert_allclose(y_np, y_np_2, atol=1e-4)
 
 
-@keras_test
 @pytest.mark.skipif((K.backend() in ['cntk', 'theano']),
                     reason='Not supported.')
 def test_stacked_rnn_dropout():
@@ -643,7 +636,6 @@ def test_stacked_rnn_dropout():
     model.train_on_batch(x_np, y_np)
 
 
-@keras_test
 def test_stacked_rnn_attributes():
     cells = [recurrent.LSTMCell(3),
              recurrent.LSTMCell(3, kernel_regularizer='l2')]
@@ -666,7 +658,6 @@ def test_stacked_rnn_attributes():
     assert layer.get_losses_for(x) == [y]
 
 
-@keras_test
 def test_stacked_rnn_compute_output_shape():
     cells = [recurrent.LSTMCell(3),
              recurrent.LSTMCell(6)]
@@ -705,7 +696,6 @@ def test_batch_size_equal_one(layer_class):
     model.train_on_batch(x, y)
 
 
-@keras_test
 def test_rnn_cell_with_constants_layer():
     class RNNCellWithConstants(keras.layers.Layer):
         def __init__(self, units, **kwargs):
@@ -812,7 +802,6 @@ def test_rnn_cell_with_constants_layer():
     assert_allclose(y_np, y_np_2, atol=1e-4)
 
 
-@keras_test
 def test_rnn_cell_with_constants_layer_passing_initial_state():
     class RNNCellWithConstants(keras.layers.Layer):
         def __init__(self, units, **kwargs):
@@ -910,7 +899,6 @@ def test_rnn_cell_identity_initializer(layer_class):
                           np.concatenate([np.identity(units)] * num_kernels, axis=1))
 
 
-@keras_test
 @pytest.mark.skipif(K.backend() == 'cntk', reason='Not supported.')
 def test_inconsistent_output_state_size():
 

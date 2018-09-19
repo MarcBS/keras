@@ -1,7 +1,6 @@
 '''Tests for functions in io_utils.py.
 '''
 import os
-import sys
 import pytest
 from keras.models import Sequential
 from keras.layers import Dense
@@ -11,9 +10,8 @@ from keras.utils.io_utils import ask_to_proceed_with_overwrite
 from numpy.testing import assert_allclose
 import numpy as np
 import six
-import warnings
 import h5py
-
+import tempfile
 try:
     from unittest.mock import patch
 except:
@@ -47,7 +45,7 @@ def test_io_utils(in_tmpdir):
     '''Tests the HDF5Matrix code using the sample from @jfsantos at
     https://gist.github.com/jfsantos/e2ef822c744357a4ed16ec0c885100a3
     '''
-    h5_path = 'test.h5'
+    _, h5_path = tempfile.mkstemp('.h5')
     create_dataset(h5_path)
 
     # Instantiating HDF5Matrix for the training set,
@@ -136,7 +134,9 @@ def test_ask_to_proceed_with_overwrite():
         assert not ask_to_proceed_with_overwrite('/tmp/not_exists')
 
 
-def test_h5dict_attrs(h5_path='test.h5'):
+def test_h5dict_attrs():
+    _, h5_path = tempfile.mkstemp('.h5')
+
     # test both HDF5 and dict implementations
     paths = [h5_path, dict()]
 
@@ -162,9 +162,12 @@ def test_h5dict_attrs(h5_path='test.h5'):
         assert_allclose(f['z'], array)
 
         f.close()
+    os.remove(h5_path)
 
 
-def test_h5dict_groups(h5_path='test.h5'):
+def test_h5dict_groups():
+    _, h5_path = tempfile.mkstemp('.h5')
+
     # test both HDF5 and dict implementations
     paths = [h5_path, dict()]
 
@@ -203,6 +206,7 @@ def test_h5dict_groups(h5_path='test.h5'):
         assert_allclose(group4['z'], array)
 
         f.close()
+    os.remove(h5_path)
 
 
 if __name__ == '__main__':

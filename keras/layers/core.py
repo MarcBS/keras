@@ -95,7 +95,8 @@ class Dropout(Layer):
         seed: A Python integer to use as random seed.
 
     # References
-        - [Dropout: A Simple Way to Prevent Neural Networks from Overfitting](http://www.cs.toronto.edu/~rsalakhu/papers/srivastava14a.pdf)
+        - [Dropout: A Simple Way to Prevent Neural Networks from Overfitting]
+          (http://www.jmlr.org/papers/volume15/srivastava14a/srivastava14a.pdf)
     """
     @interfaces.legacy_dropout_support
     def __init__(self, rate, noise_shape=None, seed=None, **kwargs):
@@ -203,7 +204,8 @@ class SpatialDropout1D(Dropout):
         Same as input
 
     # References
-        - [Efficient Object Localization Using Convolutional Networks](https://arxiv.org/abs/1411.4280)
+        - [Efficient Object Localization Using Convolutional Networks]
+          (https://arxiv.org/abs/1411.4280)
     """
 
     @interfaces.legacy_spatialdropout1d_support
@@ -248,7 +250,8 @@ class SpatialDropout2D(Dropout):
         Same as input
 
     # References
-        - [Efficient Object Localization Using Convolutional Networks](https://arxiv.org/abs/1411.4280)
+        - [Efficient Object Localization Using Convolutional Networks]
+          (https://arxiv.org/abs/1411.4280)
     """
 
     @interfaces.legacy_spatialdropoutNd_support
@@ -296,7 +299,8 @@ class SpatialDropout3D(Dropout):
         Same as input
 
     # References
-        - [Efficient Object Localization Using Convolutional Networks](https://arxiv.org/abs/1411.4280)
+        - [Efficient Object Localization Using Convolutional Networks]
+          (https://arxiv.org/abs/1411.4280)
     """
 
     @interfaces.legacy_spatialdropoutNd_support
@@ -797,7 +801,8 @@ class Lambda(Layer):
         else:
             shape = self._output_shape(input_shape)
             if not isinstance(shape, (list, tuple)):
-                raise ValueError('`output_shape` function must return a tuple or a list of tuples.')
+                raise ValueError('`output_shape` function must return a tuple or '
+                                 'a list of tuples.')
             if isinstance(shape, list):
                 if isinstance(shape[0], int) or shape[0] is None:
                     shape = tuple(shape)
@@ -1032,7 +1037,8 @@ class Dense(Layer):
             'bias_initializer': initializers.serialize(self.bias_initializer),
             'kernel_regularizer': regularizers.serialize(self.kernel_regularizer),
             'bias_regularizer': regularizers.serialize(self.bias_regularizer),
-            'activity_regularizer': regularizers.serialize(self.activity_regularizer),
+            'activity_regularizer':
+                regularizers.serialize(self.activity_regularizer),
             'kernel_constraint': constraints.serialize(self.kernel_constraint),
             'bias_constraint': constraints.serialize(self.bias_constraint)
         }
