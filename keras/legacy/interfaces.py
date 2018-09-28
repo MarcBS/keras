@@ -86,8 +86,8 @@ def generate_legacy_interface(allowed_positional_args=None,
                     if i < len(kwargs) - 1:
                         signature += ', '
                 signature += ')`'
-                warnings.warn('Update your `' + object_name +
-                              '` call to the Keras 2 API: ' + signature, stacklevel=2)
+                warnings.warn('Update your `' + object_name + '` call to the ' +
+                              'Keras 2 API: ' + signature, stacklevel=2)
             return func(*args, **kwargs)
 
         wrapper._original_function = func
@@ -129,7 +129,8 @@ def embedding_kwargs_preprocessor(args, kwargs):
         kwargs.pop('dropout')
         warnings.warn('The `dropout` argument is no longer support in `Embedding`. '
                       'You can apply a `keras.layers.SpatialDropout1D` layer '
-                      'right after the `Embedding` layer to get the same behavior.', stacklevel=3)
+                      'right after the `Embedding` layer to get the same behavior.',
+                      stacklevel=3)
     return args, kwargs, converted
 
 
@@ -296,7 +297,7 @@ def conv2d_args_preprocessor(args, kwargs):
     converted = []
     if len(args) > 4:
         raise TypeError('Layer can receive at most 3 positional arguments.')
-    if len(args) == 4:
+    elif len(args) == 4:
         if isinstance(args[2], int) and isinstance(args[3], int):
             new_keywords = ['padding', 'strides', 'data_format']
             for kwd in new_keywords:
@@ -408,7 +409,7 @@ def conv3d_args_preprocessor(args, kwargs):
     if len(args) > 5:
         raise TypeError('Layer can receive at most 4 positional arguments.')
     if len(args) == 5:
-        if isinstance(args[2], int) and isinstance(args[3], int) and isinstance(args[4], int):
+        if all([isinstance(x, int) for x in args[2:5]]):
             kernel_size = (args[2], args[3], args[4])
             args = [args[0], args[1], kernel_size]
             converted.append(('kernel_size', 'kernel_dim*'))
@@ -428,21 +429,21 @@ def conv3d_args_preprocessor(args, kwargs):
             args = [args[0], args[1], kernel_size]
             converted.append(('kernel_size', 'kernel_dim*'))
     elif len(args) == 3:
-        if 'kernel_dim2' in kwargs and 'kernel_dim3' in kwargs:
+        if all([x in kwargs for x in ['kernel_dim2', 'kernel_dim3']]):
             kernel_size = (args[2],
                            kwargs.pop('kernel_dim2'),
                            kwargs.pop('kernel_dim3'))
             args = [args[0], args[1], kernel_size]
             converted.append(('kernel_size', 'kernel_dim*'))
     elif len(args) == 2:
-        if 'kernel_dim1' in kwargs and 'kernel_dim2' in kwargs and 'kernel_dim3' in kwargs:
+        if all([x in kwargs for x in ['kernel_dim1', 'kernel_dim2', 'kernel_dim3']]):
             kernel_size = (kwargs.pop('kernel_dim1'),
                            kwargs.pop('kernel_dim2'),
                            kwargs.pop('kernel_dim3'))
             args = [args[0], args[1], kernel_size]
             converted.append(('kernel_size', 'kernel_dim*'))
     elif len(args) == 1:
-        if 'kernel_dim1' in kwargs and 'kernel_dim2' in kwargs and 'kernel_dim3' in kwargs:
+        if all([x in kwargs for x in ['kernel_dim1', 'kernel_dim2', 'kernel_dim3']]):
             kernel_size = (kwargs.pop('kernel_dim1'),
                            kwargs.pop('kernel_dim2'),
                            kwargs.pop('kernel_dim3'))
@@ -539,7 +540,8 @@ def zeropadding2d_args_preprocessor(args, kwargs):
             kwargs['padding'] = ((top_pad, bottom_pad), (left_pad, right_pad))
             warnings.warn('The `padding` argument in the Keras 2 API no longer'
                           'accepts dict types. You can now input argument as: '
-                          '`padding=(top_pad, bottom_pad, left_pad, right_pad)`.', stacklevel=3)
+                          '`padding=(top_pad, bottom_pad, left_pad, right_pad)`.',
+                          stacklevel=3)
     elif len(args) == 2 and isinstance(args[1], dict):
         if set(args[1].keys()) <= {'top_pad', 'bottom_pad',
                                    'left_pad', 'right_pad'}:
@@ -550,7 +552,8 @@ def zeropadding2d_args_preprocessor(args, kwargs):
             args = (args[0], ((top_pad, bottom_pad), (left_pad, right_pad)))
             warnings.warn('The `padding` argument in the Keras 2 API no longer'
                           'accepts dict types. You can now input argument as: '
-                          '`padding=((top_pad, bottom_pad), (left_pad, right_pad))`', stacklevel=3)
+                          '`padding=((top_pad, bottom_pad), (left_pad, right_pad))`',
+                          stacklevel=3)
     return args, kwargs, converted
 
 
@@ -617,7 +620,8 @@ def generator_methods_args_preprocessor(args, kwargs):
                 kwargs['steps_per_epoch'] = samples_per_epoch
             converted.append(('samples_per_epoch', 'steps_per_epoch'))
 
-    keras1_args = {'samples_per_epoch', 'val_samples', 'nb_epoch', 'nb_val_samples', 'nb_worker'}
+    keras1_args = {'samples_per_epoch', 'val_samples',
+                   'nb_epoch', 'nb_val_samples', 'nb_worker'}
     if keras1_args.intersection(kwargs.keys()):
         warnings.warn('The semantics of the Keras 2 argument '
                       '`steps_per_epoch` is not the same as the '

@@ -18,7 +18,7 @@ from .. import initializers
 class MaxoutDense(Layer):
     """A dense maxout layer.
     A `MaxoutDense` layer takes the element-wise maximum of
-    `nb_feature` `Dense(input_dim, units)` linear layers.
+    `nb_feature` `Dense(input_dim, output_dim)` linear layers.
     This allows the layer to learn a convex,
     piecewise linear activation function over the inputs.
     Note that this is a *linear* layer;
@@ -26,16 +26,16 @@ class MaxoutDense(Layer):
     (you shouldn't need to --they are universal function approximators),
     an `Activation` layer must be added after.
     # Arguments
-        units: int > 0.
+        output_dim: int > 0.
         nb_feature: number of Dense layers to use internally.
-        kernel_initializer: name of initialization function for the weights of the layer
+        init: name of initialization function for the weights of the layer
             (see [initializations](../initializations.md)),
             or alternatively, Theano function to use for weights
             initialization. This parameter is only relevant
             if you don't pass a `weights` argument.
         weights: list of Numpy arrays to set as initial weights.
-            The list should have 2 elements, of shape `(input_dim, units)`
-            and (units,) for weights and biases respectively.
+            The list should have 2 elements, of shape `(input_dim, output_dim)`
+            and (output_dim,) for weights and biases respectively.
         W_regularizer: instance of [WeightRegularizer](../regularizers.md)
             (eg. L1 or L2 regularization), applied to the main weights matrix.
         b_regularizer: instance of [WeightRegularizer](../regularizers.md),
@@ -54,7 +54,7 @@ class MaxoutDense(Layer):
     # Input shape
         2D tensor with shape: `(nb_samples, input_dim)`.
     # Output shape
-        2D tensor with shape: `(nb_samples, units)`.
+        2D tensor with shape: `(nb_samples, output_dim)`.
     # References
         - [Maxout Networks](http://arxiv.org/abs/1302.4389)
     """
@@ -135,7 +135,8 @@ class MaxoutDense(Layer):
                   'nb_feature': self.nb_feature,
                   'W_regularizer': regularizers.serialize(self.W_regularizer),
                   'b_regularizer': regularizers.serialize(self.b_regularizer),
-                  'activity_regularizer': regularizers.serialize(self.activity_regularizer),
+                  'activity_regularizer':
+                      regularizers.serialize(self.activity_regularizer),
                   'W_constraint': constraints.serialize(self.W_constraint),
                   'b_constraint': constraints.serialize(self.b_constraint),
                   'bias': self.bias,
@@ -148,7 +149,7 @@ class Highway(Layer):
     """Densely connected highway network.
     Highway layers are a natural extension of LSTMs to feedforward networks.
     # Arguments
-        kernel_initializer: name of initialization function for the weights of the layer
+        init: name of initialization function for the weights of the layer
             (see [initializations](../initializations.md)),
             or alternatively, Theano function to use for weights
             initialization. This parameter is only relevant
@@ -159,8 +160,8 @@ class Highway(Layer):
             If you don't specify anything, no activation is applied
             (ie. "linear" activation: a(x) = x).
         weights: list of Numpy arrays to set as initial weights.
-            The list should have 2 elements, of shape `(input_dim, units)`
-            and (units,) for weights and biases respectively.
+            The list should have 2 elements, of shape `(input_dim, output_dim)`
+            and (output_dim,) for weights and biases respectively.
         W_regularizer: instance of [WeightRegularizer](../regularizers.md)
             (eg. L1 or L2 regularization), applied to the main weights matrix.
         b_regularizer: instance of [WeightRegularizer](../regularizers.md),
@@ -269,7 +270,8 @@ class Highway(Layer):
                   'activation': activations.serialize(self.activation),
                   'W_regularizer': regularizers.serialize(self.W_regularizer),
                   'b_regularizer': regularizers.serialize(self.b_regularizer),
-                  'activity_regularizer': regularizers.serialize(self.activity_regularizer),
+                  'activity_regularizer':
+                      regularizers.serialize(self.activity_regularizer),
                   'W_constraint': constraints.serialize(self.W_constraint),
                   'b_constraint': constraints.serialize(self.b_constraint),
                   'bias': self.bias,
@@ -311,7 +313,6 @@ class Recurrent(Layer):
 
     Do not use in a model -- it's not a valid layer!
     Use its children classes `LSTM`, `GRU` and `SimpleRNN` instead.
-
     All recurrent layers (`LSTM`, `GRU`, `SimpleRNN`) also
     follow the specifications of this class and accept
     the keyword arguments listed below.
@@ -324,10 +325,8 @@ class Recurrent(Layer):
         model.add(LSTM(32, input_shape=(10, 64)))
         # now model.output_shape == (None, 32)
         # note: `None` is the batch dimension.
-
         # for subsequent layers, no need to specify the input size:
         model.add(LSTM(16))
-
         # to stack recurrent layers, you must use return_sequences=True
         # on any recurrent layer that feeds into another recurrent layer.
         # note that you only need to specify the input size on the first layer.
@@ -340,7 +339,7 @@ class Recurrent(Layer):
     # Arguments
         weights: list of Numpy arrays to set as initial weights.
             The list should have 3 elements, of shapes:
-            `[(input_dim, units), (units, units), (units,)]`.
+            `[(input_dim, output_dim), (output_dim, output_dim), (output_dim,)]`.
         return_sequences: Boolean. Whether to return the last output
             in the output sequence, or the full sequence.
         return_state: Boolean. Whether to return the last state
@@ -385,7 +384,7 @@ class Recurrent(Layer):
 
     # Input shapes
         3D tensor with shape `(batch_size, timesteps, input_dim)`,
-        (Optional) 2D tensors with shape `(batch_size, units)`.
+        (Optional) 2D tensors with shape `(batch_size, output_dim)`.
 
     # Output shape
         - if `return_state`: a list of tensors. The first tensor is
@@ -406,7 +405,6 @@ class Recurrent(Layer):
         computed for the samples in one batch will be reused as initial states
         for the samples in the next batch. This assumes a one-to-one mapping
         between samples in different successive batches.
-
         To enable statefulness:
             - specify `stateful=True` in the layer constructor.
             - specify a fixed batch size for your model, by passing
@@ -418,7 +416,6 @@ class Recurrent(Layer):
                 *including the batch size*.
                 It should be a tuple of integers, e.g. `(32, 10, 100)`.
             - specify `shuffle=False` when calling fit().
-
         To reset the states of your model, call `.reset_states()` on either
         a specific layer, or on your entire model.
 
@@ -427,7 +424,6 @@ class Recurrent(Layer):
         calling them with the keyword argument `initial_state`. The value of
         `initial_state` should be a tensor or list of tensors representing
         the initial state of the RNN layer.
-
         You can specify the initial state of RNN layers numerically by
         calling `reset_states` with the keyword argument `states`. The value of
         `states` should be a numpy array or list of numpy arrays representing
@@ -487,11 +483,12 @@ class Recurrent(Layer):
         return []
 
     def get_initial_state(self, inputs):
-        # build an all-zero tensor of shape (samples, units)
+        # build an all-zero tensor of shape (samples, output_dim)
         initial_state = K.zeros_like(inputs)  # (samples, timesteps, input_dim)
         initial_state = K.sum(initial_state, axis=(1, 2))  # (samples,)
         initial_state = K.expand_dims(initial_state)  # (samples, 1)
-        initial_state = K.tile(initial_state, [1, self.units])  # (samples, units)
+        # (samples, output_dim)
+        initial_state = K.tile(initial_state, [1, self.units])
         initial_state = [initial_state for _ in range(len(self.states))]
         return initial_state
 
@@ -504,9 +501,10 @@ class Recurrent(Layer):
         # they should be the main input and `initial_state`
         # e.g. when loading model from file
         # TODO: This is disabled, accounting for multiple-inputs RNNs. More general way of doing this?
-        # if isinstance(inputs, (list, tuple)) and len(inputs) > 1 and initial_state is None:
-        #    initial_state = inputs[1:]
-        #    inputs = inputs[0]
+        # if (isinstance(inputs, (list, tuple))
+        #         and len(inputs) > 1 and initial_state is None):
+        #     initial_state = inputs[1:]
+        #     inputs = inputs[0]
 
         # If `initial_state` is specified,
         # and if it a Keras tensor,
@@ -640,7 +638,7 @@ class Recurrent(Layer):
             if len(states) != len(self.states):
                 raise ValueError('Layer ' + self.name + ' expects ' +
                                  str(len(self.states)) + ' states, '
-                                                         'but it received ' + str(len(states)) +
+                                 'but it received ' + str(len(states)) +
                                  ' state values. Input received: ' +
                                  str(states))
             for index, (value, state) in enumerate(zip(states, self.states)):
@@ -750,7 +748,8 @@ class ConvRecurrent2D(Recurrent):
         self.strides = conv_utils.normalize_tuple(strides, 2, 'strides')
         self.padding = conv_utils.normalize_padding(padding)
         self.data_format = K.normalize_data_format(data_format)
-        self.dilation_rate = conv_utils.normalize_tuple(dilation_rate, 2, 'dilation_rate')
+        self.dilation_rate = conv_utils.normalize_tuple(dilation_rate, 2,
+                                                        'dilation_rate')
         self.return_sequences = return_sequences
         self.go_backwards = go_backwards
         self.stateful = stateful
@@ -791,9 +790,10 @@ class ConvRecurrent2D(Recurrent):
 
         if self.return_state:
             if self.data_format == 'channels_first':
-                output_shape = [output_shape] + [(input_shape[0], self.filters, rows, cols) for _ in range(2)]
+                state_shape = (input_shape[0], self.filters, rows, cols)
             elif self.data_format == 'channels_last':
-                output_shape = [output_shape] + [(input_shape[0], rows, cols, self.filters) for _ in range(2)]
+                state_shape = (input_shape[0], rows, cols, self.filters)
+            output_shape = [output_shape, state_shape, state_shape]
 
         return output_shape
 
