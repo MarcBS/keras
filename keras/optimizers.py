@@ -661,6 +661,28 @@ class Adam(Optimizer):
 
 
 class AdamAccumulate(Optimizer):
+    """Adam optimizer updating parameters only after a number of iterations.
+    Implementation made by: https://github.com/keras-team/keras/issues/3556#issuecomment-417317758
+    Default parameters follow those provided in the original paper.
+
+    # Arguments
+        lr: float >= 0. Learning rate.
+        beta_1: float, 0 < beta < 1. Generally close to 1.
+        beta_2: float, 0 < beta < 1. Generally close to 1.
+        epsilon: float >= 0. Fuzz factor. If `None`, defaults to `K.epsilon()`.
+        decay: float >= 0. Learning rate decay over each update.
+        amsgrad: boolean. Whether to apply the AMSGrad variant of this
+            algorithm from the paper "On the Convergence of Adam and
+            Beyond".
+        accum_iters: int > 0. Number of iteration between gradient updates.
+            If 1, the optimizer falls to regular Adam.
+
+    # References
+        - [Adam - A Method for Stochastic Optimization](
+           https://arxiv.org/abs/1412.6980v8)
+        - [On the Convergence of Adam and Beyond](
+           https://openreview.net/forum?id=ryQu7f-RZ)
+    """
     def __init__(self, lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.,
                  amsgrad=False, accum_iters=20, **kwargs):
         super(AdamAccumulate, self).__init__(**kwargs)
