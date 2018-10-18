@@ -25,9 +25,7 @@ def softmax(x, axis=-1):
         ValueError: In case `dim(x) == 1`.
     """
     ndim = K.ndim(x)
-    if ndim == 1:
-        raise ValueError('Cannot apply softmax to a tensor that is 1D')
-    elif ndim == 2:
+    if ndim == 2:
         return K.softmax(x)
     elif ndim > 2:
         e = K.exp(x - K.max(x, axis=axis, keepdims=True))
@@ -51,7 +49,7 @@ def elu(x, alpha=1.0):
 
     # References
         - [Fast and Accurate Deep Network Learning by Exponential
-        Linear Units (ELUs)](https://arxiv.org/abs/1511.07289)
+           Linear Units (ELUs)](https://arxiv.org/abs/1511.07289)
     """
     return K.elu(x, alpha)
 

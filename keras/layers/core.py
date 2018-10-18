@@ -95,8 +95,8 @@ class Dropout(Layer):
         seed: A Python integer to use as random seed.
 
     # References
-        - [Dropout: A Simple Way to Prevent Neural Networks from Overfitting]
-          (http://www.jmlr.org/papers/volume15/srivastava14a/srivastava14a.pdf)
+        - [Dropout: A Simple Way to Prevent Neural Networks from Overfitting](
+           http://www.jmlr.org/papers/volume15/srivastava14a/srivastava14a.pdf)
     """
     @interfaces.legacy_dropout_support
     def __init__(self, rate, noise_shape=None, seed=None, **kwargs):
@@ -204,8 +204,8 @@ class SpatialDropout1D(Dropout):
         Same as input
 
     # References
-        - [Efficient Object Localization Using Convolutional Networks]
-          (https://arxiv.org/abs/1411.4280)
+        - [Efficient Object Localization Using Convolutional Networks](
+           https://arxiv.org/abs/1411.4280)
     """
 
     @interfaces.legacy_spatialdropout1d_support
@@ -250,8 +250,8 @@ class SpatialDropout2D(Dropout):
         Same as input
 
     # References
-        - [Efficient Object Localization Using Convolutional Networks]
-          (https://arxiv.org/abs/1411.4280)
+        - [Efficient Object Localization Using Convolutional Networks](
+           https://arxiv.org/abs/1411.4280)
     """
 
     @interfaces.legacy_spatialdropoutNd_support
@@ -299,8 +299,8 @@ class SpatialDropout3D(Dropout):
         Same as input
 
     # References
-        - [Efficient Object Localization Using Convolutional Networks]
-          (https://arxiv.org/abs/1411.4280)
+        - [Efficient Object Localization Using Convolutional Networks](
+           https://arxiv.org/abs/1411.4280)
     """
 
     @interfaces.legacy_spatialdropoutNd_support

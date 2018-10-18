@@ -236,7 +236,8 @@ class Orthogonal(Initializer):
         seed: A Python integer. Used to seed the random generator.
 
     # References
-        Saxe et al., http://arxiv.org/abs/1312.6120
+        - [Exact solutions to the nonlinear dynamics of learning in deep
+           linear neural networks](http://arxiv.org/abs/1312.6120)
     """
 
     def __init__(self, gain=1., seed=None):
@@ -316,8 +317,7 @@ def lecun_uniform(seed=None):
         An initializer.
 
     # References
-        LeCun 98, Efficient Backprop,
-        http://yann.lecun.com/exdb/publis/pdf/lecun-98b.pdf
+        - [Efficient BackProp](http://yann.lecun.com/exdb/publis/pdf/lecun-98b.pdf)
     """
     return VarianceScaling(scale=1.,
                            mode='fan_in',
@@ -340,8 +340,8 @@ def glorot_normal(seed=None):
         An initializer.
 
     # References
-        Glorot & Bengio, AISTATS 2010
-        http://jmlr.org/proceedings/papers/v9/glorot10a/glorot10a.pdf
+        - [Understanding the difficulty of training deep feedforward neural
+           networks](http://jmlr.org/proceedings/papers/v9/glorot10a/glorot10a.pdf)
     """
     return VarianceScaling(scale=1.,
                            mode='fan_avg',
@@ -364,8 +364,8 @@ def glorot_uniform(seed=None):
         An initializer.
 
     # References
-        Glorot & Bengio, AISTATS 2010
-        http://jmlr.org/proceedings/papers/v9/glorot10a/glorot10a.pdf
+        - [Understanding the difficulty of training deep feedforward neural
+           networks](http://jmlr.org/proceedings/papers/v9/glorot10a/glorot10a.pdf)
     """
     return VarianceScaling(scale=1.,
                            mode='fan_avg',
@@ -387,7 +387,8 @@ def he_normal(seed=None):
         An initializer.
 
     # References
-        He et al., http://arxiv.org/abs/1502.01852
+        - [Delving Deep into Rectifiers: Surpassing Human-Level Performance on
+           ImageNet Classification](http://arxiv.org/abs/1502.01852)
     """
     return VarianceScaling(scale=2.,
                            mode='fan_in',
@@ -432,7 +433,8 @@ def he_uniform(seed=None):
         An initializer.
 
     # References
-        He et al., http://arxiv.org/abs/1502.01852
+        - [Delving Deep into Rectifiers: Surpassing Human-Level Performance on
+           ImageNet Classification](http://arxiv.org/abs/1502.01852)
     """
     return VarianceScaling(scale=2.,
                            mode='fan_in',

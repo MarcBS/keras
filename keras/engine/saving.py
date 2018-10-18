@@ -14,7 +14,7 @@ from six.moves import zip
 from .. import backend as K
 from .. import optimizers
 from ..utils.io_utils import ask_to_proceed_with_overwrite
-from ..utils.io_utils import h5dict
+from ..utils.io_utils import H5Dict
 from ..utils import conv_utils
 
 try:
@@ -133,6 +133,7 @@ def _serialize_model(model, f, include_optimizer=True):
                 },
                 'loss': model.loss,
                 'metrics': model.metrics,
+                'weighted_metrics': model.weighted_metrics,
                 'sample_weight_mode': model.sample_weight_mode,
                 'loss_weights': model.loss_weights,
             }, default=get_json_type).encode('utf8')
@@ -376,7 +377,7 @@ def save_model(model, filepath, overwrite=True, include_optimizer=True):
     else:
         opened_new_file = False
 
-    f = h5dict(filepath, mode='w')
+    f = H5Dict(filepath, mode='w')
 
     try:
         _serialize_model(model, f, include_optimizer)
@@ -414,7 +415,7 @@ def load_model(filepath, custom_objects=None, compile=True):
         raise ImportError('`load_model` requires h5py.')
     model = None
     opened_new_file = not isinstance(filepath, h5py.Group)
-    f = h5dict(filepath, 'r')
+    f = H5Dict(filepath, 'r')
     try:
         model = _deserialize_model(f, custom_objects, compile)
     finally:
@@ -425,13 +426,13 @@ def load_model(filepath, custom_objects=None, compile=True):
 
 def pickle_model(model):
     d = {}
-    f = h5dict(d)
+    f = H5Dict(d)
     _serialize_model(model, f)
     return d
 
 
 def unpickle_model(state):
-    f = h5dict(state, mode='r')
+    f = H5Dict(state, mode='r')
     return _deserialize_model(f)
 
 
