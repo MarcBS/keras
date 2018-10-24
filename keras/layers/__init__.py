@@ -12,6 +12,7 @@ from .pooling import *
 from .local import *
 from .loss_layers import *
 from .recurrent import *
+from .recurrent_advanced import *
 from .cudnn_recurrent import *
 from .normalization import *
 from .embeddings import *
