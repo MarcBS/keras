@@ -36,7 +36,7 @@ x = Dense(100, W_learning_rate_multiplier=10.0, b_learning_rate_multiplier=10.0)
 
 ## New layers for sequence-to-sequence learning and multimodal data
 
-#### Recurrent layers
+#### [Recurrent layers](https://github.com/MarcBS/keras/blob/master/keras/layers/recurrent_advanced.py)
 LSTM layers:
 - [LSTMCond](https://github.com/MarcBS/keras/blob/75ab7cc25db43b1f6c44496a77414a4c9030c58a/keras/layers/recurrent.py#L2421): LSTM conditioned to the previously generated word (additional input with previous word).
 - [AttLSTM](https://github.com/MarcBS/keras/blob/75ab7cc25db43b1f6c44496a77414a4c9030c58a/keras/layers/recurrent.py#L3367): LSTM with Attention mechanism.
