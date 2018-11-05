@@ -3288,30 +3288,30 @@ def rnn(step_function, inputs, initial_states,
                         output_ta_t: TensorArray.
                         *states: List of states.
 
-                # Returns
-                    Tuple: `(time + 1,output_ta_t) + tuple(new_states)`
-                """
-                current_input = input_ta.read(time)
-                mask_t = mask_ta.read(time)
-                output, new_states = step_function(current_input,
-                                                   tuple(states) +
-                                                   tuple(constants))
-                if getattr(output, '_uses_learning_phase', False):
-                    global uses_learning_phase
-                    uses_learning_phase = True
-                for state, new_state in zip(states, new_states):
-                    new_state.set_shape(state.get_shape())
-                tiled_mask_t = tf.tile(mask_t,
-                                       tf.stack([1, tf.shape(output)[1]]))
-                output = tf.where(tiled_mask_t, output, states[0])
-                tmp = []
-                for i in range(len(states)):
-                    multiples = tf.stack([1, tf.shape(new_states[i])[1]])
-                    tiled = tf.tile(mask_t, multiples)
-                    tmp.append(tf.where(tiled, new_states[i], states[i]))
-                new_states = tmp
-                output_ta_t = output_ta_t.write(time, output)
-                return (time + 1, output_ta_t) + tuple(new_states)
+                    # Returns
+                        Tuple: `(time + 1,output_ta_t) + tuple(new_states)`
+                    """
+                    current_input = input_ta.read(time)
+                    mask_t = mask_ta.read(time)
+                    output, new_states = step_function(current_input,
+                                                       tuple(states) +
+                                                       tuple(constants))
+                    if getattr(output, '_uses_learning_phase', False):
+                        global uses_learning_phase
+                        uses_learning_phase = True
+                    for state, new_state in zip(states, new_states):
+                        new_state.set_shape(state.get_shape())
+                    tiled_mask_t = tf.tile(mask_t,
+                                           tf.stack([1, tf.shape(output)[1]]))
+                    output = tf.where(tiled_mask_t, output, states[0])
+                    tmp = []
+                    for i in range(len(states)):
+                        multiples = tf.stack([1, tf.shape(new_states[i])[1]])
+                        tiled = tf.tile(mask_t, multiples)
+                        tmp.append(tf.where(tiled, new_states[i], states[i]))
+                    new_states = tmp
+                    output_ta_t = output_ta_t.write(time, output)
+                    return (time + 1, output_ta_t) + tuple(new_states)
         else:
             def _step(time, output_ta_t, *states):
                 """RNN step function.
