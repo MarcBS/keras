@@ -617,6 +617,8 @@ def int_shape(x):
         >>> K.int_shape(kvar)
         (2, 2)
     ```
+
+    {{np_implementation}}
     """
     if hasattr(x, '_keras_shape'):
         return x._keras_shape
@@ -646,6 +648,8 @@ def ndim(x):
         >>> K.ndim(kvar)
         2
     ```
+
+    {{np_implementation}}
     """
     dims = x.get_shape()._dims
     if dims is not None:
@@ -1763,6 +1767,8 @@ def equal(x, y):
 
     # Returns
         A bool tensor.
+
+    {{np_implementation}}
     """
     return tf.equal(x, y)
 
@@ -1776,6 +1782,8 @@ def not_equal(x, y):
 
     # Returns
         A bool tensor.
+
+    {{np_implementation}}
     """
     return tf.not_equal(x, y)
 
@@ -1789,6 +1797,8 @@ def greater(x, y):
 
     # Returns
         A bool tensor.
+
+    {{np_implementation}}
     """
     return tf.greater(x, y)
 
@@ -1802,6 +1812,8 @@ def greater_equal(x, y):
 
     # Returns
         A bool tensor.
+
+    {{np_implementation}}
     """
     return tf.greater_equal(x, y)
 
@@ -1815,6 +1827,8 @@ def less(x, y):
 
     # Returns
         A bool tensor.
+
+    {{np_implementation}}
     """
     return tf.less(x, y)
 
@@ -1828,6 +1842,8 @@ def less_equal(x, y):
 
     # Returns
         A bool tensor.
+
+    {{np_implementation}}
     """
     return tf.less_equal(x, y)
 
@@ -1841,6 +1857,8 @@ def maximum(x, y):
 
     # Returns
         A tensor.
+
+    {{np_implementation}}
     """
     return tf.maximum(x, y)
 
@@ -1854,6 +1872,8 @@ def minimum(x, y):
 
     # Returns
         A tensor.
+
+    {{np_implementation}}
     """
     return tf.minimum(x, y)
 
@@ -3778,6 +3798,8 @@ def hard_sigmoid(x):
 
     # Returns
         A tensor.
+
+    {{np_implementation}}
     """
     x = (0.2 * x) + 0.5
     zero = _to_tensor(0., x.dtype.base_dtype)
