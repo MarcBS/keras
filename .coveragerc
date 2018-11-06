@@ -23,3 +23,6 @@ omit =
     keras/layers/attention.py
     keras/layers/googlenet_custom_layers.py
     keras/utils/multi_gpu_utils.py
+    keras/backend/theano_backend.py
+    keras/backend/tensorflow_backend.py
+    keras/backend/cntk_backend.py
