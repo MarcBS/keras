@@ -3361,7 +3361,7 @@ def rnn(step_function, inputs, initial_states,
         if pos_extra_outputs_states is not None:
             non_extra_states = [final_outputs[i + 4] for i in range(len(final_outputs[4:]))
                                 if i not in pos_extra_outputs_states]
-            states = non_extra_states + final_outputs[4]
+            states = non_extra_states + final_outputs[3]
             new_states = []
             for i_s, state in enumerate(states):
                 if i_s in pos_extra_outputs_states:  # This +1 accounts for the last_output
