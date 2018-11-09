@@ -2608,9 +2608,9 @@ def tril(x):
         Lower triangle of an x.
     """
     try:
-        from tensorflow.contrib.linalg import LinearOperatorTriL as tril
+        from tensorflow.linalg import LinearOperatorLowerTriangular as tril
     except:
-        from tensorflow.contrib.linalg import LinearOperatorLowerTriangular as tril
+        from tensorflow.contrib.linalg import LinearOperatorTriL as tril
 
     return tril(x).to_dense()
 
