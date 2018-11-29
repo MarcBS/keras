@@ -1774,6 +1774,7 @@ class PositionwiseFeedForwardDense(Layer):
     @interfaces.legacy_dense_support
     def __init__(self, units,
                  activation='relu',
+                 dropout=0.,
                  use_bias=True,
                  kernel_initializer='glorot_uniform',
                  bias_initializer='zeros',
@@ -1788,6 +1789,7 @@ class PositionwiseFeedForwardDense(Layer):
         super(PositionwiseFeedForwardDense, self).__init__(**kwargs)
         self.units = units
         self.activation = activations.get(activation)
+        self.dropout = dropout
         self.use_bias = use_bias
         self.kernel_initializer = initializers.get(kernel_initializer)
         self.bias_initializer = initializers.get(bias_initializer)
@@ -1831,14 +1833,16 @@ class PositionwiseFeedForwardDense(Layer):
         else:
             self.bias_2 = None
         self.input_spec = InputSpec(min_ndim=2, axes={-1: input_dim})
+        self.dropout_layer = Dropout(self.dropout)
         self.built = True
 
     def call(self, inputs, mask=None):
         intermediate_output = K.dot(inputs, self.kernel1)
         if self.use_bias:
             intermediate_output = K.bias_add(intermediate_output, self.bias1)
-        if self.activation is not None:
-            intermediate_output = self.activation(intermediate_output)
+        intermediate_output = self.activation(intermediate_output)
+        if self.dropout > 0:
+            intermediate_output = self.dropout_layer(intermediate_output)
         output = K.dot(intermediate_output, self.kernel2)
         if self.use_bias:
             output = K.bias_add(output, self.bias2)
@@ -1855,6 +1859,7 @@ class PositionwiseFeedForwardDense(Layer):
     def get_config(self):
         config = {
             'units': self.units,
+            'dropout': self.dropout,
             'activation': activations.serialize(self.activation),
             'use_bias': self.use_bias,
             'kernel_initializer': initializers.serialize(self.kernel_initializer),
