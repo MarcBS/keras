@@ -4,13 +4,13 @@ TEST:rs
 Test convert.py's ability to handle Deconvolution and Crop laye
 by converting voc-fcn8s .prototxt and .caffemodel present in the caffe/models/segmentation folder
 """
-import os
-import inspect
-import numpy as np
-import keras.caffe.convert as convert
-from scipy import misc
-import matplotlib.pyplot as plt
-from subprocess import call
+# import os
+# import inspect
+# import numpy as np
+# import keras.caffe.convert as convert
+# from scipy import misc
+# import matplotlib.pyplot as plt
+# from subprocess import call
 
 # check whether files are present in folder
 """

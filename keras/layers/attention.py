@@ -6,7 +6,7 @@ import numpy as np
 from .. import backend as K
 from .. import activations, initializers, regularizers, constraints
 from ..engine import Layer, InputSpec
-from ..layers import Dense, Concatenate, TimeDistributed, Slice
+from ..layers import Dense, Concatenate, TimeDistributed, Slice, Dropout
 
 
 class MultiHeadAttention(Layer):
@@ -64,33 +64,30 @@ class MultiHeadAttention(Layer):
         query_dim = input_shape[0][2]
         key_dim = input_shape[1][2]
 
-        self.linear_q = self.add_weight(shape=(query_dim,
-                                               self.dk * self.n_heads),
+        self.linear_q = self.add_weight(shape=(query_dim, self.dk * self.n_heads),
                                         initializer=self.kernel_initializer,
                                         name='linear_q',
                                         regularizer=self.kernel_regularizer,
                                         constraint=self.kernel_constraint)
 
-        self.linear_k = self.add_weight(shape=(key_dim,
-                                               self.dk * self.n_heads),
+        self.linear_k = self.add_weight(shape=(key_dim, self.dk * self.n_heads),
                                         initializer=self.kernel_initializer,
                                         name='linear_k',
                                         regularizer=self.kernel_regularizer,
                                         constraint=self.kernel_constraint)
 
-        self.linear_v = self.add_weight(shape=(key_dim,
-                                               self.dv * self.n_heads),
+        self.linear_v = self.add_weight(shape=(key_dim, self.dv * self.n_heads),
                                         initializer=self.kernel_initializer,
                                         name='linear_v',
                                         regularizer=self.kernel_regularizer,
                                         constraint=self.kernel_constraint)
 
-        self.linear_o = self.add_weight(shape=(self.dv * self.n_heads,
-                                               self.dmodel),
+        self.linear_o = self.add_weight(shape=(self.dv * self.n_heads, self.dmodel),
                                         initializer=self.kernel_initializer,
                                         name='linear_o',
                                         regularizer=self.kernel_regularizer,
                                         constraint=self.kernel_constraint)
+        self.dropout_layer = Dropout(self.dropout)
 
         self.built = True
 
@@ -147,7 +144,8 @@ class MultiHeadAttention(Layer):
 
         # Activation (softmax)
         alphas = K.softmax_3d(attended_heads)
-
+        if self.dropout > 0:
+            alphas = self.dropout_layer(alphas)
         # Query Masking
         query_masks = K.sign(K.abs(K.sum(query, axis=-1)))  # (N, T_q)
         query_masks = K.tile(query_masks, [self.n_heads, 1])  # (h*N, T_q)
