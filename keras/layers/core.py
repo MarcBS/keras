@@ -1833,14 +1833,16 @@ class PositionwiseFeedForwardDense(Layer):
         else:
             self.bias_2 = None
         self.input_spec = InputSpec(min_ndim=2, axes={-1: input_dim})
-        self.dropout_layer = Dropout(self.dropout)
+        if self.dropout > 0:
+            self.dropout_layer = Dropout(self.dropout)
         self.built = True
 
     def call(self, inputs, mask=None):
         intermediate_output = K.dot(inputs, self.kernel1)
         if self.use_bias:
             intermediate_output = K.bias_add(intermediate_output, self.bias1)
-        intermediate_output = self.activation(intermediate_output)
+        if self.activation is not None:
+            intermediate_output = self.activation(intermediate_output)
         if self.dropout > 0:
             intermediate_output = self.dropout_layer(intermediate_output)
         output = K.dot(intermediate_output, self.kernel2)

@@ -87,7 +87,8 @@ class MultiHeadAttention(Layer):
                                         name='linear_o',
                                         regularizer=self.kernel_regularizer,
                                         constraint=self.kernel_constraint)
-        self.dropout_layer = Dropout(self.dropout)
+        if self.dropout > 0:
+            self.dropout_layer = Dropout(self.dropout)
 
         self.built = True
 

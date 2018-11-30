@@ -13,9 +13,6 @@ from .common import image_data_format
 from .common import set_image_data_format
 from .common import normalize_data_format
 
-# Set Keras' recursion limit high enough.
-sys.setrecursionlimit(10000)
-
 # Set Keras base dir path given KERAS_HOME env variable, if applicable.
 # Otherwise either ~/.keras or /tmp.
 if 'KERAS_HOME' in os.environ:
@@ -26,8 +23,8 @@ else:
         _keras_base_dir = '/tmp'
     _keras_dir = os.path.join(_keras_base_dir, '.keras')
 
-# Default backend: Theano.
-_BACKEND = 'theano'
+# Default backend: TensorFlow.
+_BACKEND = 'tensorflow'
 
 # Attempt to read Keras config file.
 _config_path = os.path.expanduser(os.path.join(_keras_dir, 'keras.json'))
@@ -84,12 +81,12 @@ if 'KERAS_BACKEND' in os.environ:
 if _BACKEND == 'cntk':
     sys.stderr.write('Using CNTK backend\n')
     from .cntk_backend import *
-elif _BACKEND == 'tensorflow':
-    sys.stderr.write('Using TensorFlow backend.\n')
-    from .tensorflow_backend import *
 elif _BACKEND == 'theano':
     sys.stderr.write('Using Theano backend.\n')
     from .theano_backend import *
+elif _BACKEND == 'tensorflow':
+    sys.stderr.write('Using TensorFlow backend.\n')
+    from .tensorflow_backend import *
 else:
     # Try and load external backend.
     try:
