@@ -11,7 +11,6 @@ from tensorflow.python.ops import functional_ops
 from tensorflow.python.ops import ctc_ops as ctc
 from tensorflow.python.client import device_lib
 from tensorflow.core.protobuf import config_pb2
-
 from collections import defaultdict
 
 import numpy as np
@@ -194,7 +193,6 @@ def get_session():
         A TensorFlow session.
     """
     global _SESSION
-
     default_session = tf.get_default_session()
 
     if default_session is not None:
@@ -207,6 +205,9 @@ def get_session():
                 num_thread = int(os.environ.get('OMP_NUM_THREADS'))
                 config = tf.ConfigProto(intra_op_parallelism_threads=num_thread,
                                         allow_soft_placement=True)
+
+            config.gpu_options.allow_growth = True  # dynamically grow the memory used on the GPU
+
             _SESSION = tf.Session(config=config)
         session = _SESSION
     if not _MANUAL_VAR_INIT:
