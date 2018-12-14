@@ -196,7 +196,7 @@ class MultiHeadAttention(Layer):
         attended_heads = K.concatenate([attended_heads[i * nb_samples: (i + 1) * nb_samples, :, :] for i in range(self.n_heads)], axis=2)  # batch_size, timesteps, dmodel
 
         # Apply the final linear
-        output = self.activation(K.dot_product(attended_heads, self.linear_o))
+        output = self.activation(K.bias_add(K.dot_product(attended_heads, self.linear_o), self.bias_o))
         return output
 
     def compute_mask(self, inputs, mask=None):
