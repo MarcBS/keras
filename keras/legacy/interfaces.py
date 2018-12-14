@@ -667,25 +667,23 @@ legacy_add_weight_support = generate_legacy_interface(
 
 
 def get_updates_arg_preprocessing(args, kwargs):
-    # Old interface: (params, constraints, loss, learning_rate_multipliers)
-    # New interface: (loss, params, learning_rate_multipliers)
-    if len(args) > 5:
+    # Old interface: (params, constraints, loss)
+    # New interface: (loss, params)
+    if len(args) > 4:
         raise TypeError('`get_update` call received more arguments '
                         'than expected.')
-    elif len(args) == 5:
+    elif len(args) == 4:
         # Assuming old interface.
-        opt, params, _, loss, learning_rate_multipliers = args
+        opt, params, _, loss = args
         kwargs['loss'] = loss
         kwargs['params'] = params
-        kwargs['learning_rate_multipliers'] = learning_rate_multipliers
         return [opt], kwargs, []
-    elif len(args) == 4:
+    elif len(args) == 3:
         if isinstance(args[1], (list, tuple)):
             assert isinstance(args[2], dict)
             assert 'loss' in kwargs
-            opt, params, _, learning_rate_multipliers = args
+            opt, params, _ = args
             kwargs['params'] = params
-            kwargs['learning_rate_multipliers'] = learning_rate_multipliers
             return [opt], kwargs, []
     return args, kwargs, []
 

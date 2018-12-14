@@ -86,7 +86,6 @@ class Optimizer(object):
     def get_updates(self, loss, params):
         raise NotImplementedError
 
-    @interfaces.legacy_get_updates_support
     def get_updates_with_lr_multipliers(self, loss, params,
                                         learning_rate_multipliers):
         raise NotImplementedError
@@ -210,7 +209,6 @@ class PAS(Optimizer):
             self.updates.append(K.update(wk, new_wk))
         return self.updates
 
-    @interfaces.legacy_get_updates_support
     def get_updates_with_lr_multipliers(self, loss, params,
                                         learning_rate_multipliers):
         grads = self.get_gradients(loss, params)
@@ -270,7 +268,6 @@ class PAS2(PAS):
             self.updates.append(K.update(wk, new_wk))
         return self.updates
 
-    @interfaces.legacy_get_updates_support
     def get_updates_with_lr_multipliers(self, loss, params,
                                         learning_rate_multipliers):
         grads = self.get_gradients(loss, params)
@@ -328,7 +325,6 @@ class PPAS(PAS):
             self.updates.append(K.update(wk, p_new_wk))
         return self.updates
 
-    @interfaces.legacy_get_updates_support
     def get_updates_with_lr_multipliers(self, loss, params,
                                         learning_rate_multipliers):
         grads = self.get_gradients(loss, params)
@@ -416,7 +412,6 @@ class QHSGD(Optimizer):
             self.updates.append(K.update(p, new_p))
         return self.updates
 
-    @interfaces.legacy_get_updates_support
     def get_updates_with_lr_multipliers(self, loss, params,
                                         learning_rate_multipliers):
         grads = self.get_gradients(loss, params)
@@ -537,7 +532,6 @@ class SGDHD(Optimizer):
             self.updates.append(K.update(p, new_p))
         return self.updates
 
-    @interfaces.legacy_get_updates_support
     def get_updates_with_lr_multipliers(self, loss, params,
                                         learning_rate_multipliers):
         grads = self.get_gradients(loss, params)
@@ -676,7 +670,6 @@ class QHSGDHD(Optimizer):
             self.updates.append(K.update(p, new_p))
         return self.updates
 
-    @interfaces.legacy_get_updates_support
     def get_updates_with_lr_multipliers(self, loss, params,
                                         learning_rate_multipliers):
         grads = self.get_gradients(loss, params)
@@ -792,7 +785,6 @@ class SGD(Optimizer):
             self.updates.append(K.update(p, new_p))
         return self.updates
 
-    @interfaces.legacy_get_updates_support
     def get_updates_with_lr_multipliers(self, loss, params,
                                         learning_rate_multipliers):
         grads = self.get_gradients(loss, params)
@@ -890,7 +882,6 @@ class RMSprop(Optimizer):
             self.updates.append(K.update(p, new_p))
         return self.updates
 
-    @interfaces.legacy_get_updates_support
     def get_updates_with_lr_multipliers(self, loss, params,
                                         learning_rate_multipliers):
         grads = self.get_gradients(loss, params)
@@ -988,7 +979,6 @@ class Adagrad(Optimizer):
             self.updates.append(K.update(p, new_p))
         return self.updates
 
-    @interfaces.legacy_get_updates_support
     def get_updates_with_lr_multipliers(self, loss, params,
                                         learning_rate_multipliers):
 
@@ -1103,7 +1093,6 @@ class Adadelta(Optimizer):
             self.updates.append(K.update(d_a, new_d_a))
         return self.updates
 
-    @interfaces.legacy_get_updates_support
     def get_updates_with_lr_multipliers(self, loss, params,
                                         learning_rate_multipliers):
         grads = self.get_gradients(loss, params)
@@ -1228,7 +1217,6 @@ class Adam(Optimizer):
             self.updates.append(K.update(p, new_p))
         return self.updates
 
-    @interfaces.legacy_get_updates_support
     def get_updates_with_lr_multipliers(self, loss, params,
                                         learning_rate_multipliers):
         grads = self.get_gradients(loss, params)
@@ -1375,7 +1363,6 @@ class AdamAccumulate(Optimizer):
             self.updates.append(K.update(p, new_p))
         return self.updates
 
-    @interfaces.legacy_get_updates_support
     def get_updates_with_lr_multipliers(self, loss, params,
                                         learning_rate_multipliers):
         grads = self.get_gradients(loss, params)
@@ -1508,7 +1495,6 @@ class Adamax(Optimizer):
             self.updates.append(K.update(p, new_p))
         return self.updates
 
-    @interfaces.legacy_get_updates_support
     def get_updates_with_lr_multipliers(self, loss, params,
                                         learning_rate_multipliers):
         grads = self.get_gradients(loss, params)
@@ -1637,7 +1623,6 @@ class Nadam(Optimizer):
             self.updates.append(K.update(p, new_p))
         return self.updates
 
-    @interfaces.legacy_get_updates_support
     def get_updates_with_lr_multipliers(self, loss, params,
                                         learning_rate_multipliers):
         grads = self.get_gradients(loss, params)
@@ -1712,7 +1697,6 @@ class TFOptimizer(Optimizer):
         self.updates.append(opt_update)
         return self.updates
 
-    @interfaces.legacy_get_updates_support
     def get_updates_with_lr_multipliers(self, loss, params,
                                         learning_rate_multipliers):
         grads = self.optimizer.compute_gradients(loss, params)
