@@ -500,7 +500,7 @@ class SGDHD(Optimizer):
         moments = [K.zeros(shape) for shape in shapes]
 
         # Hypergrads
-        lr_moments = [K.ones(shape) * lr for shape in shapes]
+        lr_moments = [K.variable(K.ones(shape) * self.lr) for shape in shapes]  # Initial lr moments (alpha_0 in the HG paper)
         lr_updates = [K.zeros(shape) for shape in shapes]
 
         self.weights = [self.iterations] + moments
@@ -545,7 +545,7 @@ class SGDHD(Optimizer):
         moments = [K.zeros(shape) for shape in shapes]
 
         # Hypergrads
-        lr_moments = [K.zeros(shape) for shape in shapes]
+        lr_moments = [K.variable(K.ones(shape) * self.lr) for shape in shapes]  # Initial lr moments (alpha_0 in the HG paper)
         lr_updates = [K.zeros(shape) for shape in shapes]
 
         self.weights = [self.iterations] + moments
@@ -637,7 +637,7 @@ class QHSGDHD(Optimizer):
         moments = [K.zeros(shape) for shape in shapes]
 
         # Hypergrads
-        lr_moments = [K.ones(shape) * lr for shape in shapes]
+        lr_moments = [K.variable(K.ones(shape) * self.lr) for shape in shapes]  # Initial lr moments (alpha_0 in the HG paper)
         lr_updates = [K.zeros(shape) for shape in shapes]
 
         self.weights = [self.iterations] + moments
@@ -683,7 +683,7 @@ class QHSGDHD(Optimizer):
         moments = [K.zeros(shape) for shape in shapes]
 
         # Hypergrads
-        lr_moments = [K.zeros(shape) for shape in shapes]
+        lr_moments = [K.variable(K.ones(shape) * self.lr) for shape in shapes]  # Initial lr moments (alpha_0 in the HG paper)
         lr_updates = [K.zeros(shape) for shape in shapes]
 
         self.weights = [self.iterations] + moments
