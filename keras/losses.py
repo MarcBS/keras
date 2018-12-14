@@ -60,10 +60,8 @@ def logcosh(y_true, y_pred):
     # Returns
         Tensor with one scalar loss entry per sample.
     """
-
     def _logcosh(x):
         return x + K.softplus(-2. * x) - K.log(2.)
-
     return K.mean(_logcosh(y_pred - y_true), axis=-1)
 
 

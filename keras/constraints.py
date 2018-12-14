@@ -29,7 +29,7 @@ class MaxNorm(Constraint):
         m: the maximum norm for the incoming weights.
         axis: integer, axis along which to calculate weight norms.
             For instance, in a `Dense` layer the weight matrix
-            has shape `(input_dim, units)`,
+            has shape `(input_dim, output_dim)`,
             set `axis` to `0` to constrain each weight vector
             of length `(input_dim,)`.
             In a `Conv2D` layer with `data_format="channels_last"`,
@@ -74,7 +74,7 @@ class UnitNorm(Constraint):
     # Arguments
         axis: integer, axis along which to calculate weight norms.
             For instance, in a `Dense` layer the weight matrix
-            has shape `(input_dim, units)`,
+            has shape `(input_dim, output_dim)`,
             set `axis` to `0` to constrain each weight vector
             of length `(input_dim,)`.
             In a `Conv2D` layer with `data_format="channels_last"`,
@@ -115,7 +115,7 @@ class MinMaxNorm(Constraint):
             towards a value inside the desired interval.
         axis: integer, axis along which to calculate weight norms.
             For instance, in a `Dense` layer the weight matrix
-            has shape `(input_dim, units)`,
+            has shape `(input_dim, output_dim)`,
             set `axis` to `0` to constrain each weight vector
             of length `(input_dim,)`.
             In a `Conv2D` layer with `data_format="channels_last"`,

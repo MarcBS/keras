@@ -507,14 +507,18 @@ class Model(Network):
                     # get trainable weights and LR multipliers
                     lr_multipliers = []
                     for layer in self.layers:
-                        if('learning_rate_multipliers' in layer.__dict__.keys() and layer.__dict__['learning_rate_multipliers'] != [None, None]):
+                        if 'learning_rate_multipliers' in layer.__dict__.keys() and layer.__dict__['learning_rate_multipliers'] != [None, None]:
                             lr_multipliers += layer.learning_rate_multipliers
-                        else:
-                            lr_multipliers += [1.0, 1.0]
-                    training_updates = self.optimizer.get_updates(
-                        params=self._collected_trainable_weights,
-                        loss=self.total_loss,
-                        learning_rate_multipliers=lr_multipliers)
+                    if lr_multipliers:
+                        lr_multipliers += [1.0, 1.0]
+                        training_updates = self.optimizer.get_updates_with_lr_multipliers(
+                            params=self._collected_trainable_weights,
+                            loss=self.total_loss,
+                            learning_rate_multipliers=lr_multipliers)
+                    else:
+                        training_updates = self.optimizer.get_updates(
+                            params=self._collected_trainable_weights,
+                            loss=self.total_loss)
                 updates = (self.updates +
                            training_updates +
                            self.metrics_updates)
@@ -525,21 +529,6 @@ class Model(Network):
                     updates=updates,
                     name='train_function',
                     **self._function_kwargs)
-
-    def _make_test_function_only_metrics(self):
-        if not hasattr(self, 'test_function'):
-            raise RuntimeError('You must compile your model before using it.')
-        if not self.metrics_tensors:
-            raise RuntimeError('You must specify at least one metric to the model.')
-        if self.test_function is None:
-            if self.uses_learning_phase and not isinstance(K.learning_phase(), int):
-                inputs = self.inputs + self.targets + self.sample_weights + [K.learning_phase()]
-            else:
-                inputs = self.inputs + self.targets + self.sample_weights
-            # return loss and metrics, no gradient updates.
-            # Does update the network states.
-            self.test_function_only_metrics = K.function(inputs, self.metrics_tensors,
-                                                         updates=self.state_updates, **self._function_kwargs)
 
     def _make_test_function(self):
         if not hasattr(self, 'test_function'):

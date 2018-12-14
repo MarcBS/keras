@@ -159,7 +159,6 @@ class _Conv(Layer):
                  kernel_constraint=None,
                  bias_constraint=None,
                  **kwargs):
-        # TODO: Test this layer
         super(_Conv, self).__init__(**kwargs)
         self.rank = rank
         self.filters = filters
@@ -180,29 +179,8 @@ class _Conv(Layer):
         self.kernel_constraint = constraints.get(kernel_constraint)
         self.bias_constraint = constraints.get(bias_constraint)
         self.input_spec = InputSpec(ndim=self.rank + 2)
-        # TODO: Test this layer. Old code:
-        """
-        self.W_constraint = constraints.get(W_constraint)
-        self.b_constraint = constraints.get(b_constraint)
-
-        self.W_learning_rate_multiplier = W_learning_rate_multiplier
-        self.b_learning_rate_multiplier = b_learning_rate_multiplier
-        self.learning_rate_multipliers = [self.W_learning_rate_multiplier,
-                                          self.b_learning_rate_multiplier]
-
-        self.bias = bias
-        self.input_spec = [InputSpec(ndim=3)]
-        self.initial_weights = weights
-        self.input_dim = input_dim
-        self.input_length = input_length
-        self.supports_masking = True
-        if self.input_dim:
-            kwargs['input_shape'] = (self.input_length, self.input_dim)
-        super(Convolution1D, self).__init__(**kwargs)
-        """
 
     def build(self, input_shape):
-
         if self.data_format == 'channels_first':
             channel_axis = 1
         else:

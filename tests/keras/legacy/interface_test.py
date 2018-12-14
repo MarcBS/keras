@@ -892,19 +892,13 @@ def test_optimizer_get_updates_legacy_interface():
         optimizer = optimizer_cls()
         param = keras.backend.variable(0.)
         loss = keras.backend.mean(param)
-        learning_rate_multipliers = [keras.backend.variable(1.0)]
         constraints = {param: lambda x: x}
         params = [param]
-        optimizer.get_updates(params, constraints, loss,
-                              learning_rate_multipliers)
-        optimizer.get_updates(params, constraints,
-                              learning_rate_multipliers, loss=loss)
-        optimizer.get_updates(loss, params,
-                              learning_rate_multipliers)
-        optimizer.get_updates(loss, params=params,
-                              learning_rate_multipliers=learning_rate_multipliers)
-        optimizer.get_updates(loss=loss, params=params,
-                              learning_rate_multipliers=learning_rate_multipliers)
+        optimizer.get_updates(params, constraints, loss)
+        optimizer.get_updates(params, constraints, loss=loss)
+        optimizer.get_updates(loss, params)
+        optimizer.get_updates(loss, params=params)
+        optimizer.get_updates(loss=loss, params=params)
 
 
 if __name__ == '__main__':

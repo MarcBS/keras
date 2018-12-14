@@ -199,8 +199,6 @@ class VarianceScaling(Initializer):
         self.seed = seed
 
     def __call__(self, shape, dtype=None):
-        if dtype is None:
-            dtype = K.floatx()
         fan_in, fan_out = _compute_fans(shape)
         scale = self.scale
         if self.mode == 'fan_in':
@@ -208,7 +206,7 @@ class VarianceScaling(Initializer):
         elif self.mode == 'fan_out':
             scale /= max(1., fan_out)
         else:
-            scale /= max(1., np.float32(fan_in + fan_out) / 2)
+            scale /= max(1., float(fan_in + fan_out) / 2)
         if self.distribution == 'normal':
             # 0.879... = scipy.stats.truncnorm.std(a=-2, b=2, loc=0., scale=1.)
             stddev = np.sqrt(scale) / .87962566103423978
@@ -441,12 +439,6 @@ def he_uniform(seed=None):
                            distribution='uniform',
                            seed=seed)
 
-
-# Layer normalization
-def gamma_init_func(shape, c=1, **kwargs):
-    if c == 1.:
-        return ones()(shape, kwargs)
-    return K.variable(np.ones(shape) * c, **kwargs)
 
 # Compatibility aliases
 

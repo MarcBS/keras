@@ -334,7 +334,6 @@ class Concatenate(_Merge):
 
     # Arguments
         axis: Axis along which to concatenate.
-        cropping: Cropping for each input axis (disable for axis). None or [crop]
         **kwargs: standard layer keyword arguments.
     """
 

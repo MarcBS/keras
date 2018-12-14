@@ -11,6 +11,7 @@ from tensorflow.python.ops import functional_ops
 from tensorflow.python.ops import ctc_ops as ctc
 from tensorflow.python.client import device_lib
 from tensorflow.core.protobuf import config_pb2
+
 from collections import defaultdict
 
 import numpy as np
@@ -193,6 +194,7 @@ def get_session():
         A TensorFlow session.
     """
     global _SESSION
+
     default_session = tf.get_default_session()
 
     if default_session is not None:
@@ -3757,8 +3759,7 @@ def categorical_crossentropy(target, output, from_logits=False, axis=-1):
         output = tf.clip_by_value(output, _epsilon, 1. - _epsilon)
         return - tf.reduce_sum(target * tf.log(output), axis)
     else:
-        return tf.nn.softmax_cross_entropy_with_logits(labels=target,
-                                                       logits=output)
+        return tf.nn.softmax_cross_entropy_with_logits_v2(labels=target, logits=output)
 
 
 def sparse_categorical_crossentropy(target, output, from_logits=False, axis=-1):

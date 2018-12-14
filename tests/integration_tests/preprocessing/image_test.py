@@ -8,6 +8,7 @@ import shutil
 
 
 class TestImage(object):
+
     def setup_class(cls):
         cls.img_w = cls.img_h = 20
         rgb_images = []
@@ -316,12 +317,12 @@ class TestImage(object):
         batch = next(dir_iterator)
 
         # check if input and output have the same shape
-        assert (batch[0].shape == batch[1].shape)
+        assert(batch[0].shape == batch[1].shape)
         # check if the input and output images are not the same numpy array
         input_img = batch[0][0]
         output_img = batch[1][0]
         output_img[0][0][0] += 1
-        assert (input_img[0][0][0] != output_img[0][0][0])
+        assert(input_img[0][0][0] != output_img[0][0][0])
 
     @pytest.mark.parametrize('validation_split,num_training', [
         (0.25, 12),

@@ -583,9 +583,9 @@ class Flatten(Layer):
             raise ValueError('The shape of the input to "Flatten" '
                              'is not fully defined '
                              '(got ' + str(input_shape[1:]) + '. '
-                                                              'Make sure to pass a complete "input_shape" '
-                                                              'or "batch_input_shape" argument to the first '
-                                                              'layer in your model.')
+                             'Make sure to pass a complete "input_shape" '
+                             'or "batch_input_shape" argument to the first '
+                             'layer in your model.')
         return (input_shape[0], np.prod(input_shape[1:]))
 
     def call(self, inputs):
@@ -986,8 +986,6 @@ class Dense(Layer):
                  activity_regularizer=None,
                  kernel_constraint=None,
                  bias_constraint=None,
-                 W_learning_rate_multiplier=None,
-                 b_learning_rate_multiplier=None,
                  **kwargs):
         if 'input_shape' not in kwargs and 'input_dim' in kwargs:
             kwargs['input_shape'] = (kwargs.pop('input_dim'),)
@@ -1004,14 +1002,6 @@ class Dense(Layer):
         self.bias_constraint = constraints.get(bias_constraint)
         self.input_spec = InputSpec(min_ndim=2)
         self.supports_masking = True
-        # TODO: Check this layer
-        """
-        self.W_learning_rate_multiplier = W_learning_rate_multiplier
-        self.b_learning_rate_multiplier = b_learning_rate_multiplier
-        self.learning_rate_multipliers = [self.W_learning_rate_multiplier, self.b_learning_rate_multiplier]
-
-        self.initial_weights = weights
-        """
 
     def build(self, input_shape):
         assert len(input_shape) >= 2
@@ -1065,15 +1055,6 @@ class Dense(Layer):
         base_config = super(Dense, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
-    # TODO: Check this method
-    def set_lr_multipliers(self, W_learning_rate_multiplier, b_learning_rate_multiplier):
-        # Set lr multipliers to weights
-        self.W_learning_rate_multiplier = W_learning_rate_multiplier
-        # Set lr multipliers to biases
-        self.b_learning_rate_multiplier = b_learning_rate_multiplier
-        # Assign lr multipliers
-        self.learning_rate_multipliers = [self.W_learning_rate_multiplier, self.b_learning_rate_multiplier]
-
 
 class ActivityRegularization(Layer):
     """Layer that applies an update to the cost function based input activity.
@@ -1123,13 +1104,13 @@ class PositionLayer(Layer):
         Same shape as input.
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, maxlen=500, **kwargs):
         self.supports_masking = True
+        self.positions = K.arange(0, stop=maxlen)
         super(PositionLayer, self).__init__(**kwargs)
 
     def call(self, inputs, mask=None):
-        outputs = K.ones_like(inputs) * K.arange(0, stop=K.shape(inputs)[1])
-        return outputs
+        return self.positions[:K.shape(inputs)[1]]
 
     def compute_mask(self, input_shape, input_mask=None):
         return input_mask

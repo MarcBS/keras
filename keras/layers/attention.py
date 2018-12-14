@@ -38,6 +38,10 @@ class MultiHeadAttention(Layer):
                  kernel_regularizer=None,
                  activity_regularizer=None,
                  kernel_constraint=None,
+                 bias_initializer='zeros',
+                 bias_regularizer=None,
+                 bias_constraint=None,
+
                  **kwargs):
         super(MultiHeadAttention, self).__init__(**kwargs)
         self.supports_masking = True
@@ -52,15 +56,25 @@ class MultiHeadAttention(Layer):
         self.kernel_regularizer = regularizers.get(kernel_regularizer)
         self.kernel_constraint = constraints.get(kernel_constraint)
         self.activity_regularizer = regularizers.get(activity_regularizer)
+
+        self.bias_initializer = initializers.get(bias_initializer)
+        self.bias_regularizer = regularizers.get(bias_regularizer)
+        self.bias_constraint = constraints.get(bias_constraint)
+
         self.linear_v = None
         self.linear_k = None
         self.linear_q = None
         self.linear_o = None
+
+        self.bias_v = None
+        self.bias_k = None
+        self.bias_q = None
+        self.bias_o = None
         self.mask_future = mask_future  # If mask_future,  units that reference the future are masked.
 
     def build(self, input_shape):
-        assert len(input_shape) == 2, 'You should pass two inputs to ScaledDotAttention: ' \
-                                      'queries and keys.'
+        assert len(input_shape) == 2, 'You should pass two inputs to MultiHeadAttention: ' \
+                                      'queries, keys/values.'
         query_dim = input_shape[0][2]
         key_dim = input_shape[1][2]
 
@@ -70,23 +84,47 @@ class MultiHeadAttention(Layer):
                                         regularizer=self.kernel_regularizer,
                                         constraint=self.kernel_constraint)
 
+        self.bias_q = self.add_weight(shape=(query_dim,),
+                                      initializer=self.bias_initializer,
+                                      name='bias_q',
+                                      regularizer=self.bias_regularizer,
+                                      constraint=self.bias_constraint)
+
         self.linear_k = self.add_weight(shape=(key_dim, self.dk * self.n_heads),
                                         initializer=self.kernel_initializer,
                                         name='linear_k',
                                         regularizer=self.kernel_regularizer,
                                         constraint=self.kernel_constraint)
 
+        self.bias_k = self.add_weight(shape=(key_dim,),
+                                      initializer=self.bias_initializer,
+                                      name='bias_k',
+                                      regularizer=self.bias_regularizer,
+                                      constraint=self.bias_constraint)
+
         self.linear_v = self.add_weight(shape=(key_dim, self.dv * self.n_heads),
                                         initializer=self.kernel_initializer,
                                         name='linear_v',
                                         regularizer=self.kernel_regularizer,
                                         constraint=self.kernel_constraint)
+        self.bias_v = self.add_weight(shape=(key_dim,),
+                                      initializer=self.bias_initializer,
+                                      name='bias_v',
+                                      regularizer=self.bias_regularizer,
+                                      constraint=self.bias_constraint)
 
         self.linear_o = self.add_weight(shape=(self.dv * self.n_heads, self.dmodel),
                                         initializer=self.kernel_initializer,
                                         name='linear_o',
                                         regularizer=self.kernel_regularizer,
                                         constraint=self.kernel_constraint)
+
+        self.bias_o = self.add_weight(shape=(key_dim,),
+                                      initializer=self.bias_initializer,
+                                      name='bias_o',
+                                      regularizer=self.bias_regularizer,
+                                      constraint=self.bias_constraint)
+
         if self.dropout > 0:
             self.dropout_layer = Dropout(self.dropout)
 
@@ -98,22 +136,17 @@ class MultiHeadAttention(Layer):
 
         if mask[0] is not None:
             mask_query = K.cast(mask[0], K.dtype(query))
-        else:
-            mask_query = K.not_equal(K.sum(K.abs(query), axis=2), 0)
-            mask_query = K.cast(mask_query, K.dtype(query))
+            query *= mask_query[:, :, None]
 
         if mask[1] is not None:
             mask_key = K.cast(mask[1], K.dtype(key))
-        else:
-            mask_key = K.not_equal(K.sum(K.abs(key), axis=2), 0)
-            mask_key = K.cast(mask_key, K.dtype(key))
-
-        query *= mask_query[:, :, None]
-        key *= mask_key[:, :, None]
+            key *= mask_key[:, :, None]
 
         # Do linear projections. Shapes: batch_size, timesteps, dmodel*n_heads
-        queries, keys, values = [self.activation(K.dot_product(x, l))
-                                 for l, x in zip([self.linear_q, self.linear_k, self.linear_v], (query, key, key))]
+        queries, keys, values = [self.activation(K.bias_add(K.dot_product(x, kernel), bias))
+                                 for kernel, bias, x in zip([self.linear_q, self.linear_k, self.linear_v],
+                                                            [self.bias_q, self.bias_k, self.bias_v],
+                                                            (query, key, key))]
 
         queries_ = K.concatenate([queries[:, :, i * self.dk: (i + 1) * self.dk] for i in range(self.n_heads)], axis=0)  # batch_size * n_heads, timesteps, dmodel/h
         keys_ = K.concatenate([keys[:, :, i * self.dk: (i + 1) * self.dk] for i in range(self.n_heads)], axis=0)  # batch_size * n_heads, timesteps, dmodel/h
@@ -130,11 +163,11 @@ class MultiHeadAttention(Layer):
         attended_heads = matmul / scale
 
         # Key Masking
-        key_masks = K.sign(K.abs(K.sum(key, axis=-1)))  # (N, T_q)
-        key_masks = K.tile(key_masks, [self.n_heads, 1])  # (h*N, T_k)
-        key_masks = K.tile(K.expand_dims(key_masks, 1), [1, K.shape(query)[1], 1])  # (h*N, T_q, T_k)
-        paddings = K.ones_like(attended_heads) * K.variable(-2 ** 32 + 1, dtype=K.floatx())
-        attended_heads = K.switch(K.equal(key_masks, 0), paddings, attended_heads)  # (h*N, T_q, T_k)
+        # key_masks = K.sign(K.abs(K.sum(key, axis=-1)))  # (N, T_q)
+        # key_masks = K.tile(key_masks, [self.n_heads, 1])  # (h*N, T_k)
+        # key_masks = K.tile(K.expand_dims(key_masks, 1), [1, K.shape(query)[1], 1])  # (h*N, T_q, T_k)
+        # paddings = K.ones_like(attended_heads) * K.variable(-2 ** 32 + 1, dtype=K.floatx())
+        # attended_heads = K.switch(K.equal(key_masks, 0), paddings, attended_heads)  # (h*N, T_q, T_k)
 
         if self.mask_future:
             diag_vals = K.ones_like(attended_heads[0, :, :])  # (T_q, T_k)
@@ -145,16 +178,18 @@ class MultiHeadAttention(Layer):
 
         # Activation (softmax)
         alphas = K.softmax_3d(attended_heads)
+
         if self.dropout > 0:
             alphas = self.dropout_layer(alphas)
+
         # Query Masking
-        query_masks = K.sign(K.abs(K.sum(query, axis=-1)))  # (N, T_q)
-        query_masks = K.tile(query_masks, [self.n_heads, 1])  # (h*N, T_q)
-        query_masks = K.tile(K.expand_dims(query_masks, -1), [1, 1, K.shape(key)[1]])  # (h*N, T_q, T_k)
-        attended_heads = alphas * query_masks  # broadcasting. (N, T_q, C)
+        # query_masks = K.sign(K.abs(K.sum(query, axis=-1)))  # (N, T_q)
+        # query_masks = K.tile(query_masks, [self.n_heads, 1])  # (h*N, T_q)
+        # query_masks = K.tile(K.expand_dims(query_masks, -1), [1, 1, K.shape(key)[1]])  # (h*N, T_q, T_k)
+        # alphas = alphas * query_masks  # broadcasting. (N, T_q, C)
 
         # Matmul with V
-        attended_heads = K.batch_dot(attended_heads, values_, axes=[2, 1])
+        attended_heads = K.batch_dot(alphas, values_, axes=[2, 1])
 
         # Restore shape
         nb_samples = K.shape(attended_heads)[0] // self.n_heads
