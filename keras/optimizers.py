@@ -455,7 +455,7 @@ class QHSGD(Optimizer):
 
 
 class SGDHD(Optimizer):
-    """Stochastic gradient descent optimizer with hypergradient.
+    """Stochastic gradient descent optimizer with hypergradient descent.
     See https://openreview.net/forum?id=BkrsAzWAb
 
     Code adapted from the original PyTorch repo: https://github.com/gbaydin/hypergradient-descent/blob/master/sgd_hd.py
@@ -499,36 +499,38 @@ class SGDHD(Optimizer):
         shapes = [K.int_shape(p) for p in params]
         moments = [K.zeros(shape) for shape in shapes]
 
-        # Hypergrads
-        lr_moments = [K.variable(K.ones(shape) * self.lr) for shape in shapes]  # Initial lr moments (alpha_0 in the HG paper)
-        lr_updates = [K.zeros(shape) for shape in shapes]
+        # Initial lr moments (\nabla_{\alpha} u_0 in the HG paper)
+        lr_moments = [K.zeros(shape) for shape in shapes]
+        # Initial learning rate (\alpha_0)
+        learning_rates = [K.variable(K.ones(shape) * lr) for shape in shapes]
 
         self.weights = [self.iterations] + moments
-        for p, g, m, lr_m, alpha in zip(params, grads, moments, lr_moments, lr_updates):
+        for p, g, m, lr_m, alpha in zip(params, grads, moments, lr_moments, learning_rates):
 
             # Compute hypergradient
-            hypergrad = g * lr_m  # h_t in the paper
+            hypergrad = g * lr_m  # In the paper: h_t := g_t \nabla_{\alpha} u_{t-1}
 
-            # Update hyper_lr
+            # Update learning rate (\alpha_t := \alpha_{t-1} - beta * h_t)
             new_alpha = alpha - self.hypergrad_lr * hypergrad
             self.updates.append(K.update(alpha, new_alpha))
 
-            # Compute momentum
-            v = self.momentum * m - g  # velocity
+            # Compute momentum (v = \mu *v_{t-1} + g_t)
+            v = self.momentum * m + g  # Velocity
             self.updates.append(K.update(m, v))  # Parameter update
 
-            new_lr_m = -g  # Parameter update (\delta_\alpha u_t
-            self.updates.append(K.update(lr_m, new_lr_m))
+            # Parameter update (-alpha_t * g_t)
+            u = -new_alpha * (g + self.momentum * v)
+            new_p = p + u
 
-            if self.nesterov:
-                new_p = p + self.momentum * v - lr_m * g
-            else:
-                new_p = p + v
+            # Parameter update (u_t := -g -\mu * v)
+            new_lr_m = -g - self.momentum * v
+            self.updates.append(K.update(lr_m, new_lr_m))
 
             # Apply constraints.
             if getattr(p, 'constraint', None) is not None:
                 new_p = p.constraint(new_p)
 
+            # Apply parameter update
             self.updates.append(K.update(p, new_p))
         return self.updates
 
@@ -636,37 +638,38 @@ class QHSGDHD(Optimizer):
         shapes = [K.int_shape(p) for p in params]
         moments = [K.zeros(shape) for shape in shapes]
 
-        # Hypergrads
-        lr_moments = [K.variable(K.ones(shape) * self.lr) for shape in shapes]  # Initial lr moments (alpha_0 in the HG paper)
-        lr_updates = [K.zeros(shape) for shape in shapes]
+        # Initial lr moments (\nabla_{\alpha} u_0 in the HG paper)
+        lr_moments = [K.zeros(shape) for shape in shapes]
+        # Initial learning rate (\alpha_0)
+        learning_rates = [K.variable(K.ones(shape) * lr) for shape in shapes]
 
         self.weights = [self.iterations] + moments
-        for p, g, m, lr_m, alpha in zip(params, grads, moments, lr_moments, lr_updates):
+        for p, g, m, lr_m, alpha in zip(params, grads, moments, lr_moments, learning_rates):
 
             # Compute hypergradient
-            hypergrad = g * lr_m  # h_t in the paper
-            # Update hyper_lr
+            hypergrad = g * lr_m  # In the paper: h_t := g_t \nabla_{\alpha} u_{t-1}
+
+            # Update learning rate (\alpha_t := \alpha_{t-1} - beta * h_t)
             new_alpha = alpha - self.hypergrad_lr * hypergrad
             self.updates.append(K.update(alpha, new_alpha))
 
-            # Compute momentum
-            v = self.momentum * m - (1 - self.dampening) * g  # velocity
+            # Compute momentum (v = \mu *v_{t-1} + (1 - \mu) *  g_t)
+            v = self.momentum * m + (1 - self.dampening) * g  # Velocity
             self.updates.append(K.update(m, v))  # Parameter update
 
             # Parameter update (\delta_\alpha u_t)
+            u = -new_alpha * ((1 - self.quasi_hyperbolic_momentum) * g + self.quasi_hyperbolic_momentum * v)
+            new_p = p + u
+
+            # Parameter update (u_t := -g -\mu * v)
             new_lr_m = - ((1 - self.quasi_hyperbolic_momentum) * g + self.quasi_hyperbolic_momentum * v)
             self.updates.append(K.update(lr_m, new_lr_m))
-
-            if self.nesterov:
-                raise NotImplementedError("NAG still unimplemented")
-                new_p = p + self.momentum * v - lr * g
-            else:
-                new_p = p + new_alpha * new_lr_m
 
             # Apply constraints.
             if getattr(p, 'constraint', None) is not None:
                 new_p = p.constraint(new_p)
 
+            # Apply parameter update
             self.updates.append(K.update(p, new_p))
         return self.updates
 
@@ -763,8 +766,7 @@ class SGD(Optimizer):
 
         lr = self.lr
         if self.initial_decay > 0:
-            lr = lr * (1. / (1. + self.decay * K.cast(self.iterations,
-                                                      K.dtype(self.decay))))
+            lr = lr * (1. / (1. + self.decay * K.cast(self.iterations, K.dtype(self.decay))))
         # momentum
         shapes = [K.int_shape(p) for p in params]
         moments = [K.zeros(shape) for shape in shapes]
