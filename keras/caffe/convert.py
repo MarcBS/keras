@@ -37,7 +37,7 @@ def caffe_to_keras(prototext, caffemodel, phase='train', debug=False):
         input_dim.append(int(layers[0].input_param.shape[0].dim[3]))
     else:
         input_dim = tuple(config.input_dim[:])
-    print (layers)
+    print(layers)
     print("CREATING MODEL")
     model = create_model(layers,
                          0 if phase == 'train' else 1,
@@ -88,7 +88,7 @@ def preprocessPrototxt(prototxt, debug=False):
 
     p = '\n'.join(p)
     if debug:
-        print ('Writing preprocessed prototxt to debug.prototxt')
+        print('Writing preprocessed prototxt to debug.prototxt')
         f = open('debug.prototxt', 'w')
         f.write(p)
         f.close()
@@ -158,8 +158,8 @@ def create_model(layers, phase, input_dim, debug=False):
                 input_layer_names.append(layers[input_layer].name)
 
             if debug:
-                print ("Layer", str(n_layer) + ":", name)
-                print ('\t input shape: ' + str(input_layers[0]._keras_shape))
+                print("Layer", str(n_layer) + ":", name)
+                print('\t input shape: ' + str(input_layers[0]._keras_shape))
 
             if type(input_layers) is list and len(input_layers) == 1:
                 input_layers = input_layers[0]
@@ -358,8 +358,8 @@ def create_model(layers, phase, input_dim, debug=False):
                 moving_average = layer.batch_norm_param.moving_average_fraction  # unused
 
                 if debug:
-                    print ('\t -- BatchNormalization')
-                    print ('\t axis: ' + str(axis))
+                    print('\t -- BatchNormalization')
+                    print('\t axis: ' + str(axis))
 
                 net_node[layer_nb] = BatchNormalization(epsilon=epsilon, axis=axis, name=name)(input_layers)
 
@@ -367,8 +367,8 @@ def create_model(layers, phase, input_dim, debug=False):
                 axis = layer.scale_param.axis
 
                 if debug:
-                    print ('\t -- Scale')
-                    print ('\t axis: ' + str(axis))
+                    print('\t -- Scale')
+                    print('\t axis: ' + str(axis))
 
                 net_node[layer_nb] = Scale(axis=axis, name=name)(input_layers)
 
@@ -509,13 +509,13 @@ def convert_weights(param_layers, v='V1', debug=False):
             nb_filter_per_group = nb_filter // group
 
             if debug:
-                print (layer.name)
-                print ("nb_filter")
-                print (nb_filter)
-                print ("(channels x height x width)")
-                print ("(" + str(temp_stack_size) + " x " + str(nb_col) + " x " + str(nb_row) + ")")
-                print ("groups")
-                print (group)
+                print(layer.name)
+                print("nb_filter")
+                print(nb_filter)
+                print("(channels x height x width)")
+                print("(" + str(temp_stack_size) + " x " + str(nb_col) + " x " + str(nb_row) + ")")
+                print("groups")
+                print(group)
 
             for i in range(group):
                 group_weights = weights_p[i * nb_filter_per_group: (i + 1) * nb_filter_per_group, i * stacks_size_per_group: (i + 1) * stacks_size_per_group, :, :]
@@ -539,4 +539,4 @@ def load_weights(model, weights):
     for layer in model.layers:
         if weights in layer.name:
             model.get_layer(layer.name).set_weights(weights[layer.name])
-            print ("Copied wts for layer:", layer.name)
+            print("Copied wts for layer:", layer.name)

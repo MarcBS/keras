@@ -9,7 +9,7 @@ if __name__ == "__main__":
 
     model_path = '/media/HDD_3TB/CNN_MODELS/VGG_Face'
 
-    print ("Preparing test image.")
+    print("Preparing test image.")
     # Read image
     im = misc.imread('models/cat.jpg')
 
@@ -33,7 +33,7 @@ if __name__ == "__main__":
     im = np.expand_dims(im, axis=0)
 
     # Load the converted model
-    print ("Loading model.")
+    print("Loading model.")
     # Load model structure
     model = model_from_json(open(model_path + '/Keras_model_structure.json').read())
     # Load model weights
@@ -44,7 +44,7 @@ if __name__ == "__main__":
     in_layer_names = model.input_names
 
     # Predict image output
-    print ("Applying prediction.")
+    print("Applying prediction.")
     in_data = dict()
     for in_name in in_layer_names:
         in_data[in_name] = im
@@ -57,4 +57,4 @@ if __name__ == "__main__":
             classes.append(line.rstrip('\n'))
 
     for i, o in enumerate(out_layer_names):
-        print ('Prediction on output layer "' + o + '": ' + str(classes[np.argmax(out[i])]))
+        print('Prediction on output layer "' + o + '": ' + str(classes[np.argmax(out[i])]))

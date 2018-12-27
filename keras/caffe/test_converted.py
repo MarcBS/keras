@@ -9,7 +9,7 @@ if __name__ == "__main__":
 
     out_layer_names = ["loss1/loss", "loss2/loss", "loss3/loss3"]
 
-    print ("Preparing test image.")
+    print("Preparing test image.")
     # Read image
     im = misc.imread('models/cat.jpg')
 
@@ -33,14 +33,14 @@ if __name__ == "__main__":
     im = np.expand_dims(im, axis=0)
 
     # Load the converted model
-    print ("Loading model.")
+    print("Loading model.")
     # Load model structure
     model = model_from_json(open('models/Keras_model_structure.json').read())
     # Load model weights
     model.load_weights('models/Keras_model_weights.h5')
 
     # Compile converted model
-    print ("Compiling model.")
+    print("Compiling model.")
     sgd = SGD(lr=0.1, decay=1e-6, momentum=0.9, nesterov=True)
     loss = dict()
     for out in out_layer_names:
@@ -49,7 +49,7 @@ if __name__ == "__main__":
     model.compile(optimizer=sgd, loss=loss)
 
     # Predict image output
-    print ("Applying prediction.")
+    print("Applying prediction.")
     in_data = dict()
     for input in ['data']:
         in_data[input] = im
@@ -62,4 +62,4 @@ if __name__ == "__main__":
             classes.append(line.rstrip('\n'))
 
     for i, o in enumerate(out_layer_names):
-        print ('Prediction on output layer "' + o + '": ' + str(classes[np.argmax(out[i])]))
+        print('Prediction on output layer "' + o + '": ' + str(classes[np.argmax(out[i])]))
