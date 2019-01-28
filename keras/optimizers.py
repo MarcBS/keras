@@ -594,7 +594,7 @@ class QHSGDHD(Optimizer):
     """Quasi-hyperbolic momentum stochastic gradient descent optimizer with hypergradient descent.
     See https://openreview.net/forum?id=BkrsAzWAb, https://arxiv.org/abs/1810.06801
 
-    Consists in teh SGD-HD optimizer with the momentum parametrization from https://arxiv.org/abs/1810.06801
+    Consists in the SGD-HD optimizer with the momentum parametrization from https://arxiv.org/abs/1810.06801
 
     # Arguments
         lr: float >= 0. Initial learning rate.
@@ -1139,6 +1139,114 @@ class Adadelta(Optimizer):
         return dict(list(base_config.items()) + list(config.items()))
 
 
+class AdadeltaHD(Optimizer):
+    """Adadelta optimizer with hypergradient descent.
+    See https://openreview.net/forum?id=BkrsAzWAb
+    Adadelta is a more robust extension of Adagrad
+    that adapts learning rates based on a moving window of gradient updates,
+    instead of accumulating all past gradients. This way, Adadelta continues
+    learning even when many updates have been done. Compared to Adagrad, in the
+    original version of Adadelta you don't have to set an initial learning
+    rate. In this version, initial learning rate and decay factor can
+    be set, as in most other Keras optimizers.
+
+    It is recommended to leave the parameters of this optimizer
+    at their default values.
+
+    # Arguments
+        lr: float >= 0. Initial learning rate, defaults to 1.
+            It is recommended to leave it at the default value.
+        rho: float >= 0. Adadelta decay factor, corresponding to fraction of
+            gradient to keep at each time step.
+        epsilon: float >= 0. Fuzz factor. If `None`, defaults to `K.epsilon()`.
+        decay: float >= 0. Initial learning rate decay.
+        hypergrad_lr (float, optional): hypergradient learning rate for the online
+        tuning of the learning rate, introduced in the paper
+        Online Learning Rate Adaptation with Hypergradient Descent (https://openreview.net/forum?id=BkrsAzWAb)
+
+    # References
+        - [Adadelta - an adaptive learning rate method](
+           https://arxiv.org/abs/1212.5701)
+    """
+
+    def __init__(self, lr=1.0, rho=0.95, epsilon=None, decay=0., hypergrad_lr=1e-3,
+                 **kwargs):
+        super(AdadeltaHD, self).__init__(**kwargs)
+        with K.name_scope(self.__class__.__name__):
+            self.lr = K.variable(lr, name='lr')
+            self.decay = K.variable(decay, name='decay')
+            self.iterations = K.variable(0, dtype='int64', name='iterations')
+            self.hypergrad_lr = K.variable(hypergrad_lr, name='hypergrad_lr')
+
+        if epsilon is None:
+            epsilon = K.epsilon()
+        self.rho = rho
+        self.epsilon = epsilon
+        self.initial_decay = decay
+
+    @interfaces.legacy_get_updates_support
+    def get_updates(self, loss, params):
+        grads = self.get_gradients(loss, params)
+        shapes = [K.int_shape(p) for p in params]
+        accumulators = [K.zeros(shape) for shape in shapes]
+        delta_accumulators = [K.zeros(shape) for shape in shapes]
+        self.weights = accumulators + delta_accumulators
+        self.updates = [K.update_add(self.iterations, 1)]
+
+        lr = self.lr
+        if self.initial_decay > 0:
+            lr = lr * (1. / (1. + self.decay * K.cast(self.iterations,
+                                                      K.dtype(self.decay))))
+        # Initial lr moments (\nabla_{\alpha} u_0 in the HG paper)
+        lr_moments = [K.zeros(shape) for shape in shapes]
+        # Initial learning rate (\alpha_0)
+        learning_rates = [K.variable(K.ones(shape) * lr) for shape in shapes]
+
+        for p, g, a, d_a, lr_m, alpha in zip(params, grads, accumulators, delta_accumulators,
+                                             lr_moments, learning_rates):
+
+            # Compute hypergradient
+            hypergrad = g * lr_m  # In the paper: h_t := g_t \nabla_{\alpha} u_{t-1}
+
+            # Update learning rate (\alpha_t := \alpha_{t-1} - beta * h_t)
+            new_alpha = alpha - self.hypergrad_lr * hypergrad
+            self.updates.append(K.update(alpha, new_alpha))
+
+            # update accumulator
+            new_a = self.rho * a + (1. - self.rho) * K.square(g)
+            self.updates.append(K.update(a, new_a))
+
+            # use the new accumulator and the *old* delta_accumulator
+            update = g * K.sqrt(d_a + self.epsilon) / K.sqrt(new_a + self.epsilon)
+            new_p = p - new_alpha * update
+
+            # Apply constraints.
+            if getattr(p, 'constraint', None) is not None:
+                new_p = p.constraint(new_p)
+
+            self.updates.append(K.update(p, new_p))
+
+            # update delta_accumulator
+            new_d_a = self.rho * d_a + (1 - self.rho) * K.square(update)
+            self.updates.append(K.update(d_a, new_d_a))
+
+            # Parameter update (u_t := -\frac{sqrt{d_a_{t-1} + \epsilon}}{sqrt (new_a_t + epsilon}} * g_t)
+            new_lr_m = -g * K.sqrt(d_a + self.epsilon) / K.sqrt(new_a + self.epsilon)
+            self.updates.append(K.update(lr_m, new_lr_m))
+
+        return self.updates
+
+    def get_config(self):
+        config = {'lr': float(K.get_value(self.lr)),
+                  'rho': self.rho,
+                  'decay': float(K.get_value(self.decay)),
+                  'epsilon': self.epsilon,
+                  'hypergrad_lr': float(K.get_value(self.hypergrad_lr))
+                  }
+        base_config = super(AdadeltaHD, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+
 class Adam(Optimizer):
     """Adam optimizer.
 
@@ -1271,6 +1379,126 @@ class Adam(Optimizer):
                   'epsilon': self.epsilon,
                   'amsgrad': self.amsgrad}
         base_config = super(Adam, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+
+class AdamHD(Optimizer):
+    """Adam optimizer with hypergradient descent.
+    See https://openreview.net/forum?id=BkrsAzWAb
+
+    Default parameters follow those provided in the original paper.
+
+    # Arguments
+        lr: float >= 0. Learning rate.
+        beta_1: float, 0 < beta < 1. Generally close to 1.
+        beta_2: float, 0 < beta < 1. Generally close to 1.
+        epsilon: float >= 0. Fuzz factor. If `None`, defaults to `K.epsilon()`.
+        decay: float >= 0. Learning rate decay over each update.
+        amsgrad: boolean. Whether to apply the AMSGrad variant of this
+            algorithm from the paper "On the Convergence of Adam and
+            Beyond".
+        hypergrad_lr (float, optional): hypergradient learning rate for the online
+        tuning of the learning rate, introduced in the paper
+        Online Learning Rate Adaptation with Hypergradient Descent (https://openreview.net/forum?id=BkrsAzWAb)
+
+    # References
+        - [Adam - A Method for Stochastic Optimization](
+           https://arxiv.org/abs/1412.6980v8)
+        - [On the Convergence of Adam and Beyond](
+           https://openreview.net/forum?id=ryQu7f-RZ)
+    """
+
+    def __init__(self, lr=0.001, beta_1=0.9, beta_2=0.999, hypergrad_lr=1e-3,
+                 epsilon=None, decay=0., amsgrad=False, **kwargs):
+        super(AdamHD, self).__init__(**kwargs)
+        with K.name_scope(self.__class__.__name__):
+            self.iterations = K.variable(0, dtype='int64', name='iterations')
+            self.lr = K.variable(lr, name='lr')
+            self.beta_1 = K.variable(beta_1, name='beta_1')
+            self.beta_2 = K.variable(beta_2, name='beta_2')
+            self.decay = K.variable(decay, name='decay')
+            self.hypergrad_lr = K.variable(hypergrad_lr, name='hypergrad_lr')
+
+        if epsilon is None:
+            epsilon = K.epsilon()
+        self.epsilon = epsilon
+        self.initial_decay = decay
+        self.amsgrad = amsgrad
+
+    @interfaces.legacy_get_updates_support
+    def get_updates(self, loss, params):
+
+        grads = self.get_gradients(loss, params)
+        shapes = [K.int_shape(p) for p in params]
+        self.updates = [K.update_add(self.iterations, 1)]
+        lr = self.lr
+        if self.initial_decay > 0:
+            lr = lr * (1. / (1. + self.decay * K.cast(self.iterations,
+                                                      K.dtype(self.decay))))
+
+        t = K.cast(self.iterations, K.floatx()) + 1
+        bias_corrections = (K.sqrt(1. - K.pow(self.beta_2, t)) / (1. - K.pow(self.beta_1, t)))
+
+        ms = [K.zeros(K.int_shape(p), dtype=K.dtype(p)) for p in params]
+        vs = [K.zeros(K.int_shape(p), dtype=K.dtype(p)) for p in params]
+        if self.amsgrad:
+            vhats = [K.zeros(K.int_shape(p), dtype=K.dtype(p)) for p in params]
+        else:
+            vhats = [K.zeros(1) for _ in params]
+        self.weights = [self.iterations] + ms + vs + vhats
+
+        # Initial lr moments (\nabla_{\alpha} u_0 in the HG paper)
+        lr_moments = [K.zeros(shape) for shape in shapes]
+        # Initial learning rate (\alpha_0)
+        learning_rates = [K.variable(K.ones(shape) * lr) for shape in shapes]
+
+        for p, g, m, v, vhat, lr_m, alpha in zip(params, grads, ms, vs, vhats,
+                                                 lr_moments, learning_rates):
+
+            # Compute hypergradient
+            hypergrad = g * lr_m  # In the paper: h_t := g_t \nabla_{\alpha} u_{t-1}
+
+            # Update learning rate (\alpha_t := \alpha_{t-1} - beta * h_t)
+            new_alpha = alpha - self.hypergrad_lr * hypergrad
+            self.updates.append(K.update(alpha, new_alpha))
+
+            m_t = (self.beta_1 * m) + (1. - self.beta_1) * g
+            v_t = (self.beta_2 * v) + (1. - self.beta_2) * K.square(g)
+            if self.amsgrad:
+                vhat_t = K.maximum(vhat, v_t)
+                p_t = p - new_alpha * bias_corrections * m_t / (K.sqrt(vhat_t) + self.epsilon)
+                self.updates.append(K.update(vhat, vhat_t))
+            else:
+                p_t = p - new_alpha * bias_corrections * m_t / (K.sqrt(v_t) + self.epsilon)
+
+            self.updates.append(K.update(m, m_t))
+            self.updates.append(K.update(v, v_t))
+            new_p = p_t
+
+            # Apply constraints.
+            if getattr(p, 'constraint', None) is not None:
+                new_p = p.constraint(new_p)
+
+            self.updates.append(K.update(p, new_p))
+
+            # Parameter update (u_t := -\frac{\hat{m_t} /(\sqrt{\hat{v_t}} + epsilon}
+            if self.amsgrad:
+                new_lr_m = -bias_corrections * m_t / (K.sqrt(vhat_t) + self.epsilon)
+            else:
+                new_lr_m = -bias_corrections * m_t / (K.sqrt(v_t) + self.epsilon)
+            self.updates.append(K.update(lr_m, new_lr_m))
+
+        return self.updates
+
+    def get_config(self):
+        config = {'lr': float(K.get_value(self.lr)),
+                  'beta_1': float(K.get_value(self.beta_1)),
+                  'beta_2': float(K.get_value(self.beta_2)),
+                  'decay': float(K.get_value(self.decay)),
+                  'epsilon': self.epsilon,
+                  'hypergrad_lr': float(K.get_value(self.hypergrad_lr)),
+                  'amsgrad': self.amsgrad}
+        base_config = super(AdamHD, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
 
@@ -1728,7 +1956,9 @@ qhsgd = QHSGD
 rmsprop = RMSprop
 adagrad = Adagrad
 adadelta = Adadelta
+adadeltahd = AdadeltaHD
 adam = Adam
+adamhd = AdamHD
 adamaccumulate = AdamAccumulate
 adamax = Adamax
 nadam = Nadam
@@ -1759,7 +1989,9 @@ def deserialize(config, custom_objects=None):
         'rmsprop': RMSprop,
         'adagrad': Adagrad,
         'adadelta': Adadelta,
+        'adadeltahd': AdadeltaHD,
         'adam': Adam,
+        'adamhd': AdamHD,
         'adamax': Adamax,
         'nadam': Nadam,
         'tfoptimizer': TFOptimizer,
