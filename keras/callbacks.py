@@ -768,6 +768,7 @@ class TensorBoard(Callback):
         self.log_dir = log_dir
         self.histogram_freq = histogram_freq
         self.merged = None
+        self.saved = False
         self.write_graph = write_graph
         self.write_grads = write_grads
         self.write_images = write_images
@@ -853,7 +854,7 @@ class TensorBoard(Callback):
                                                 self.sess.graph)
         else:
             self.writer = tf.summary.FileWriter(self.log_dir)
-
+        
         if self.embeddings_freq:
             embeddings_layer_names = self.embeddings_layer_names
             if not embeddings_layer_names:
@@ -883,11 +884,12 @@ class TensorBoard(Callback):
                         self.assign_embeddings.append(batch)
                 self.saver = tf.train.Saver(list(embeddings_vars.values()))
             else:
-                embeddings_vars = {layer.name: layer.weights[0]
-                                   for layer in self.model.layers
-                                   if layer.name in embeddings_layer_names}
-                self.saver = tf.train.Saver(list(embeddings_vars.values()))
-
+                if not self.saved:
+                    embeddings_vars = {layer.name: layer.weights[0]
+                                       for layer in self.model.layers
+                                       if layer.name in embeddings_layer_names}
+                    self.saver = tf.train.Saver(list(embeddings_vars.values()))
+                    self.saved = True
             if not isinstance(self.embeddings_metadata, str):
                 embeddings_metadata = self.embeddings_metadata
             else:
@@ -896,13 +898,12 @@ class TensorBoard(Callback):
 
             config = projector.ProjectorConfig()
 
-            for layer_name, tensor in embeddings_vars.items():
-                embedding = config.embeddings.add()
-                embedding.tensor_name = tensor.name
-
-                if layer_name in embeddings_metadata:
-                    embedding.metadata_path = embeddings_metadata[layer_name]
-
+            if not self.saved:
+                for layer_name, tensor in embeddings_vars.items():
+                    embedding = config.embeddings.add()
+                    embedding.tensor_name = tensor.name
+                    if layer_name in embeddings_metadata:
+                        embedding.metadata_path = embeddings_metadata[layer_name]
             projector.visualize_embeddings(self.writer, config)
 
     def on_epoch_end(self, epoch, logs=None):
