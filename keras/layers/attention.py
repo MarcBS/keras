@@ -41,7 +41,6 @@ class MultiHeadAttention(Layer):
                  bias_initializer='zeros',
                  bias_regularizer=None,
                  bias_constraint=None,
-
                  **kwargs):
         super(MultiHeadAttention, self).__init__(**kwargs)
         self.supports_masking = True

@@ -1127,9 +1127,10 @@ class TensorBoard(Callback):
                                                 self.sess.graph)
         else:
             self.writer = tf.summary.FileWriter(self.log_dir)
-        
+
         if self.embeddings_freq:
             embeddings_layer_names = self.embeddings_layer_names
+
             if not embeddings_layer_names:
                 embeddings_layer_names = [layer.name for layer in self.model.layers
                                           if type(layer).__name__ == 'Embedding']
@@ -1155,7 +1156,6 @@ class TensorBoard(Callback):
                         batch = tf.assign(embedding[batch_id:batch_id + step],
                                           embedding_input)
                         self.assign_embeddings.append(batch)
-                self.saver = tf.train.Saver(list(embeddings_vars.values()))
             else:
                 if not self.saved:
                     embeddings_vars = {layer.name: layer.weights[0]
@@ -1163,6 +1163,8 @@ class TensorBoard(Callback):
                                        if layer.name in embeddings_layer_names}
                     self.saver = tf.train.Saver(list(embeddings_vars.values()))
                     self.saved = True
+            self.saver = tf.train.Saver(list(embeddings_vars.values()))
+
             if not isinstance(self.embeddings_metadata, str):
                 embeddings_metadata = self.embeddings_metadata
             else:
