@@ -1163,7 +1163,6 @@ class TensorBoard(Callback):
                                        if layer.name in embeddings_layer_names}
                     self.saver = tf.train.Saver(list(embeddings_vars.values()))
                     self.saved = True
-            self.saver = tf.train.Saver(list(embeddings_vars.values()))
 
             if not isinstance(self.embeddings_metadata, str):
                 embeddings_metadata = self.embeddings_metadata

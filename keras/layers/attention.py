@@ -162,7 +162,7 @@ class MultiHeadAttention(Layer):
         attended_heads = matmul / scale
 
         # Key Masking
-        key_masks = K.sign(K.sum(K.abs(key, axis=-1)))  # (N, T_q)
+        key_masks = K.sign(K.sum(K.abs(key), axis=-1))  # (N, T_q)
         key_masks = K.tile(key_masks, [self.n_heads, 1])  # (h*N, T_k)
         key_masks = K.tile(K.expand_dims(key_masks, 1), [1, K.shape(query)[1], 1])  # (h*N, T_q, T_k)
         paddings = K.ones_like(attended_heads) * K.variable(-2 ** 32 + 1, dtype=K.floatx())
@@ -182,7 +182,7 @@ class MultiHeadAttention(Layer):
             alphas = self.dropout_layer(alphas)
 
         # Query Masking
-        query_masks = K.sign(K.sum(K.abs(query, axis=-1)))  # (N, T_q)
+        query_masks = K.sign(K.sum(K.abs(query), axis=-1))  # (N, T_q)
         query_masks = K.tile(query_masks, [self.n_heads, 1])  # (h*N, T_q)
         query_masks = K.tile(K.expand_dims(query_masks, -1), [1, 1, K.shape(key)[1]])  # (h*N, T_q, T_k)
         alphas = alphas * query_masks  # broadcasting. (N, T_q, C)
