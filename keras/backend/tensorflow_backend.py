@@ -3442,11 +3442,11 @@ def rnn(step_function, inputs, initial_states,
                     output_ta_t = output_ta_t.write(time, output)
                     return (time + 1, output_ta_t, output) + tuple(new_states)
                 loop_vars = (time, output_ta, initial_output) + states
-                final_outputs = control_flow_ops.while_loop(
-                    body=_step,
-                    loop_vars=loop_vars,
-                    **while_loop_kwargs)
-                new_states = final_outputs[3:]  # skip output_tm1
+            final_outputs = control_flow_ops.while_loop(
+                body=_step,
+                loop_vars=loop_vars,
+                **while_loop_kwargs)
+            new_states = final_outputs[3:]  # skip output_tm1
         else:
             def _step(time, output_ta_t, *states):
                 """RNN step function.
