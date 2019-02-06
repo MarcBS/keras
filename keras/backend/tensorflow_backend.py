@@ -1435,6 +1435,25 @@ def gather(reference, indices):
     return tf.nn.embedding_lookup(reference, indices)
 
 
+def fft(x, norm=None):
+    """Fast fourier transform:
+       Compute an n-point fft of frames along given axis.
+    """
+    return tf.fft(x)
+
+
+def ifft(x, norm=None, is_odd=False):
+    """Inverse fast fourier transform
+    """
+    return tf.ifft(x)
+
+
+def real(x):
+    """Gets the real part of a complex tensor
+    """
+    return tf.real(x)
+
+
 # ELEMENT-WISE OPERATIONS
 
 
