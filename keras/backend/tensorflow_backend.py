@@ -3419,18 +3419,18 @@ def rnn(step_function, inputs, initial_states,
                         output_tm1: output Tensor from previous timestep
                         *states: List of states.
 
-                # Returns
-                    Tuple: `(time + 1,output_ta_t) + tuple(new_states)`
-                """
-                current_input = input_ta.read(time)
-                mask_t = mask_ta.read(time)
-                output, new_states = step_function(current_input,
-                                                   tuple(states) +
-                                                   tuple(constants))
-                if getattr(output, '_uses_learning_phase', False):
-                    uses_learning_phase[0] = True
-                for state, new_state in zip(states, new_states):
-                    new_state.set_shape(state.shape)
+                    # Returns
+                        Tuple: `(time + 1,output_ta_t) + tuple(new_states)`
+                    """
+                    current_input = input_ta.read(time)
+                    mask_t = mask_ta.read(time)
+                    output, new_states = step_function(current_input,
+                                                       tuple(states) +
+                                                       tuple(constants))
+                    if getattr(output, '_uses_learning_phase', False):
+                        uses_learning_phase[0] = True
+                    for state, new_state in zip(states, new_states):
+                        new_state.set_shape(state.shape)
 
                     output_mask_t = get_matching_mask(mask_t, output)
                     output = tf.where(output_mask_t, output, output_tm1)
@@ -3442,11 +3442,11 @@ def rnn(step_function, inputs, initial_states,
                     output_ta_t = output_ta_t.write(time, output)
                     return (time + 1, output_ta_t, output) + tuple(new_states)
                 loop_vars = (time, output_ta, initial_output) + states
-            final_outputs = control_flow_ops.while_loop(
-                body=_step,
-                loop_vars=loop_vars,
-                **while_loop_kwargs)
-            new_states = final_outputs[3:]  # skip output_tm1
+                final_outputs = control_flow_ops.while_loop(
+                    body=_step,
+                    loop_vars=loop_vars,
+                    **while_loop_kwargs)
+                new_states = final_outputs[3:]  # skip output_tm1
         else:
             def _step(time, output_ta_t, *states):
                 """RNN step function.
