@@ -14,9 +14,9 @@ class LRN(Layer):
 
     # Arguments
         alpha: scaling parameter.
+        k: offset for the scale
         beta: the exponent.
         n: local_size
-        k: offset for the scale
     """
 
     def __init__(self, alpha=0.0001, k=1, beta=0.75, n=5, **kwargs):

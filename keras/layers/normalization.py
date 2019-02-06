@@ -60,15 +60,15 @@ class Scale(Layer):
     where 'gamma' and 'beta' are the weights and biases learned.
 
     # Arguments
+        weights: Initialization weights.
+            List of 2 Numpy arrays, with shapes:
+            `[(input_shape,), (input_shape,)]`
         axis: integer, axis along which to normalize in mode 0. For instance,
             if your input tensor has shape (samples, channels, rows, cols),
             set axis to 1 to normalize per feature map (channels axis).
         momentum: momentum in the computation of the
             exponential average of the mean and standard deviation
             of the data, for feature-wise normalization.
-        weights: Initialization weights.
-            List of 2 Numpy arrays, with shapes:
-            `[(input_shape,), (input_shape,)]`
         beta_init: name of initialization function for shift parameter
             (see [initializations](../initializations.md)), or alternatively,
             Theano/TensorFlow function to use for weights initialization.
@@ -79,7 +79,12 @@ class Scale(Layer):
             This parameter is only relevant if you don't pass a `weights` argument.
     """
 
-    def __init__(self, weights=None, axis=-1, momentum=0.9, beta_init='zero', gamma_init='one', **kwargs):
+    def __init__(self,
+                 weights=None,
+                 axis=-1,
+                 momentum=0.9,
+                 beta_init='zero',
+                 gamma_init='one', **kwargs):
         self.momentum = momentum
         self.axis = axis
         self.beta_init = initializations.get(beta_init)
@@ -157,6 +162,7 @@ class BatchNormalization(Layer):
             For instance, after a `Conv2D` layer with
             `data_format="channels_first"`,
             set `axis=1` in `BatchNormalization`.
+        mode: mode BN
         momentum: Momentum for the moving mean and the moving variance.
         epsilon: Small float added to variance to avoid dividing by zero.
         center: If True, add offset of `beta` to normalized tensor.

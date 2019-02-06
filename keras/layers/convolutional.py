@@ -30,17 +30,24 @@ from ..legacy.layers import AtrousConvolution2D
 
 class ClassActivationMapping(Layer):
     # TODO: Test this layer
-    '''Class Activation Mapping computation used in GAP networks.
+    """Class Activation Mapping computation used in GAP networks.
 
     # Arguments
+        weights_shape: Set of weights shapes
         weights: Set of weights (numpy.array) already learned that connect a
             GAP (global average pooling) layer with a Dense layer.
 
+    # Input shape
+        Arbitrary. Use the keyword argument `input_shape`
+        (tuple of integers, does not include the samples axis)
+        when using this layer as the first layer in a model.
+
+    # Output shape
+        Same shape as input.
+
     # References
-        [1]Zhou B, Khosla A, Lapedriza A, Oliva A, Torralba A.
-            Learning Deep Features for Discriminative Localization.
-            arXiv preprint arXiv:1512.04150. 2015 Dec 14.
-    '''
+        - [Learning Deep Features for Discriminative Localization](https://arxiv.org/abs/1512.04150)
+    """
 
     def __init__(self, weights_shape, weights=None, **kwargs):
         self.weights_shape = weights_shape
@@ -2388,16 +2395,25 @@ class ZeroPadding3D(_ZeroPadding):
 
 
 class CompactBilinearPooling(Layer):
-    # TODO: Test this layer
-    '''Compact Bilinear Pooling
-    # Arguments:
+    """Compact Bilinear Pooling
+    TODO: Test this layer
+    # Arguments
         d: dimension of the compact bilinear feature
+        return_extra: return extra values
+        conv_type: Type of convolution
 
-    # References:
+    # Input shape
+        2 modes
+    # Output shape
+        1 CBP
+    # References
         - [Multimodal Compact Bilinear Pooling for Visual Question Answering and Visual Grounding](http://arxiv.org/pdf/1606.01847v2.pdf)
-    '''
+    """
 
-    def __init__(self, d, return_extra=False, conv_type='conv', **kwargs):
+    def __init__(self, d,
+                 return_extra=False,
+                 conv_type='conv',
+                 **kwargs):
         self.h = [None, None]
         self.s = [None, None]
         self.return_extra = return_extra
@@ -2529,14 +2545,20 @@ class CompactBilinearPooling(Layer):
 
 
 class BilinearPooling(Layer):
-    '''Compact Bilinear Pooling
+    """Compact Bilinear Pooling
+    TODO: Test this layer
+    # Arguments
+        d: dimension of the compact bilinear feature
 
-    # References:
+    # Input shape
+        2 modes
+    # Output shape
+        1 CBP
+    # References
         - [Multimodal Compact Bilinear Pooling for Visual Question Answering and Visual Grounding](http://arxiv.org/pdf/1606.01847v2.pdf)
-    '''
+    """
 
     def __init__(self, d, **kwargs):
-
         # layer parameters
         self.inbound_nodes = []
         self.outbound_nodes = []
@@ -2588,10 +2610,20 @@ class BilinearPooling(Layer):
 
 
 class CountSketch(Layer):
-    '''Count Sketch vector compacting
-    # Arguments:
+
+    """Count Sketch vector compacting
+    TODO: Test this layer
+    # Arguments
         d: dimension of the output compact representation
-    '''
+        return_extra: return extra values
+
+    # Input shape
+        2 modes
+    # Output shape
+        1 CBP
+    # References
+        - [Multimodal Compact Bilinear Pooling for Visual Question Answering and Visual Grounding](http://arxiv.org/pdf/1606.01847v2.pdf)
+    """
 
     def __init__(self, d, return_extra=False, **kwargs):
         self.h = [None, None]

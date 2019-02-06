@@ -18,7 +18,34 @@ class MultiHeadAttention(Layer):
 
     # Arguments
         n_heads: Number of attention layers that represent the linear projections.
-        dmodel = model size
+        dmodel: model size
+        mask_future: Boolean. Whether we should apply a mask to the future or not.
+        dropout: Float between 0 and 1.
+            Fraction of the units to drop for
+            the attention weights computed
+        activation: Activation function to use
+            (see [activations](../activations.md)).
+            If you pass None, no activation is applied
+            (ie. "linear" activation: `a(x) = x`).
+        kernel_initializer: Initializer for the `kernel` weights matrix,
+            used for the linear transformation of the inputs
+            (see [initializers](../initializers.md)).
+        kernel_regularizer: Regularizer function applied to
+            the `kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        activity_regularizer: Regularizer function applied to
+            the output of the layer (its "activation").
+            (see [regularizer](../regularizers.md)).
+        kernel_constraint: Constraint function applied to
+            the `kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        bias_initializer: Initializer for the bias vector
+            (see [initializers](../initializers.md)).
+        bias_regularizer: Regularizer function applied to the bias vector
+            (see [regularizer](../regularizers.md)).
+        bias_constraint: Constraint function applied to the bias vector
+            (see [constraints](../constraints.md)).
+
     # Input shape
         3 tensors with shape: `(batch_size, input_dim)`.
 
@@ -238,39 +265,36 @@ class Attention(Layer):
 
     # Arguments
         nb_attention: number of attention mechanisms applied over the input vectors
-        kernel_initializer: weight initialization function.
+        init: weight initialization function.
             Can be the name of an existing function (str),
             or a Theano function (see: [initializations](../initializations.md)).
-        recurrent_initializer: initialization function of the inner cells.
-        forget_bias_initializer: initialization function for the bias of the forget gate.
+        inner_init: initialization function of the inner cells.
+        forget_bias_init: initialization function for the bias of the forget gate.
             [Jozefowicz et al.](http://www.jmlr.org/proceedings/papers/v37/jozefowicz15.pdf)
             recommend initializing with ones.
         activation: activation function.
             Can be the name of an existing function (str),
             or a Theano function (see: [activations](../activations.md)).
-        recurrent_activation: activation function for the inner cells.
-        w_a_regularizer: instance of [WeightRegularizer](../regularizers.md)
+        inner_activation: activation function for the inner cells.
+        dropout_Wa: float between 0 and 1.
+        Wa_regularizer: instance of [WeightRegularizer](../regularizers.md)
             (eg. L1 or L2 regularization), applied to the input weights matrices.
-        W_a_regularizer: instance of [WeightRegularizer](../regularizers.md)
-            (eg. L1 or L2 regularization), applied to the input weights matrices.
-        U_a_regularizer: instance of [WeightRegularizer](../regularizers.md)
-            (eg. L1 or L2 regularization), applied to the recurrent weights matrices.
-        b_a_regularizer: instance of [WeightRegularizer](../regularizers.md),
+        ba_regularizer: instance of [WeightRegularizer](../regularizers.md),
             applied to the bias.
-        dropout_w_a: float between 0 and 1.
-        dropout_W_a: float between 0 and 1.
-        dropout_U_a: float between 0 and 1.
 
     # Formulation
 
     """
 
     def __init__(self, nb_attention,
-                 init='glorot_uniform', inner_init='orthogonal',
-                 forget_bias_init='one', activation='tanh',
+                 init='glorot_uniform',
+                 inner_init='orthogonal',
+                 forget_bias_init='one',
+                 activation='tanh',
                  inner_activation='hard_sigmoid',
                  dropout_Wa=0.,
-                 Wa_regularizer=None, ba_regularizer=None,
+                 Wa_regularizer=None,
+                 ba_regularizer=None,
                  **kwargs):
         self.nb_attention = nb_attention
         self.init = initializations.get(init)
@@ -406,24 +430,27 @@ class SoftAttention(Layer):
     The output information provided are the attended input an the attention weights 'alpha' over the input data.
 
     # Arguments
-        att_units: Soft alignment MLP dimension
-        kernel_initializer: weight initialization function.
+        att_dim: Soft alignment MLP dimension
+        sum_weighted_output: Boolean, whether to sum the weigthed output
+        init: weight initialization function.
             Can be the name of an existing function (str),
             or a Theano function (see: [initializations](../initializations.md)).
-        activation: activation function.
-            Can be the name of an existing function (str),
-            or a Theano function (see: [activations](../activations.md)).
-        w_a_regularizer: instance of [WeightRegularizer](../regularizers.md)
+        activation: ctivation function to use
+            (see [activations](../activations.md)).
+            If you pass None, no activation is applied
+            (ie. "linear" activation: `a(x) = x`).
+        dropout_Wa: float between 0 and 1.
+        dropout_Ua: float between 0 and 1.
+        wa_regularizer: instance of [WeightRegularizer](../regularizers.md)
             (eg. L1 or L2 regularization), applied to the input weights matrices.
-        W_a_regularizer: instance of [WeightRegularizer](../regularizers.md)
+        Wa_regularizer: instance of [WeightRegularizer](../regularizers.md)
             (eg. L1 or L2 regularization), applied to the input weights matrices.
-        U_a_regularizer: instance of [WeightRegularizer](../regularizers.md)
+        Ua_regularizer: instance of [WeightRegularizer](../regularizers.md)
             (eg. L1 or L2 regularization), applied to the recurrent weights matrices.
-        b_a_regularizer: instance of [WeightRegularizer](../regularizers.md),
+        ba_regularizer: instance of [WeightRegularizer](../regularizers.md),
             applied to the bias.
-        dropout_w_a: float between 0 and 1.
-        dropout_W_a: float between 0 and 1.
-        dropout_U_a: float between 0 and 1.
+        ca_regularizer: instance of [WeightRegularizer](../regularizers.md),
+            applied to the bias.
 
     # Formulation
         The resulting attention vector 'phi' at time 't' is formed by applying a weighted sum over
@@ -450,10 +477,17 @@ class SoftAttention(Layer):
 
     """
 
-    def __init__(self, att_dim, sum_weighted_output=True,
-                 init='glorot_uniform', activation='tanh',
-                 dropout_Wa=0., dropout_Ua=0.,
-                 wa_regularizer=None, Wa_regularizer=None, Ua_regularizer=None, ba_regularizer=None,
+    def __init__(self,
+                 att_dim,
+                 sum_weighted_output=True,
+                 init='glorot_uniform',
+                 activation='tanh',
+                 dropout_Wa=0.,
+                 dropout_Ua=0.,
+                 wa_regularizer=None,
+                 Wa_regularizer=None,
+                 Ua_regularizer=None,
+                 ba_regularizer=None,
                  ca_regularizer=None,
                  **kwargs):
         self.att_dim = att_dim
@@ -625,24 +659,28 @@ class SoftMultistepsAttention(Layer):
     The output information provided are the attended input an the attention weights 'alpha' over the input data.
 
     # Arguments
-        att_units: Soft alignment MLP dimension
-        kernel_initializer: weight initialization function.
+        att_dim: Soft alignment MLP dimension
+        sum_weighted_output: Boolean, whether to sum the weigthed output
+        init: weight initialization function.
             Can be the name of an existing function (str),
             or a Theano function (see: [initializations](../initializations.md)).
-        activation: activation function.
-            Can be the name of an existing function (str),
-            or a Theano function (see: [activations](../activations.md)).
-        w_a_regularizer: instance of [WeightRegularizer](../regularizers.md)
+        activation: ctivation function to use
+            (see [activations](../activations.md)).
+            If you pass None, no activation is applied
+            (ie. "linear" activation: `a(x) = x`).
+        return_sequences: whether to return sequences or not
+        dropout_Wa: float between 0 and 1.
+        dropout_Ua: float between 0 and 1.
+        wa_regularizer: instance of [WeightRegularizer](../regularizers.md)
             (eg. L1 or L2 regularization), applied to the input weights matrices.
-        W_a_regularizer: instance of [WeightRegularizer](../regularizers.md)
+        Wa_regularizer: instance of [WeightRegularizer](../regularizers.md)
             (eg. L1 or L2 regularization), applied to the input weights matrices.
-        U_a_regularizer: instance of [WeightRegularizer](../regularizers.md)
+        Ua_regularizer: instance of [WeightRegularizer](../regularizers.md)
             (eg. L1 or L2 regularization), applied to the recurrent weights matrices.
-        b_a_regularizer: instance of [WeightRegularizer](../regularizers.md),
+        ba_regularizer: instance of [WeightRegularizer](../regularizers.md),
             applied to the bias.
-        dropout_w_a: float between 0 and 1.
-        dropout_W_a: float between 0 and 1.
-        dropout_U_a: float between 0 and 1.
+        ca_regularizer: instance of [WeightRegularizer](../regularizers.md),
+            applied to the bias.
 
     # Formulation
         The resulting attention vector 'phi' at time 't' is formed by applying a weighted sum over
@@ -672,8 +710,12 @@ class SoftMultistepsAttention(Layer):
     def __init__(self, att_dim, sum_weighted_output=True,
                  init='glorot_uniform', activation='tanh',
                  return_sequences=True,
-                 dropout_Wa=0., dropout_Ua=0.,
-                 wa_regularizer=None, Wa_regularizer=None, Ua_regularizer=None, ba_regularizer=None,
+                 dropout_Wa=0.,
+                 dropout_Ua=0.,
+                 wa_regularizer=None,
+                 Wa_regularizer=None,
+                 Ua_regularizer=None,
+                 ba_regularizer=None,
                  ca_regularizer=None,
                  **kwargs):
         self.att_dim = att_dim
@@ -867,39 +909,49 @@ class AttentionComplex(Layer):
 
     # Arguments
         nb_attention: number of attention mechanisms applied over the input vectors
-        kernel_initializer: weight initialization function.
+        init: weight initialization function.
             Can be the name of an existing function (str),
             or a Theano function (see: [initializations](../initializations.md)).
-        recurrent_initializer: initialization function of the inner cells.
-        forget_bias_initializer: initialization function for the bias of the forget gate.
+        inner_init: initialization function of the inner cells.
+        forget_bias_init: initialization function for the bias of the forget gate.
             [Jozefowicz et al.](http://www.jmlr.org/proceedings/papers/v37/jozefowicz15.pdf)
             recommend initializing with ones.
         activation: activation function.
             Can be the name of an existing function (str),
             or a Theano function (see: [activations](../activations.md)).
-        recurrent_activation: activation function for the inner cells.
-        w_a_regularizer: instance of [WeightRegularizer](../regularizers.md)
+        inner_activation: activation function for the inner cells.
+        dropout_w: float between 0 and 1.
+        dropout_W: float between 0 and 1.
+        dropout_Wa: float between 0 and 1.
+        w_regularizer: instance of [WeightRegularizer](../regularizers.md)
             (eg. L1 or L2 regularization), applied to the input weights matrices.
-        W_a_regularizer: instance of [WeightRegularizer](../regularizers.md)
+        W_regularizer: instance of [WeightRegularizer](../regularizers.md)
             (eg. L1 or L2 regularization), applied to the input weights matrices.
-        U_a_regularizer: instance of [WeightRegularizer](../regularizers.md)
+        b_regularizer: instance of [WeightRegularizer](../regularizers.md)
+            (eg. L1 or L2 regularization), applied to the input weights matrices.
+        Wa_regularizer: instance of [WeightRegularizer](../regularizers.md)
             (eg. L1 or L2 regularization), applied to the recurrent weights matrices.
-        b_a_regularizer: instance of [WeightRegularizer](../regularizers.md),
+        ba_regularizer: instance of [WeightRegularizer](../regularizers.md),
             applied to the bias.
-        dropout_w_a: float between 0 and 1.
-        dropout_W_a: float between 0 and 1.
-        dropout_U_a: float between 0 and 1.
 
     # Formulation
 
     """
 
     def __init__(self, nb_attention,
-                 init='glorot_uniform', inner_init='orthogonal',
-                 forget_bias_init='one', activation='tanh',
+                 init='glorot_uniform',
+                 inner_init='orthogonal',
+                 forget_bias_init='one',
+                 activation='tanh',
                  inner_activation='hard_sigmoid',
-                 dropout_w=0., dropout_W=0., dropout_Wa=0.,
-                 w_regularizer=None, W_regularizer=None, b_regularizer=None, Wa_regularizer=None, ba_regularizer=None,
+                 dropout_w=0.,
+                 dropout_W=0.,
+                 dropout_Wa=0.,
+                 w_regularizer=None,
+                 W_regularizer=None,
+                 b_regularizer=None,
+                 Wa_regularizer=None,
+                 ba_regularizer=None,
                  **kwargs):
         self.nb_attention = nb_attention
         self.init = initializations.get(init)
@@ -1103,8 +1155,10 @@ class ConvAtt(Layer):
         # now model.output_shape == (None, 32, 256, 256)
     ```
     # Arguments
-            nb_filter: Number of convolution filters to use.
-            kernel_initializer: name of initialization function for the weights of the layer
+            nb_embedding: Number of convolution filters to use.
+            nb_glimpses: Number of glimpses to take
+            concat_timesteps: Boolean. Whether we concatenate timesteps or not.
+            init: name of initialization function for the weights of the layer
                 (see [initializations](../initializations.md)), or alternatively,
                 Theano function to use for weights initialization.
                 This parameter is only relevant if you don't pass
@@ -1115,10 +1169,18 @@ class ConvAtt(Layer):
                 If you don't specify anything, no activation is applied
                 (ie. "linear" activation: a(x) = x).
             weights: list of numpy arrays to set as initial weights.
+            return_states: boolean. Whether we return states or not
             border_mode: 'valid', 'same' or 'full'. ('full' requires the Theano backend.)
-            subsample: tuple of length 2. Factor by which to subsample output.
-                Also called strides elsewhere.
+            dim_ordering: 'th' or 'tf'. In 'th' mode, the channels dimension
+                (the depth) is at index 1, in 'tf' mode is it at index 3.
+                It defaults to the `image_dim_ordering` value found in your
+                Keras config file at `~/.keras/keras.json`.
+                If you never set it, then it will be "tf".
             W_regularizer: instance of [WeightRegularizer](../regularizers.md)
+                (eg. L1 or L2 regularization), applied to the main weights matrix.
+            U_regularizer: instance of [WeightRegularizer](../regularizers.md)
+                (eg. L1 or L2 regularization), applied to the main weights matrix.
+            V_regularizer: instance of [WeightRegularizer](../regularizers.md)
                 (eg. L1 or L2 regularization), applied to the main weights matrix.
             b_regularizer: instance of [WeightRegularizer](../regularizers.md),
                 applied to the bias.
@@ -1126,13 +1188,14 @@ class ConvAtt(Layer):
                 applied to the network output.
             W_constraint: instance of the [constraints](../constraints.md) module
                 (eg. maxnorm, nonneg), applied to the main weights matrix.
+            U_constraint: instance of the [constraints](../constraints.md) module
+                (eg. maxnorm, nonneg), applied to the main weights matrix.
+            V_constraint: instance of the [constraints](../constraints.md) module
+                (eg. maxnorm, nonneg), applied to the main weights matrix.
             b_constraint: instance of the [constraints](../constraints.md) module,
                 applied to the bias.
-            dim_ordering: 'th' or 'tf'. In 'th' mode, the channels dimension
-                (the depth) is at index 1, in 'tf' mode is it at index 3.
-                It defaults to the `image_dim_ordering` value found in your
-                Keras config file at `~/.keras/keras.json`.
-                If you never set it, then it will be "tf".
+            W_learning_rate_multiplier: multiplier of the learning rate for W
+            b_learning_rate_multiplier: multiplier of the learning rate for W
             bias: whether to include a bias
                 (i.e. make the layer affine rather than linear).
 
@@ -1477,8 +1540,10 @@ class ConvCoAtt(Layer):
         # now model.output_shape == (None, 32, 256, 256)
     ```
     # Arguments
-            nb_filter: Number of convolution filters to use.
-            kernel_initializer: name of initialization function for the weights of the layer
+            nb_embedding: Number of convolution filters to use.
+            nb_glimpses: Number of glimpses to take
+            concat_timesteps: Boolean. Whether we concatenate timesteps or not.
+            init: name of initialization function for the weights of the layer
                 (see [initializations](../initializations.md)), or alternatively,
                 Theano function to use for weights initialization.
                 This parameter is only relevant if you don't pass
@@ -1489,10 +1554,18 @@ class ConvCoAtt(Layer):
                 If you don't specify anything, no activation is applied
                 (ie. "linear" activation: a(x) = x).
             weights: list of numpy arrays to set as initial weights.
+            return_states: boolean. Whether we return states or not
             border_mode: 'valid', 'same' or 'full'. ('full' requires the Theano backend.)
-            subsample: tuple of length 2. Factor by which to subsample output.
-                Also called strides elsewhere.
+            dim_ordering: 'th' or 'tf'. In 'th' mode, the channels dimension
+                (the depth) is at index 1, in 'tf' mode is it at index 3.
+                It defaults to the `image_dim_ordering` value found in your
+                Keras config file at `~/.keras/keras.json`.
+                If you never set it, then it will be "tf".
             W_regularizer: instance of [WeightRegularizer](../regularizers.md)
+                (eg. L1 or L2 regularization), applied to the main weights matrix.
+            U_regularizer: instance of [WeightRegularizer](../regularizers.md)
+                (eg. L1 or L2 regularization), applied to the main weights matrix.
+            V_regularizer: instance of [WeightRegularizer](../regularizers.md)
                 (eg. L1 or L2 regularization), applied to the main weights matrix.
             b_regularizer: instance of [WeightRegularizer](../regularizers.md),
                 applied to the bias.
@@ -1500,13 +1573,14 @@ class ConvCoAtt(Layer):
                 applied to the network output.
             W_constraint: instance of the [constraints](../constraints.md) module
                 (eg. maxnorm, nonneg), applied to the main weights matrix.
+            U_constraint: instance of the [constraints](../constraints.md) module
+                (eg. maxnorm, nonneg), applied to the main weights matrix.
+            V_constraint: instance of the [constraints](../constraints.md) module
+                (eg. maxnorm, nonneg), applied to the main weights matrix.
             b_constraint: instance of the [constraints](../constraints.md) module,
                 applied to the bias.
-            dim_ordering: 'th' or 'tf'. In 'th' mode, the channels dimension
-                (the depth) is at index 1, in 'tf' mode is it at index 3.
-                It defaults to the `image_dim_ordering` value found in your
-                Keras config file at `~/.keras/keras.json`.
-                If you never set it, then it will be "tf".
+            W_learning_rate_multiplier: multiplier of the learning rate for W
+            b_learning_rate_multiplier: multiplier of the learning rate for W
             bias: whether to include a bias
                 (i.e. make the layer affine rather than linear).
 

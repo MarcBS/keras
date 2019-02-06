@@ -50,6 +50,8 @@ class ConvRNN2D(RNN):
         stateful: Boolean (default False). If True, the last state
             for each sample at index i in a batch will be used as initial
             state for the sample of index i in the following batch.
+        unroll: Boolean (default False).
+            Unrolling isn't possible with convolutional RNNs
         input_shape: Use this argument to specify the shape of the
             input when this layer is the first one in a model.
 

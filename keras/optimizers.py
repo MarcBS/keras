@@ -169,6 +169,7 @@ class PAS(Optimizer):
     """Soft Passive-Agressive online learning by subgradient techniques optimizer.
 
     # Arguments
+        trainable_weights_shapes: shapes of the model weights
         lr: float >= 0. Learning rate.
         c: float. Importance of the gradients when updating weights.
     """
@@ -240,6 +241,7 @@ class PAS2(PAS):
     """Passive-Agressive online learning by projected subgradient techniques optimizer.
         Alternative 1
     # Arguments
+        trainable_weights_shapes: shapes of the model weights
         lr: float >= 0. Learning rate.
         c: float. Weight given to projection operator.
     """
@@ -298,6 +300,7 @@ class PPAS(PAS):
     '''Passive-Agressive online learning by projected subgradient techniques optimizer.
 
     # Arguments
+        trainable_weights_shapes: shapes of the model weights
         lr: float >= 0. Learning rate.
         c: float. Weight given to projection operator.
     '''
@@ -360,9 +363,10 @@ class QHSGD(Optimizer):
         lr: float >= 0. Learning rate.
         momentum: float >= 0. Parameter that accelerates SGD
             in the relevant direction and dampens oscillations.
+        quasi_hyperbolic_momentum: Quasi hyperbolic momentum parameter
         decay: float >= 0. Learning rate decay over each update.
+        dampening: boolean. Whether to apply dampening or not.
         nesterov: boolean. Whether to apply Nesterov momentum.
-
     """
 
     def __init__(self, lr=0.01, momentum=0., quasi_hyperbolic_momentum=0., decay=0.,
@@ -469,7 +473,7 @@ class SGDHD(Optimizer):
             in the relevant direction and dampens oscillations.
         decay: float >= 0. Learning rate decay over each update.
         nesterov: boolean. Whether to apply Nesterov momentum.
-        hypergrad_lr (float, optional): hypergradient learning rate for the online
+        hypergrad_lr: (float, optional) hypergradient learning rate for the online
         tuning of the learning rate, introduced in the paper
         Online Learning Rate Adaptation with Hypergradient Descent (https://openreview.net/forum?id=BkrsAzWAb)
     """
@@ -601,8 +605,9 @@ class QHSGDHD(Optimizer):
         momentum: float >= 0. Momentum parameter. Accelerates SGD
         in the relevant direction and dampens oscillations. \beta parameter in  https://arxiv.org/abs/1810.06801
         quasi_hyperbolic_momentum: float >= 0. Quasi-hyperbolic momentum parameter. \mu in https://arxiv.org/abs/1810.06801
-        nesterov: boolean. Whether to apply Nesterov momentum.
         dampening: float >=0. = dampening for momentum
+        decay: learning rate decay rate.
+        nesterov: boolean. Whether to apply Nesterov momentum.
         hypergrad_lr: (float >=0., optional): hypergradient learning rate for the online
         tuning of the learning rate, introduced in the paper
         Online Learning Rate Adaptation with Hypergradient Descent (https://openreview.net/forum?id=BkrsAzWAb)
@@ -1160,7 +1165,7 @@ class AdadeltaHD(Optimizer):
             gradient to keep at each time step.
         epsilon: float >= 0. Fuzz factor. If `None`, defaults to `K.epsilon()`.
         decay: float >= 0. Initial learning rate decay.
-        hypergrad_lr (float, optional): hypergradient learning rate for the online
+        hypergrad_lr: (float, optional) hypergradient learning rate for the online
         tuning of the learning rate, introduced in the paper
         Online Learning Rate Adaptation with Hypergradient Descent (https://openreview.net/forum?id=BkrsAzWAb)
 
@@ -1392,14 +1397,14 @@ class AdamHD(Optimizer):
         lr: float >= 0. Learning rate.
         beta_1: float, 0 < beta < 1. Generally close to 1.
         beta_2: float, 0 < beta < 1. Generally close to 1.
+        hypergrad_lr: (float, optional) hypergradient learning rate for the online
+        tuning of the learning rate, introduced in the paper
+        Online Learning Rate Adaptation with Hypergradient Descent (https://openreview.net/forum?id=BkrsAzWAb)
         epsilon: float >= 0. Fuzz factor. If `None`, defaults to `K.epsilon()`.
         decay: float >= 0. Learning rate decay over each update.
         amsgrad: boolean. Whether to apply the AMSGrad variant of this
             algorithm from the paper "On the Convergence of Adam and
             Beyond".
-        hypergrad_lr (float, optional): hypergradient learning rate for the online
-        tuning of the learning rate, introduced in the paper
-        Online Learning Rate Adaptation with Hypergradient Descent (https://openreview.net/forum?id=BkrsAzWAb)
 
     # References
         - [Adam - A Method for Stochastic Optimization](

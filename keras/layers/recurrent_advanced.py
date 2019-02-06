@@ -118,25 +118,39 @@ class GRUCond(Recurrent):
         kernel_initializer: Initializer for the `kernel` weights matrix,
             used for the linear transformation of the inputs
             (see [initializers](../initializers.md)).
+        conditional_initializer: Initializer for the `conditional_kernel`
+            weights matrix,
+            used for the linear transformation of the conditional inputs
+            (see [initializers](../initializers.md)).
         recurrent_initializer: Initializer for the `recurrent_kernel`
             weights matrix,
             used for the linear transformation of the recurrent state
             (see [initializers](../initializers.md)).
         bias_initializer: Initializer for the bias vector
             (see [initializers](../initializers.md)).
+        mask_value: Value of the mask of the context (0. by default)
         kernel_regularizer: Regularizer function applied to
             the `kernel` weights matrix
             (see [regularizer](../regularizers.md)).
         recurrent_regularizer: Regularizer function applied to
             the `recurrent_kernel` weights matrix
             (see [regularizer](../regularizers.md)).
+        conditional_regularizer: Regularizer function applied to
+            the `conditional_kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
         bias_regularizer: Regularizer function applied to the bias vector
+            (see [regularizer](../regularizers.md)).
+        activity_regularizer: Regularizer function applied to
+            the output of the layer (its "activation").
             (see [regularizer](../regularizers.md)).
         kernel_constraint: Constraint function applied to
             the `kernel` weights matrix
             (see [constraints](../constraints.md)).
         recurrent_constraint: Constraint function applied to
             the `recurrent_kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        conditional_constraint: Constraint function applied to
+            the `conditional_kernel` weights matrix
             (see [constraints](../constraints.md)).
         bias_constraint: Constraint function applied to the bias vector
             (see [constraints](../constraints.md)).
@@ -149,12 +163,6 @@ class GRUCond(Recurrent):
         conditional_dropout: Float between 0 and 1.
             Fraction of the units to drop for
             the linear transformation of the input.
-        implementation: Implementation mode, either 1 or 2.
-            Mode 1 will structure its operations as a larger number of
-            smaller dot products and additions, whereas mode 2 will
-            batch them into fewer, larger operations. These modes will
-            have different performance profiles on different hardware and
-            for different applications.
         num_inputs: Number of inputs of the layer.
         static_ctx: If static_ctx, it should have 2 dimensions and it will
                     be fed to each timestep of the RNN. Otherwise, it should
@@ -536,7 +544,10 @@ class AttGRU(Recurrent):
         2. The complete input sequence (shape: (batch_size, input_timesteps, input_dim))
     # Arguments
         units: Positive integer, dimensionality of the output space.
+        att_units:  Positive integer, dimensionality of the attention space.
+        return_extra_variables: Return the attended context vectors and the attention weights (alphas)
         return_states: Whether it should return the internal RNN states.
+        attention_mode: 'add', 'dot' or custom function.
         activation: Activation function to use
             (see [activations](../activations.md)).
             If you pass None, no activation is applied
@@ -552,15 +563,47 @@ class AttGRU(Recurrent):
             weights matrix,
             used for the linear transformation of the recurrent state
             (see [initializers](../initializers.md)).
+        attention_recurrent_initializer:  Initializer for the `attention_recurrent_kernel`
+            weights matrix, used for the linear transformation of the conditional inputs
+            (see [initializers](../initializers.md)).
+        attention_context_initializer:  Initializer for the `attention_context_kernel`
+            weights matrix,
+            used for the linear transformation of the attention context inputs
+            (see [initializers](../initializers.md)).
+        attention_context_wa_initializer:  Initializer for the `attention_wa_kernel`
+            weights matrix,
+            used for the linear transformation of the attention context
+            (see [initializers](../initializers.md)).
         bias_initializer: Initializer for the bias vector
             (see [initializers](../initializers.md)).
+        bias_ba_initializer: Initializer for the bias_ba vector from the attention mechanism
+            (see [initializers](../initializers.md)).
+        bias_ca_initializer: Initializer for the bias_ca vector from the attention mechanism
+            (see [initializers](../initializers.md)).
+        mask_value: Value of the mask of the context (0. by default)
         kernel_regularizer: Regularizer function applied to
             the `kernel` weights matrix
             (see [regularizer](../regularizers.md)).
         recurrent_regularizer: Regularizer function applied to
             the `recurrent_kernel` weights matrix
             (see [regularizer](../regularizers.md)).
+        attention_recurrent_regularizer:  Regularizer function applied to
+            the `attention_recurrent__kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        attention_context_regularizer:  Regularizer function applied to
+            the `attention_context_kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        attention_context_wa_regularizer:  Regularizer function applied to
+            the `attention_context_wa_kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
         bias_regularizer: Regularizer function applied to the bias vector
+            (see [regularizer](../regularizers.md)).
+        bias_ba_regularizer:  Regularizer function applied to the bias_ba vector
+            (see [regularizer](../regularizers.md)).
+        bias_ca_regularizer:  Regularizer function applied to the bias_ca vector
+            (see [regularizer](../regularizers.md)).
+        activity_regularizer: Regularizer function applied to
+            the output of the layer (its "activation").
             (see [regularizer](../regularizers.md)).
         kernel_constraint: Constraint function applied to
             the `kernel` weights matrix
@@ -568,7 +611,22 @@ class AttGRU(Recurrent):
         recurrent_constraint: Constraint function applied to
             the `recurrent_kernel` weights matrix
             (see [constraints](../constraints.md)).
+        attention_recurrent_constraint: Constraint function applied to
+            the `attention_recurrent_kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        attention_context_constraint: Constraint function applied to
+            the `attention_context_kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        attention_context_wa_constraint: Constraint function applied to
+            the `attention_context_wa_kernel` weights matrix
+            (see [constraints](../constraints.md)).
         bias_constraint: Constraint function applied to the bias vector
+            (see [constraints](../constraints.md)).
+        bias_ba_constraint: Constraint function applied to
+            the `bias_ba` weights matrix
+            (see [constraints](../constraints.md)).
+        bias_ca_constraint: Constraint function applied to
+            the `bias_ca` weights matrix
             (see [constraints](../constraints.md)).
         dropout: Float between 0 and 1.
             Fraction of the units to drop for
@@ -576,24 +634,11 @@ class AttGRU(Recurrent):
         recurrent_dropout: Float between 0 and 1.
             Fraction of the units to drop for
             the linear transformation of the recurrent state.
-        conditional_dropout: Float between 0 and 1.
-            Fraction of the units to drop for
-            the linear transformation of the input.
-        dropout_w_a: Float between 0 and 1.
             Fraction of the units to drop for
             the linear transformation in the attended context.
-        dropout_W_a: Float between 0 and 1.
+        attention_dropout: Float between 0 and 1.
             Fraction of the units to drop for
-            the linear transformation of the recurrent state in the attention mechanism.
-        dropout_U_a: Float between 0 and 1.
-            Fraction of the units to drop for
-            the linear transformation of the input in the attention mechanism.
-        implementation: Implementation mode, either 1 or 2.
-            Mode 1 will structure its operations as a larger number of
-            smaller dot products and additions, whereas mode 2 will
-            batch them into fewer, larger operations. These modes will
-            have different performance profiles on different hardware and
-            for different applications.
+            the linear transformation of the attention mechanism.
         num_inputs: Number of inputs of the layer.
 
 
@@ -640,10 +685,10 @@ class AttGRU(Recurrent):
                  recurrent_activation='sigmoid',
                  use_bias=True,
                  kernel_initializer='glorot_uniform',
+                 recurrent_initializer='orthogonal',
                  attention_recurrent_initializer='glorot_uniform',
                  attention_context_initializer='glorot_uniform',
                  attention_context_wa_initializer='glorot_uniform',
-                 recurrent_initializer='orthogonal',
                  bias_initializer='zeros',
                  bias_ba_initializer='zeros',
                  bias_ca_initializer='zero',
@@ -725,7 +770,7 @@ class AttGRU(Recurrent):
 
     def build(self, input_shape):
 
-        assert len(input_shape) >= 2, 'You should pass two inputs to AttLSTMCond ' \
+        assert len(input_shape) >= 2, 'You should pass two inputs to AttGRU ' \
                                       '(previous_embedded_words and context) ' \
                                       'and two optional inputs (init_state and init_memory)'
         self.input_dim = input_shape[0][2]
@@ -1070,6 +1115,7 @@ class AttGRUCond(Recurrent):
         att_units:  Positive integer, dimensionality of the attention space.
         return_extra_variables: Return the attended context vectors and the attention weights (alphas)
         return_states: Whether it should return the internal RNN states.
+        attention_mode: 'add', 'dot' or custom function.
         activation: Activation function to use
             (see [activations](../activations.md)).
             If you pass None, no activation is applied
@@ -1169,9 +1215,6 @@ class AttGRUCond(Recurrent):
         conditional_dropout: Float between 0 and 1.
             Fraction of the units to drop for
             the linear transformation of the input.
-        conditional_dropout: Float between 0 and 1.
-            Fraction of the units to drop for
-            the linear transformation of the input.
         attention_dropout: Float between 0 and 1.
             Fraction of the units to drop for
             the linear transformation of the attention mechanism.
@@ -1222,10 +1265,10 @@ class AttGRUCond(Recurrent):
                  use_bias=True,
                  kernel_initializer='glorot_uniform',
                  conditional_initializer='glorot_uniform',
+                 recurrent_initializer='orthogonal',
                  attention_recurrent_initializer='glorot_uniform',
                  attention_context_initializer='glorot_uniform',
                  attention_context_wa_initializer='glorot_uniform',
-                 recurrent_initializer='orthogonal',
                  bias_initializer='zeros',
                  bias_ba_initializer='zeros',
                  bias_ca_initializer='zero',
@@ -1704,6 +1747,7 @@ class AttConditionalGRUCond(Recurrent):
             (see [activations](../activations.md)).
             If you pass None, no activation is applied
             (ie. "linear" activation: `a(x) = x`).
+        attention_mode: 'add', 'dot' or custom function.
         recurrent_activation: Activation function to use
             for the recurrent step
             (see [activations](../activations.md)).
@@ -1715,10 +1759,6 @@ class AttConditionalGRUCond(Recurrent):
             weights matrix,
             used for the linear transformation of the conditional inputs
             (see [initializers](../initializers.md)).
-        recurrent_initializer: Initializer for the `recurrent_kernel`
-            weights matrix,
-            used for the linear transformation of the recurrent state
-            (see [initializers](../initializers.md)).
         attention_recurrent_initializer:  Initializer for the `attention_recurrent_kernel`
             weights matrix, used for the linear transformation of the conditional inputs
             (see [initializers](../initializers.md)).
@@ -1729,6 +1769,10 @@ class AttConditionalGRUCond(Recurrent):
         attention_context_wa_initializer:  Initializer for the `attention_wa_kernel`
             weights matrix,
             used for the linear transformation of the attention context
+            (see [initializers](../initializers.md)).
+        recurrent_initializer: Initializer for the `recurrent_kernel`
+            weights matrix,
+            used for the linear transformation of the recurrent state
             (see [initializers](../initializers.md)).
         bias_initializer: Initializer for the bias vector
             (see [initializers](../initializers.md)).
@@ -1923,7 +1967,7 @@ class AttConditionalGRUCond(Recurrent):
 
     def build(self, input_shape):
 
-        assert len(input_shape) >= 2, 'You should pass two inputs to AttLSTMCond ' \
+        assert len(input_shape) >= 2, 'You should pass two inputs to AttConditionalGRUCond ' \
                                       '(previous_embedded_words and context) ' \
                                       'and two optional inputs (init_state and init_memory)'
         self.input_dim = input_shape[0][2]
@@ -2352,25 +2396,42 @@ class LSTMCond(Recurrent):
         kernel_initializer: Initializer for the `kernel` weights matrix,
             used for the linear transformation of the inputs
             (see [initializers](../initializers.md)).
+        conditional_initializer: Initializer for the `conditional_kernel`
+            weights matrix,
+            used for the linear transformation of the conditional inputs
+            (see [initializers](../initializers.md)).
         recurrent_initializer: Initializer for the `recurrent_kernel`
             weights matrix,
             used for the linear transformation of the recurrent state
             (see [initializers](../initializers.md)).
         bias_initializer: Initializer for the bias vector
             (see [initializers](../initializers.md)).
+        forget_bias_init: Initializer for the forget bias vector
+            (see [initializers](../initializers.md)).
+        unit_forget_bias: Boolean, whether the forget gate uses a bias vector.
+        mask_value: Value of the mask of the context (0. by default)
         kernel_regularizer: Regularizer function applied to
             the `kernel` weights matrix
             (see [regularizer](../regularizers.md)).
         recurrent_regularizer: Regularizer function applied to
             the `recurrent_kernel` weights matrix
             (see [regularizer](../regularizers.md)).
+        conditional_regularizer: Regularizer function applied to
+            the `conditional_kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
         bias_regularizer: Regularizer function applied to the bias vector
+            (see [regularizer](../regularizers.md)).
+        activity_regularizer: Regularizer function applied to
+            the output of the layer (its "activation").
             (see [regularizer](../regularizers.md)).
         kernel_constraint: Constraint function applied to
             the `kernel` weights matrix
             (see [constraints](../constraints.md)).
         recurrent_constraint: Constraint function applied to
             the `recurrent_kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        conditional_constraint: Constraint function applied to
+            the `conditional_kernel` weights matrix
             (see [constraints](../constraints.md)).
         bias_constraint: Constraint function applied to the bias vector
             (see [constraints](../constraints.md)).
@@ -2383,12 +2444,9 @@ class LSTMCond(Recurrent):
         conditional_dropout: Float between 0 and 1.
             Fraction of the units to drop for
             the linear transformation of the input.
-        implementation: Implementation mode, either 1 or 2.
-            Mode 1 will structure its operations as a larger number of
-            smaller dot products and additions, whereas mode 2 will
-            batch them into fewer, larger operations. These modes will
-            have different performance profiles on different hardware and
-            for different applications.
+        conditional_dropout: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the input.
         num_inputs: Number of inputs of the layer.
         static_ctx: If static_ctx, it should have 2 dimensions and it will
                     be fed to each timestep of the RNN. Otherwise, it should
@@ -2411,8 +2469,6 @@ class LSTMCond(Recurrent):
                  conditional_initializer='glorot_uniform',
                  recurrent_initializer='orthogonal',
                  bias_initializer='zeros',
-                 bias_ba_initializer='zeros',
-                 bias_ca_initializer='zero',
                  forget_bias_init='one',
                  unit_forget_bias=True,
                  mask_value=0.,
@@ -2420,15 +2476,11 @@ class LSTMCond(Recurrent):
                  recurrent_regularizer=None,
                  conditional_regularizer=None,
                  bias_regularizer=None,
-                 bias_ba_regularizer=None,
-                 bias_ca_regularizer=None,
                  activity_regularizer=None,
                  kernel_constraint=None,
                  recurrent_constraint=None,
                  conditional_constraint=None,
                  bias_constraint=None,
-                 bias_ba_constraint=None,
-                 bias_ca_constraint=None,
                  dropout=0.,
                  recurrent_dropout=0.,
                  conditional_dropout=0.,
@@ -2452,8 +2504,6 @@ class LSTMCond(Recurrent):
         self.recurrent_initializer = initializers.get(recurrent_initializer)
         self.conditional_initializer = initializers.get(conditional_initializer)
         self.bias_initializer = initializers.get(bias_initializer)
-        self.bias_ba_initializer = initializers.get(bias_ba_initializer)
-        self.bias_ca_initializer = initializers.get(bias_ca_initializer)
         self.unit_forget_bias = unit_forget_bias
         self.forget_bias_initializer = initializers.get(forget_bias_init)
 
@@ -2462,8 +2512,6 @@ class LSTMCond(Recurrent):
         self.recurrent_regularizer = regularizers.get(recurrent_regularizer)
         self.conditional_regularizer = regularizers.get(conditional_regularizer)
         self.bias_regularizer = regularizers.get(bias_regularizer)
-        self.bias_ba_regularizer = regularizers.get(bias_ba_regularizer)
-        self.bias_ca_regularizer = regularizers.get(bias_ca_regularizer)
         self.activity_regularizer = regularizers.get(activity_regularizer)
 
         # Constraints
@@ -2471,8 +2519,6 @@ class LSTMCond(Recurrent):
         self.recurrent_constraint = constraints.get(recurrent_constraint)
         self.conditional_constraint = constraints.get(conditional_constraint)
         self.bias_constraint = constraints.get(bias_constraint)
-        self.bias_ba_constraint = constraints.get(bias_ba_constraint)
-        self.bias_ca_constraint = constraints.get(bias_ca_constraint)
 
         # Dropouts
         self.dropout = min(1., max(0., dropout)) if dropout is not None else 0.
@@ -2774,22 +2820,16 @@ class LSTMCond(Recurrent):
                   'recurrent_initializer': initializers.serialize(self.recurrent_initializer),
                   'conditional_initializer': initializers.serialize(self.conditional_initializer),
                   'bias_initializer': initializers.serialize(self.bias_initializer),
-                  'bias_ba_initializer': initializers.serialize(self.bias_ba_initializer),
-                  'bias_ca_initializer': initializers.serialize(self.bias_ca_initializer),
                   'unit_forget_bias': self.unit_forget_bias,
                   'kernel_regularizer': regularizers.serialize(self.kernel_regularizer),
                   'recurrent_regularizer': regularizers.serialize(self.recurrent_regularizer),
                   'conditional_regularizer': regularizers.serialize(self.conditional_regularizer),
                   'bias_regularizer': regularizers.serialize(self.bias_regularizer),
-                  'bias_ba_regularizer': regularizers.serialize(self.bias_ba_regularizer),
-                  'bias_ca_regularizer': regularizers.serialize(self.bias_ca_regularizer),
                   'activity_regularizer': regularizers.serialize(self.activity_regularizer),
                   'kernel_constraint': constraints.serialize(self.kernel_constraint),
                   'recurrent_constraint': constraints.serialize(self.recurrent_constraint),
                   'conditional_constraint': constraints.serialize(self.conditional_constraint),
                   'bias_constraint': constraints.serialize(self.bias_constraint),
-                  'bias_ba_constraint': constraints.serialize(self.bias_ba_constraint),
-                  'bias_ca_constraint': constraints.serialize(self.bias_ca_constraint),
                   'dropout': self.dropout,
                   'recurrent_dropout': self.recurrent_dropout,
                   'conditional_dropout': self.conditional_dropout,
@@ -2808,11 +2848,14 @@ class AttLSTM(Recurrent):
         2. The complete input sequence (shape: (batch_size, input_timesteps, input_dim))
     # Arguments
         units: Positive integer, dimensionality of the output space.
+        att_units:  Positive integer, dimensionality of the attention space.
+        return_extra_variables: Return the attended context vectors and the attention weights (alphas)
         return_states: Whether it should return the internal RNN states.
         activation: Activation function to use
             (see [activations](../activations.md)).
             If you pass None, no activation is applied
             (ie. "linear" activation: `a(x) = x`).
+        attention_mode: 'add', 'dot' or custom function.
         recurrent_activation: Activation function to use
             for the recurrent step
             (see [activations](../activations.md)).
@@ -2824,15 +2867,50 @@ class AttLSTM(Recurrent):
             weights matrix,
             used for the linear transformation of the recurrent state
             (see [initializers](../initializers.md)).
+        attention_recurrent_initializer:  Initializer for the `attention_recurrent_kernel`
+            weights matrix, used for the linear transformation of the conditional inputs
+            (see [initializers](../initializers.md)).
+        attention_context_initializer:  Initializer for the `attention_context_kernel`
+            weights matrix,
+            used for the linear transformation of the attention context inputs
+            (see [initializers](../initializers.md)).
+        attention_context_wa_initializer:  Initializer for the `attention_wa_kernel`
+            weights matrix,
+            used for the linear transformation of the attention context
+            (see [initializers](../initializers.md)).
         bias_initializer: Initializer for the bias vector
             (see [initializers](../initializers.md)).
+        bias_ba_initializer: Initializer for the bias_ba vector from the attention mechanism
+            (see [initializers](../initializers.md)).
+        bias_ca_initializer: Initializer for the bias_ca vector from the attention mechanism
+            (see [initializers](../initializers.md)).
+        forget_bias_init: Initializer for the forget gate
+            (see [initializers](../initializers.md)).
+        unit_forget_bias: Boolean, whether the forget gate uses a bias vector.
+        mask_value: Value of the mask of the context (0. by default)
         kernel_regularizer: Regularizer function applied to
             the `kernel` weights matrix
             (see [regularizer](../regularizers.md)).
         recurrent_regularizer: Regularizer function applied to
             the `recurrent_kernel` weights matrix
             (see [regularizer](../regularizers.md)).
+        attention_recurrent_regularizer:  Regularizer function applied to
+            the `attention_recurrent__kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        attention_context_regularizer:  Regularizer function applied to
+            the `attention_context_kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        attention_context_wa_regularizer:  Regularizer function applied to
+            the `attention_context_wa_kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
         bias_regularizer: Regularizer function applied to the bias vector
+            (see [regularizer](../regularizers.md)).
+        bias_ba_regularizer:  Regularizer function applied to the bias_ba vector
+            (see [regularizer](../regularizers.md)).
+        bias_ca_regularizer:  Regularizer function applied to the bias_ca vector
+            (see [regularizer](../regularizers.md)).
+        activity_regularizer: Regularizer function applied to
+            the output of the layer (its "activation").
             (see [regularizer](../regularizers.md)).
         kernel_constraint: Constraint function applied to
             the `kernel` weights matrix
@@ -2840,7 +2918,22 @@ class AttLSTM(Recurrent):
         recurrent_constraint: Constraint function applied to
             the `recurrent_kernel` weights matrix
             (see [constraints](../constraints.md)).
+        attention_recurrent_constraint: Constraint function applied to
+            the `attention_recurrent_kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        attention_context_constraint: Constraint function applied to
+            the `attention_context_kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        attention_context_wa_constraint: Constraint function applied to
+            the `attention_context_wa_kernel` weights matrix
+            (see [constraints](../constraints.md)).
         bias_constraint: Constraint function applied to the bias vector
+            (see [constraints](../constraints.md)).
+        bias_ba_constraint: Constraint function applied to
+            the `bias_ba` weights matrix
+            (see [constraints](../constraints.md)).
+        bias_ca_constraint: Constraint function applied to
+            the `bias_ca` weights matrix
             (see [constraints](../constraints.md)).
         dropout: Float between 0 and 1.
             Fraction of the units to drop for
@@ -2848,24 +2941,11 @@ class AttLSTM(Recurrent):
         recurrent_dropout: Float between 0 and 1.
             Fraction of the units to drop for
             the linear transformation of the recurrent state.
-        conditional_dropout: Float between 0 and 1.
-            Fraction of the units to drop for
-            the linear transformation of the input.
-        dropout_w_a: Float between 0 and 1.
             Fraction of the units to drop for
             the linear transformation in the attended context.
-        dropout_W_a: Float between 0 and 1.
+        attention_dropout: Float between 0 and 1.
             Fraction of the units to drop for
-            the linear transformation of the recurrent state in the attention mechanism.
-        dropout_U_a: Float between 0 and 1.
-            Fraction of the units to drop for
-            the linear transformation of the input in the attention mechanism.
-        implementation: Implementation mode, either 1 or 2.
-            Mode 1 will structure its operations as a larger number of
-            smaller dot products and additions, whereas mode 2 will
-            batch them into fewer, larger operations. These modes will
-            have different performance profiles on different hardware and
-            for different applications.
+            the linear transformation of the attention mechanism.
         num_inputs: Number of inputs of the layer.
 
 
@@ -2912,10 +2992,10 @@ class AttLSTM(Recurrent):
                  recurrent_activation='sigmoid',
                  use_bias=True,
                  kernel_initializer='glorot_uniform',
+                 recurrent_initializer='orthogonal',
                  attention_recurrent_initializer='glorot_uniform',
                  attention_context_initializer='glorot_uniform',
                  attention_context_wa_initializer='glorot_uniform',
-                 recurrent_initializer='orthogonal',
                  bias_initializer='zeros',
                  bias_ba_initializer='zeros',
                  bias_ca_initializer='zero',
@@ -3366,6 +3446,7 @@ class AttLSTMCond(Recurrent):
         att_units:  Positive integer, dimensionality of the attention space.
         return_extra_variables: Return the attended context vectors and the attention weights (alphas)
         return_states: Whether it should return the internal RNN states.
+        attention_mode: 'add', 'dot' or custom function.
         activation: Activation function to use
             (see [activations](../activations.md)).
             If you pass None, no activation is applied
@@ -3402,6 +3483,7 @@ class AttLSTMCond(Recurrent):
             (see [initializers](../initializers.md)).
         bias_ca_initializer: Initializer for the bias_ca vector from the attention mechanism
             (see [initializers](../initializers.md)).
+        unit_forget_bias: Boolean, whether the forget gate uses a bias vector.
         mask_value: Value of the mask of the context (0. by default)
         kernel_regularizer: Regularizer function applied to
             the `kernel` weights matrix
@@ -3490,10 +3572,10 @@ class AttLSTMCond(Recurrent):
                  use_bias=True,
                  kernel_initializer='glorot_uniform',
                  conditional_initializer='glorot_uniform',
+                 recurrent_initializer='orthogonal',
                  attention_recurrent_initializer='glorot_uniform',
                  attention_context_initializer='glorot_uniform',
                  attention_context_wa_initializer='glorot_uniform',
-                 recurrent_initializer='orthogonal',
                  bias_initializer='zeros',
                  bias_ba_initializer='zeros',
                  bias_ca_initializer='zero',
@@ -4001,6 +4083,7 @@ class AttConditionalLSTMCond(Recurrent):
         return_extra_variables: Return the attended context vectors and the attention weights (alphas)
         att_mode: Attention mode. 'add' or 'dot' implemented.
         return_states: Whether it should return the internal RNN states.
+        attention_mode: 'add', 'dot' or custom function.
         activation: Activation function to use
             (see [activations](../activations.md)).
             If you pass None, no activation is applied
@@ -4037,6 +4120,7 @@ class AttConditionalLSTMCond(Recurrent):
             (see [initializers](../initializers.md)).
         bias_ca_initializer: Initializer for the bias_ca vector from the attention mechanism
             (see [initializers](../initializers.md)).
+        unit_forget_bias: Boolean, whether the forget gate uses a bias vector.
         mask_value: Value of the mask of the context (0. by default)
         kernel_regularizer: Regularizer function applied to
             the `kernel` weights matrix
@@ -4120,16 +4204,16 @@ class AttConditionalLSTMCond(Recurrent):
                  att_units=0,
                  return_extra_variables=False,
                  return_states=False,
-                 activation='tanh',
                  attention_mode='add',
+                 activation='tanh',
                  recurrent_activation='sigmoid',
                  use_bias=True,
                  kernel_initializer='glorot_uniform',
                  conditional_initializer='glorot_uniform',
+                 recurrent_initializer='orthogonal',
                  attention_recurrent_initializer='glorot_uniform',
                  attention_context_initializer='glorot_uniform',
                  attention_context_wa_initializer='glorot_uniform',
-                 recurrent_initializer='orthogonal',
                  bias_initializer='zeros',
                  bias_ba_initializer='zeros',
                  bias_ca_initializer='zero',
@@ -4677,9 +4761,12 @@ class AttLSTMCond2Inputs(Recurrent):
 
     # Arguments
         units: Positive integer, dimensionality of the output space.
-        att_units:  Positive integer, dimensionality of the attention space.
+        att_units1:  Positive integer, dimensionality of the first attention space.
+        att_units2:  Positive integer, dimensionality of the second attention space.
         return_extra_variables: Return the attended context vectors and the attention weights (alphas)
+        attend_on_both: Boolean, wether attend on both inputs or not.
         return_states: Whether it should return the internal RNN states.
+        attention_mode: 'add', 'dot' or custom function.
         activation: Activation function to use
             (see [activations](../activations.md)).
             If you pass None, no activation is applied
@@ -4688,7 +4775,12 @@ class AttLSTMCond2Inputs(Recurrent):
             for the recurrent step
             (see [activations](../activations.md)).
         use_bias: Boolean, whether the layer uses a bias vector.
+        unit_forget_bias: Boolean, whether the forget gate uses a bias vector.
+        mask_value: Value of the mask of the context (0. by default)
         kernel_initializer: Initializer for the `kernel` weights matrix,
+            used for the linear transformation of the inputs
+            (see [initializers](../initializers.md)).
+        kernel_initializer2: Initializer for the `kernel2` weights matrix,
             used for the linear transformation of the inputs
             (see [initializers](../initializers.md)).
         conditional_initializer: Initializer for the `conditional_kernel`
@@ -4702,7 +4794,14 @@ class AttLSTMCond2Inputs(Recurrent):
         attention_recurrent_initializer:  Initializer for the `attention_recurrent_kernel`
             weights matrix, used for the linear transformation of the conditional inputs
             (see [initializers](../initializers.md)).
+        attention_recurrent_initializer2:  Initializer for the `attention_recurrent_kernel2`
+            weights matrix, used for the linear transformation of the conditional inputs
+            (see [initializers](../initializers.md)).
         attention_context_initializer:  Initializer for the `attention_context_kernel`
+            weights matrix,
+            used for the linear transformation of the attention context inputs
+            (see [initializers](../initializers.md)).
+        attention_context_initializer2:  Initializer for the `attention_context_kernel2`
             weights matrix,
             used for the linear transformation of the attention context inputs
             (see [initializers](../initializers.md)).
@@ -4710,14 +4809,26 @@ class AttLSTMCond2Inputs(Recurrent):
             weights matrix,
             used for the linear transformation of the attention context
             (see [initializers](../initializers.md)).
+        attention_context_wa_initializer2:  Initializer for the `attention_wa_kernel2`
+            weights matrix,
+            used for the linear transformation of the attention context
+            (see [initializers](../initializers.md)).
         bias_initializer: Initializer for the bias vector
+            (see [initializers](../initializers.md)).
+        bias_initializer2: Initializer for the bias vector 2
             (see [initializers](../initializers.md)).
         bias_ba_initializer: Initializer for the bias_ba vector from the attention mechanism
             (see [initializers](../initializers.md)).
+        bias_ba_initializer2: Initializer for the bias_ba2 vector from the attention mechanism
+            (see [initializers](../initializers.md)).
         bias_ca_initializer: Initializer for the bias_ca vector from the attention mechanism
             (see [initializers](../initializers.md)).
-        mask_value: Value of the mask of the context (0. by default)
+        bias_ca_initializer2: Initializer for the bias_ca2 vector from the attention mechanism
+            (see [initializers](../initializers.md)).
         kernel_regularizer: Regularizer function applied to
+            the `kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        kernel_regularizer2: Regularizer function applied to
             the `kernel` weights matrix
             (see [regularizer](../regularizers.md)).
         recurrent_regularizer: Regularizer function applied to
@@ -4726,26 +4837,41 @@ class AttLSTMCond2Inputs(Recurrent):
         conditional_regularizer: Regularizer function applied to
             the `conditional_kernel` weights matrix
             (see [regularizer](../regularizers.md)).
+        bias_regularizer: Regularizer function applied to the bias vector
+            (see [regularizer](../regularizers.md)).
+        bias_regularizer2: Regularizer function applied to the bias2 vector
+            (see [regularizer](../regularizers.md)).
         attention_recurrent_regularizer:  Regularizer function applied to
             the `attention_recurrent__kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        attention_recurrent_regularizer2:  Regularizer function applied to
+            the `attention_recurrent__kernel2` weights matrix
             (see [regularizer](../regularizers.md)).
         attention_context_regularizer:  Regularizer function applied to
             the `attention_context_kernel` weights matrix
             (see [regularizer](../regularizers.md)).
+        attention_context_regularizer2:  Regularizer function applied to
+            the `attention_context_kernel2` weights matrix
+            (see [regularizer](../regularizers.md)).
         attention_context_wa_regularizer:  Regularizer function applied to
             the `attention_context_wa_kernel` weights matrix
             (see [regularizer](../regularizers.md)).
-        bias_regularizer: Regularizer function applied to the bias vector
+        attention_context_wa_regularizer2:  Regularizer function applied to
+            the `attention_context_wa_kernel2` weights matrix
             (see [regularizer](../regularizers.md)).
         bias_ba_regularizer:  Regularizer function applied to the bias_ba vector
             (see [regularizer](../regularizers.md)).
+        bias_ba_regularizer2:  Regularizer function applied to the bias_ba2 vector
+            (see [regularizer](../regularizers.md)).
         bias_ca_regularizer:  Regularizer function applied to the bias_ca vector
             (see [regularizer](../regularizers.md)).
-        activity_regularizer: Regularizer function applied to
-            the output of the layer (its "activation").
+        bias_ca_regularizer2:  Regularizer function applied to the bias_ca2 vector
             (see [regularizer](../regularizers.md)).
         kernel_constraint: Constraint function applied to
             the `kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        kernel_constraint2: Constraint function applied to
+            the `kernel2` weights matrix
             (see [constraints](../constraints.md)).
         recurrent_constraint: Constraint function applied to
             the `recurrent_kernel` weights matrix
@@ -4756,35 +4882,55 @@ class AttLSTMCond2Inputs(Recurrent):
         attention_recurrent_constraint: Constraint function applied to
             the `attention_recurrent_kernel` weights matrix
             (see [constraints](../constraints.md)).
+        attention_recurrent_constraint2: Constraint function applied to
+            the `attention_recurrent_kernel2` weights matrix
+            (see [constraints](../constraints.md)).
         attention_context_constraint: Constraint function applied to
             the `attention_context_kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        attention_context_constraint2: Constraint function applied to
+            the `attention_context_kernel2` weights matrix
             (see [constraints](../constraints.md)).
         attention_context_wa_constraint: Constraint function applied to
             the `attention_context_wa_kernel` weights matrix
             (see [constraints](../constraints.md)).
+        attention_context_wa_constraint2: Constraint function applied to
+            the `attention_context_wa_kernel2` weights matrix
+            (see [constraints](../constraints.md)).
         bias_constraint: Constraint function applied to the bias vector
+            (see [constraints](../constraints.md)).
+        bias_constraint2: Constraint function applied to the bias2 vector
             (see [constraints](../constraints.md)).
         bias_ba_constraint: Constraint function applied to
             the `bias_ba` weights matrix
             (see [constraints](../constraints.md)).
+        bias_ba_constraint2: Constraint function applied to
+            the `bias_ba2` weights matrix
+            (see [constraints](../constraints.md)).
         bias_ca_constraint: Constraint function applied to
             the `bias_ca` weights matrix
+            (see [constraints](../constraints.md)).
+        bias_ca_constraint2: Constraint function applied to
+            the `bias_ca2` weights matrix
             (see [constraints](../constraints.md)).
         dropout: Float between 0 and 1.
             Fraction of the units to drop for
             the linear transformation of the context.
+        dropout2: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the context2.
         recurrent_dropout: Float between 0 and 1.
             Fraction of the units to drop for
             the linear transformation of the recurrent state.
         conditional_dropout: Float between 0 and 1.
             Fraction of the units to drop for
             the linear transformation of the input.
-        conditional_dropout: Float between 0 and 1.
-            Fraction of the units to drop for
-            the linear transformation of the input.
         attention_dropout: Float between 0 and 1.
             Fraction of the units to drop for
             the linear transformation of the attention mechanism.
+        attention_dropout2: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the attention mechanism2.
         num_inputs: Number of inputs of the layer.
 
     # References
@@ -4797,43 +4943,43 @@ class AttLSTMCond2Inputs(Recurrent):
     def __init__(self, units,
                  att_units1=0,
                  att_units2=0,
-                 return_states=False,
-                 activation='tanh',
-                 attention_mode='add',
-                 recurrent_activation='sigmoid',
                  return_extra_variables=False,
                  attend_on_both=False,
+                 return_states=False,
+                 attention_mode='add',
+                 activation='tanh',
+                 recurrent_activation='sigmoid',
                  use_bias=True,
+                 unit_forget_bias=True,
+                 mask_value=0.,
                  kernel_initializer='glorot_uniform',
                  kernel_initializer2='glorot_uniform',
                  conditional_initializer='glorot_uniform',
+                 recurrent_initializer='orthogonal',
                  attention_recurrent_initializer='glorot_uniform',
                  attention_recurrent_initializer2='glorot_uniform',
                  attention_context_initializer='glorot_uniform',
                  attention_context_initializer2='glorot_uniform',
                  attention_context_wa_initializer='glorot_uniform',
                  attention_context_wa_initializer2='glorot_uniform',
-                 recurrent_initializer='orthogonal',
                  bias_initializer='zeros',
                  bias_initializer2='zeros',
                  bias_ba_initializer='zeros',
                  bias_ba_initializer2='zeros',
                  bias_ca_initializer='zero',
                  bias_ca_initializer2='zero',
-                 unit_forget_bias=True,
-                 mask_value=0.,
                  kernel_regularizer=None,
                  kernel_regularizer2=None,
-                 conditional_regularizer=None,
                  recurrent_regularizer=None,
+                 conditional_regularizer=None,
                  bias_regularizer=None,
                  bias_regularizer2=None,
+                 attention_recurrent_regularizer=None,
+                 attention_recurrent_regularizer2=None,
                  attention_context_regularizer=None,
                  attention_context_regularizer2=None,
                  attention_context_wa_regularizer=None,
                  attention_context_wa_regularizer2=None,
-                 attention_recurrent_regularizer=None,
-                 attention_recurrent_regularizer2=None,
                  bias_ba_regularizer=None,
                  bias_ba_regularizer2=None,
                  bias_ca_regularizer=None,
@@ -5570,8 +5716,11 @@ class AttConditionalLSTMCond2Inputs(Recurrent):
 
     # Arguments
         units: Positive integer, dimensionality of the output space.
-        att_units:  Positive integer, dimensionality of the attention space.
+        attention_mode: 'add', 'dot' or custom function.
+        att_units1:  Positive integer, dimensionality of the first attention space.
+        att_units2:  Positive integer, dimensionality of the second attention space.
         return_extra_variables: Return the attended context vectors and the attention weights (alphas)
+        attend_on_both: Boolean, wether attend on both inputs or not.
         return_states: Whether it should return the internal RNN states.
         activation: Activation function to use
             (see [activations](../activations.md)).
@@ -5581,7 +5730,12 @@ class AttConditionalLSTMCond2Inputs(Recurrent):
             for the recurrent step
             (see [activations](../activations.md)).
         use_bias: Boolean, whether the layer uses a bias vector.
+        unit_forget_bias: Boolean, whether the forget gate uses a bias vector.
+        mask_value: Value of the mask of the context (0. by default)
         kernel_initializer: Initializer for the `kernel` weights matrix,
+            used for the linear transformation of the inputs
+            (see [initializers](../initializers.md)).
+        kernel_initializer2: Initializer for the `kernel2` weights matrix,
             used for the linear transformation of the inputs
             (see [initializers](../initializers.md)).
         conditional_initializer: Initializer for the `conditional_kernel`
@@ -5595,7 +5749,14 @@ class AttConditionalLSTMCond2Inputs(Recurrent):
         attention_recurrent_initializer:  Initializer for the `attention_recurrent_kernel`
             weights matrix, used for the linear transformation of the conditional inputs
             (see [initializers](../initializers.md)).
+        attention_recurrent_initializer2:  Initializer for the `attention_recurrent_kernel2`
+            weights matrix, used for the linear transformation of the conditional inputs
+            (see [initializers](../initializers.md)).
         attention_context_initializer:  Initializer for the `attention_context_kernel`
+            weights matrix,
+            used for the linear transformation of the attention context inputs
+            (see [initializers](../initializers.md)).
+        attention_context_initializer2:  Initializer for the `attention_context_kernel2`
             weights matrix,
             used for the linear transformation of the attention context inputs
             (see [initializers](../initializers.md)).
@@ -5603,14 +5764,26 @@ class AttConditionalLSTMCond2Inputs(Recurrent):
             weights matrix,
             used for the linear transformation of the attention context
             (see [initializers](../initializers.md)).
+        attention_context_wa_initializer2:  Initializer for the `attention_wa_kernel2`
+            weights matrix,
+            used for the linear transformation of the attention context
+            (see [initializers](../initializers.md)).
         bias_initializer: Initializer for the bias vector
+            (see [initializers](../initializers.md)).
+        bias_initializer2: Initializer for the bias vector 2
             (see [initializers](../initializers.md)).
         bias_ba_initializer: Initializer for the bias_ba vector from the attention mechanism
             (see [initializers](../initializers.md)).
+        bias_ba_initializer2: Initializer for the bias_ba2 vector from the attention mechanism
+            (see [initializers](../initializers.md)).
         bias_ca_initializer: Initializer for the bias_ca vector from the attention mechanism
             (see [initializers](../initializers.md)).
-        mask_value: Value of the mask of the context (0. by default)
+        bias_ca_initializer2: Initializer for the bias_ca2 vector from the attention mechanism
+            (see [initializers](../initializers.md)).
         kernel_regularizer: Regularizer function applied to
+            the `kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        kernel_regularizer2: Regularizer function applied to
             the `kernel` weights matrix
             (see [regularizer](../regularizers.md)).
         recurrent_regularizer: Regularizer function applied to
@@ -5619,26 +5792,41 @@ class AttConditionalLSTMCond2Inputs(Recurrent):
         conditional_regularizer: Regularizer function applied to
             the `conditional_kernel` weights matrix
             (see [regularizer](../regularizers.md)).
+        bias_regularizer: Regularizer function applied to the bias vector
+            (see [regularizer](../regularizers.md)).
+        bias_regularizer2: Regularizer function applied to the bias2 vector
+            (see [regularizer](../regularizers.md)).
         attention_recurrent_regularizer:  Regularizer function applied to
             the `attention_recurrent__kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        attention_recurrent_regularizer2:  Regularizer function applied to
+            the `attention_recurrent__kernel2` weights matrix
             (see [regularizer](../regularizers.md)).
         attention_context_regularizer:  Regularizer function applied to
             the `attention_context_kernel` weights matrix
             (see [regularizer](../regularizers.md)).
+        attention_context_regularizer2:  Regularizer function applied to
+            the `attention_context_kernel2` weights matrix
+            (see [regularizer](../regularizers.md)).
         attention_context_wa_regularizer:  Regularizer function applied to
             the `attention_context_wa_kernel` weights matrix
             (see [regularizer](../regularizers.md)).
-        bias_regularizer: Regularizer function applied to the bias vector
+        attention_context_wa_regularizer2:  Regularizer function applied to
+            the `attention_context_wa_kernel2` weights matrix
             (see [regularizer](../regularizers.md)).
         bias_ba_regularizer:  Regularizer function applied to the bias_ba vector
             (see [regularizer](../regularizers.md)).
+        bias_ba_regularizer2:  Regularizer function applied to the bias_ba2 vector
+            (see [regularizer](../regularizers.md)).
         bias_ca_regularizer:  Regularizer function applied to the bias_ca vector
             (see [regularizer](../regularizers.md)).
-        activity_regularizer: Regularizer function applied to
-            the output of the layer (its "activation").
+        bias_ca_regularizer2:  Regularizer function applied to the bias_ca2 vector
             (see [regularizer](../regularizers.md)).
         kernel_constraint: Constraint function applied to
             the `kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        kernel_constraint2: Constraint function applied to
+            the `kernel2` weights matrix
             (see [constraints](../constraints.md)).
         recurrent_constraint: Constraint function applied to
             the `recurrent_kernel` weights matrix
@@ -5649,35 +5837,55 @@ class AttConditionalLSTMCond2Inputs(Recurrent):
         attention_recurrent_constraint: Constraint function applied to
             the `attention_recurrent_kernel` weights matrix
             (see [constraints](../constraints.md)).
+        attention_recurrent_constraint2: Constraint function applied to
+            the `attention_recurrent_kernel2` weights matrix
+            (see [constraints](../constraints.md)).
         attention_context_constraint: Constraint function applied to
             the `attention_context_kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        attention_context_constraint2: Constraint function applied to
+            the `attention_context_kernel2` weights matrix
             (see [constraints](../constraints.md)).
         attention_context_wa_constraint: Constraint function applied to
             the `attention_context_wa_kernel` weights matrix
             (see [constraints](../constraints.md)).
+        attention_context_wa_constraint2: Constraint function applied to
+            the `attention_context_wa_kernel2` weights matrix
+            (see [constraints](../constraints.md)).
         bias_constraint: Constraint function applied to the bias vector
+            (see [constraints](../constraints.md)).
+        bias_constraint2: Constraint function applied to the bias2 vector
             (see [constraints](../constraints.md)).
         bias_ba_constraint: Constraint function applied to
             the `bias_ba` weights matrix
             (see [constraints](../constraints.md)).
+        bias_ba_constraint2: Constraint function applied to
+            the `bias_ba2` weights matrix
+            (see [constraints](../constraints.md)).
         bias_ca_constraint: Constraint function applied to
             the `bias_ca` weights matrix
+            (see [constraints](../constraints.md)).
+        bias_ca_constraint2: Constraint function applied to
+            the `bias_ca2` weights matrix
             (see [constraints](../constraints.md)).
         dropout: Float between 0 and 1.
             Fraction of the units to drop for
             the linear transformation of the context.
+        dropout2: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the context2.
         recurrent_dropout: Float between 0 and 1.
             Fraction of the units to drop for
             the linear transformation of the recurrent state.
         conditional_dropout: Float between 0 and 1.
             Fraction of the units to drop for
             the linear transformation of the input.
-        conditional_dropout: Float between 0 and 1.
-            Fraction of the units to drop for
-            the linear transformation of the input.
         attention_dropout: Float between 0 and 1.
             Fraction of the units to drop for
             the linear transformation of the attention mechanism.
+        attention_dropout2: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the attention mechanism2.
         num_inputs: Number of inputs of the layer.
 
     # References
@@ -5688,27 +5896,27 @@ class AttConditionalLSTMCond2Inputs(Recurrent):
     """
 
     def __init__(self, units,
+                 attention_mode='add',
                  att_units1=0,
                  att_units2=0,
-                 return_states=False,
-                 attention_mode='add',
-                 activation='tanh',
-                 recurrent_activation='sigmoid',
                  return_extra_variables=False,
                  attend_on_both=False,
+                 return_states=False,
+                 activation='tanh',
+                 recurrent_activation='sigmoid',
                  use_bias=True,
                  unit_forget_bias=True,
                  mask_value=0.,
                  kernel_initializer='glorot_uniform',
                  kernel_initializer2='glorot_uniform',
                  conditional_initializer='glorot_uniform',
+                 recurrent_initializer='orthogonal',
                  attention_recurrent_initializer='glorot_uniform',
                  attention_recurrent_initializer2='glorot_uniform',
                  attention_context_initializer='glorot_uniform',
                  attention_context_initializer2='glorot_uniform',
                  attention_context_wa_initializer='glorot_uniform',
                  attention_context_wa_initializer2='glorot_uniform',
-                 recurrent_initializer='orthogonal',
                  bias_initializer='zeros',
                  bias_initializer2='zeros',
                  bias_ba_initializer='zeros',
@@ -5717,16 +5925,16 @@ class AttConditionalLSTMCond2Inputs(Recurrent):
                  bias_ca_initializer2='zero',
                  kernel_regularizer=None,
                  kernel_regularizer2=None,
-                 conditional_regularizer=None,
                  recurrent_regularizer=None,
+                 conditional_regularizer=None,
                  bias_regularizer=None,
                  bias_regularizer2=None,
+                 attention_recurrent_regularizer=None,
+                 attention_recurrent_regularizer2=None,
                  attention_context_regularizer=None,
                  attention_context_regularizer2=None,
                  attention_context_wa_regularizer=None,
                  attention_context_wa_regularizer2=None,
-                 attention_recurrent_regularizer=None,
-                 attention_recurrent_regularizer2=None,
                  bias_ba_regularizer=None,
                  bias_ba_regularizer2=None,
                  bias_ca_regularizer=None,
@@ -5855,7 +6063,7 @@ class AttConditionalLSTMCond2Inputs(Recurrent):
             self.input_spec.append(InputSpec(ndim=2))
 
     def build(self, input_shape):
-        assert len(input_shape) >= 3 or 'You should pass three inputs to AttLSTMCond2Inputs ' \
+        assert len(input_shape) >= 3 or 'You should pass three inputs to AttConditionalLSTMCond2Inputs ' \
                                         '(previous_embedded_words, context1 and context2) and ' \
                                         'two optional inputs (init_state and init_memory)'
         self.input_dim = input_shape[0][2]
@@ -5869,10 +6077,10 @@ class AttConditionalLSTMCond2Inputs(Recurrent):
         if self.attend_on_both:
             assert K.ndim(self.input_spec[1]) == 3 and K.ndim(self.input_spec[2]), 'When using two attention models,' \
                                                                                    'you should pass two 3D tensors' \
-                                                                                   'to AttLSTMCond2Inputs'
+                                                                                   'to AttConditionalLSTMCond2Inputs'
         else:
             assert K.ndim(self.input_spec[1]) == 3, 'When using an attention model, you should pass one 3D tensors' \
-                                                    'to AttLSTMCond2Inputs'
+                                                    'to AttConditionalLSTMCond2Inputs'
 
         if K.ndim(self.input_spec[1]) == 3:
             self.context1_steps = input_shape[1][1]
@@ -6532,9 +6740,13 @@ class AttLSTMCond3Inputs(Recurrent):
 
     # Arguments
         units: Positive integer, dimensionality of the output space.
-        att_units:  Positive integer, dimensionality of the attention space.
+        att_units1:  Positive integer, dimensionality of the first attention space.
+        att_units2:  Positive integer, dimensionality of the second attention space.
+        att_units3:  Positive integer, dimensionality of the third attention space.
         return_extra_variables: Return the attended context vectors and the attention weights (alphas)
+        attend_on_both: Boolean, wether attend on both inputs or not.
         return_states: Whether it should return the internal RNN states.
+        attention_mode: 'add', 'dot' or custom function.
         activation: Activation function to use
             (see [activations](../activations.md)).
             If you pass None, no activation is applied
@@ -6543,7 +6755,15 @@ class AttLSTMCond3Inputs(Recurrent):
             for the recurrent step
             (see [activations](../activations.md)).
         use_bias: Boolean, whether the layer uses a bias vector.
+        unit_forget_bias: Boolean, whether the forget gate uses a bias vector.
+        mask_value: Value of the mask of the context (0. by default)
         kernel_initializer: Initializer for the `kernel` weights matrix,
+            used for the linear transformation of the inputs
+            (see [initializers](../initializers.md)).
+        kernel_initializer2: Initializer for the `kernel2` weights matrix,
+            used for the linear transformation of the inputs
+            (see [initializers](../initializers.md)).
+        kernel_initializer3: Initializer for the `kernel3` weights matrix,
             used for the linear transformation of the inputs
             (see [initializers](../initializers.md)).
         conditional_initializer: Initializer for the `conditional_kernel`
@@ -6557,7 +6777,21 @@ class AttLSTMCond3Inputs(Recurrent):
         attention_recurrent_initializer:  Initializer for the `attention_recurrent_kernel`
             weights matrix, used for the linear transformation of the conditional inputs
             (see [initializers](../initializers.md)).
+        attention_recurrent_initializer2:  Initializer for the `attention_recurrent_kernel2`
+            weights matrix, used for the linear transformation of the conditional inputs
+            (see [initializers](../initializers.md)).
+        attention_recurrent_initializer3:  Initializer for the `attention_recurrent_kernel3`
+            weights matrix, used for the linear transformation of the conditional inputs
+            (see [initializers](../initializers.md)).
         attention_context_initializer:  Initializer for the `attention_context_kernel`
+            weights matrix,
+            used for the linear transformation of the attention context inputs
+            (see [initializers](../initializers.md)).
+        attention_context_initializer2:  Initializer for the `attention_context_kernel2`
+            weights matrix,
+            used for the linear transformation of the attention context inputs
+            (see [initializers](../initializers.md)).
+        attention_context_initializer3:  Initializer for the `attention_context_kernel3`
             weights matrix,
             used for the linear transformation of the attention context inputs
             (see [initializers](../initializers.md)).
@@ -6565,15 +6799,40 @@ class AttLSTMCond3Inputs(Recurrent):
             weights matrix,
             used for the linear transformation of the attention context
             (see [initializers](../initializers.md)).
+        attention_context_wa_initializer2:  Initializer for the `attention_wa_kernel2`
+            weights matrix,
+            used for the linear transformation of the attention context
+            (see [initializers](../initializers.md)).
+        attention_context_wa_initializer3:  Initializer for the `attention_wa_kernel3`
+            weights matrix,
+            used for the linear transformation of the attention context
+            (see [initializers](../initializers.md)).
         bias_initializer: Initializer for the bias vector
+            (see [initializers](../initializers.md)).
+        bias_initializer2: Initializer for the bias vector 2
+            (see [initializers](../initializers.md)).
+        bias_initializer3: Initializer for the bias vector 3
             (see [initializers](../initializers.md)).
         bias_ba_initializer: Initializer for the bias_ba vector from the attention mechanism
             (see [initializers](../initializers.md)).
+        bias_ba_initializer2: Initializer for the bias_ba2 vector from the attention mechanism
+            (see [initializers](../initializers.md)).
+        bias_ba_initializer3: Initializer for the bias_ba3 vector from the attention mechanism
+            (see [initializers](../initializers.md)).
         bias_ca_initializer: Initializer for the bias_ca vector from the attention mechanism
             (see [initializers](../initializers.md)).
-        mask_value: Value of the mask of the context (0. by default)
+        bias_ca_initializer2: Initializer for the bias_ca2 vector from the attention mechanism
+            (see [initializers](../initializers.md)).
+        bias_ca_initializer3: Initializer for the bias_ca3 vector from the attention mechanism
+            (see [initializers](../initializers.md)).
         kernel_regularizer: Regularizer function applied to
             the `kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        kernel_regularizer2: Regularizer function applied to
+            the `kernel2` weights matrix
+            (see [regularizer](../regularizers.md)).
+        kernel_regularizer3: Regularizer function applied to
+            the `kernel3` weights matrix
             (see [regularizer](../regularizers.md)).
         recurrent_regularizer: Regularizer function applied to
             the `recurrent_kernel` weights matrix
@@ -6581,26 +6840,59 @@ class AttLSTMCond3Inputs(Recurrent):
         conditional_regularizer: Regularizer function applied to
             the `conditional_kernel` weights matrix
             (see [regularizer](../regularizers.md)).
+        bias_regularizer: Regularizer function applied to the bias vector
+            (see [regularizer](../regularizers.md)).
+        bias_regularizer2: Regularizer function applied to the bias2 vector
+            (see [regularizer](../regularizers.md)).
+        bias_regularizer3: Regularizer function applied to the bias3 vector
+            (see [regularizer](../regularizers.md)).
         attention_recurrent_regularizer:  Regularizer function applied to
             the `attention_recurrent__kernel` weights matrix
+            (see [regularizer](../regularizers.md)).
+        attention_recurrent_regularizer2:  Regularizer function applied to
+            the `attention_recurrent__kernel2` weights matrix
+            (see [regularizer](../regularizers.md)).
+        attention_recurrent_regularizer3:  Regularizer function applied to
+            the `attention_recurrent__kernel3` weights matrix
             (see [regularizer](../regularizers.md)).
         attention_context_regularizer:  Regularizer function applied to
             the `attention_context_kernel` weights matrix
             (see [regularizer](../regularizers.md)).
+        attention_context_regularizer2:  Regularizer function applied to
+            the `attention_context_kernel2` weights matrix
+            (see [regularizer](../regularizers.md)).
+        attention_context_regularizer3:  Regularizer function applied to
+            the `attention_context_kernel3` weights matrix
+            (see [regularizer](../regularizers.md)).
         attention_context_wa_regularizer:  Regularizer function applied to
             the `attention_context_wa_kernel` weights matrix
             (see [regularizer](../regularizers.md)).
-        bias_regularizer: Regularizer function applied to the bias vector
+        attention_context_wa_regularizer2:  Regularizer function applied to
+            the `attention_context_wa_kernel2` weights matrix
+            (see [regularizer](../regularizers.md)).
+        attention_context_wa_regularizer3:  Regularizer function applied to
+            the `attention_context_wa_kernel3` weights matrix
             (see [regularizer](../regularizers.md)).
         bias_ba_regularizer:  Regularizer function applied to the bias_ba vector
             (see [regularizer](../regularizers.md)).
+        bias_ba_regularizer2:  Regularizer function applied to the bias_ba2 vector
+            (see [regularizer](../regularizers.md)).
+        bias_ba_regularizer3:  Regularizer function applied to the bias_ba3 vector
+            (see [regularizer](../regularizers.md)).
         bias_ca_regularizer:  Regularizer function applied to the bias_ca vector
             (see [regularizer](../regularizers.md)).
-        activity_regularizer: Regularizer function applied to
-            the output of the layer (its "activation").
+        bias_ca_regularizer2:  Regularizer function applied to the bias_ca2 vector
+            (see [regularizer](../regularizers.md)).
+        bias_ca_regularizer3:  Regularizer function applied to the bias_ca3 vector
             (see [regularizer](../regularizers.md)).
         kernel_constraint: Constraint function applied to
             the `kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        kernel_constraint2: Constraint function applied to
+            the `kernel2` weights matrix
+            (see [constraints](../constraints.md)).
+        kernel_constraint3: Constraint function applied to
+            the `kernel3` weights matrix
             (see [constraints](../constraints.md)).
         recurrent_constraint: Constraint function applied to
             the `recurrent_kernel` weights matrix
@@ -6611,35 +6903,78 @@ class AttLSTMCond3Inputs(Recurrent):
         attention_recurrent_constraint: Constraint function applied to
             the `attention_recurrent_kernel` weights matrix
             (see [constraints](../constraints.md)).
+        attention_recurrent_constraint2: Constraint function applied to
+            the `attention_recurrent_kernel2` weights matrix
+            (see [constraints](../constraints.md)).
+        attention_recurrent_constraint3: Constraint function applied to
+            the `attention_recurrent_kernel3` weights matrix
+            (see [constraints](../constraints.md)).
         attention_context_constraint: Constraint function applied to
             the `attention_context_kernel` weights matrix
+            (see [constraints](../constraints.md)).
+        attention_context_constraint2: Constraint function applied to
+            the `attention_context_kernel2` weights matrix
+            (see [constraints](../constraints.md)).
+        attention_context_constraint3: Constraint function applied to
+            the `attention_context_kernel3` weights matrix
             (see [constraints](../constraints.md)).
         attention_context_wa_constraint: Constraint function applied to
             the `attention_context_wa_kernel` weights matrix
             (see [constraints](../constraints.md)).
+        attention_context_wa_constraint2: Constraint function applied to
+            the `attention_context_wa_kernel2` weights matrix
+            (see [constraints](../constraints.md)).
+        attention_context_wa_constraint3: Constraint function applied to
+            the `attention_context_wa_kernel3` weights matrix
+            (see [constraints](../constraints.md)).
         bias_constraint: Constraint function applied to the bias vector
+            (see [constraints](../constraints.md)).
+        bias_constraint2: Constraint function applied to the bias2 vector
+            (see [constraints](../constraints.md)).
+        bias_constraint3: Constraint function applied to the bias3 vector
             (see [constraints](../constraints.md)).
         bias_ba_constraint: Constraint function applied to
             the `bias_ba` weights matrix
             (see [constraints](../constraints.md)).
+        bias_ba_constraint2: Constraint function applied to
+            the `bias_ba2` weights matrix
+            (see [constraints](../constraints.md)).
+        bias_ba_constraint3: Constraint function applied to
+            the `bias_ba3` weights matrix
+            (see [constraints](../constraints.md)).
         bias_ca_constraint: Constraint function applied to
             the `bias_ca` weights matrix
+            (see [constraints](../constraints.md)).
+        bias_ca_constraint2: Constraint function applied to
+            the `bias_ca2` weights matrix
+            (see [constraints](../constraints.md)).
+        bias_ca_constraint3: Constraint function applied to
+            the `bias_ca3` weights matrix
             (see [constraints](../constraints.md)).
         dropout: Float between 0 and 1.
             Fraction of the units to drop for
             the linear transformation of the context.
+        dropout2: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the context2.
+        dropout3: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the context3.
         recurrent_dropout: Float between 0 and 1.
             Fraction of the units to drop for
             the linear transformation of the recurrent state.
         conditional_dropout: Float between 0 and 1.
             Fraction of the units to drop for
             the linear transformation of the input.
-        conditional_dropout: Float between 0 and 1.
-            Fraction of the units to drop for
-            the linear transformation of the input.
         attention_dropout: Float between 0 and 1.
             Fraction of the units to drop for
             the linear transformation of the attention mechanism.
+        attention_dropout2: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the attention mechanism2.
+        attention_dropout3: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the attention mechanism3.
         num_inputs: Number of inputs of the layer.
 
     # References
@@ -6654,22 +6989,20 @@ class AttLSTMCond3Inputs(Recurrent):
                  att_units1=0,
                  att_units2=0,
                  att_units3=0,
+                 return_extra_variables=False,
+                 attend_on_both=False,
+                 return_states=False,
                  attention_mode='add',
                  activation='tanh',
                  recurrent_activation='sigmoid',
-                 return_states=False,
-                 return_extra_variables=False,
-                 attend_on_both=False,
                  use_bias=True,
                  unit_forget_bias=True,
                  mask_value=0.,
-                 init='glorot_uniform',
-                 inner_init='orthogonal',
-                 init_att='glorot_uniform',
                  kernel_initializer='glorot_uniform',
                  kernel_initializer2='glorot_uniform',
                  kernel_initializer3='glorot_uniform',
                  conditional_initializer='glorot_uniform',
+                 recurrent_initializer='orthogonal',
                  attention_recurrent_initializer='glorot_uniform',
                  attention_recurrent_initializer2='glorot_uniform',
                  attention_recurrent_initializer3='glorot_uniform',
@@ -6679,7 +7012,6 @@ class AttLSTMCond3Inputs(Recurrent):
                  attention_context_wa_initializer='glorot_uniform',
                  attention_context_wa_initializer2='glorot_uniform',
                  attention_context_wa_initializer3='glorot_uniform',
-                 recurrent_initializer='orthogonal',
                  bias_initializer='zeros',
                  bias_initializer2='zeros',
                  bias_initializer3='zeros',
@@ -6692,20 +7024,20 @@ class AttLSTMCond3Inputs(Recurrent):
                  kernel_regularizer=None,
                  kernel_regularizer2=None,
                  kernel_regularizer3=None,
-                 conditional_regularizer=None,
                  recurrent_regularizer=None,
+                 conditional_regularizer=None,
                  bias_regularizer=None,
                  bias_regularizer2=None,
                  bias_regularizer3=None,
+                 attention_recurrent_regularizer=None,
+                 attention_recurrent_regularizer2=None,
+                 attention_recurrent_regularizer3=None,
                  attention_context_regularizer=None,
                  attention_context_regularizer2=None,
                  attention_context_regularizer3=None,
                  attention_context_wa_regularizer=None,
                  attention_context_wa_regularizer2=None,
                  attention_context_wa_regularizer3=None,
-                 attention_recurrent_regularizer=None,
-                 attention_recurrent_regularizer2=None,
-                 attention_recurrent_regularizer3=None,
                  bias_ba_regularizer=None,
                  bias_ba_regularizer2=None,
                  bias_ba_regularizer3=None,
@@ -6859,7 +7191,7 @@ class AttLSTMCond3Inputs(Recurrent):
             self.input_spec.append(InputSpec(ndim=2))
 
     def build(self, input_shape):
-        assert len(input_shape) >= 4 or 'You should pass four inputs to AttLSTMCond2Inputs ' \
+        assert len(input_shape) >= 4 or 'You should pass four inputs to AttLSTMCond3Inputs ' \
                                         '(previous_embedded_words, context1, context2, context3) and ' \
                                         'two optional inputs (init_state and init_memory)'
         self.input_dim = input_shape[0][2]
@@ -6873,7 +7205,7 @@ class AttLSTMCond3Inputs(Recurrent):
         if self.attend_on_both:
             assert K.ndim(self.input_spec[1]) == 3 and K.ndim(self.input_spec[2]) and K.ndim(self.input_spec[3]), 'When using three attention models,' \
                                                                                                                   'you should pass three 3D tensors' \
-                                                                                                                  'to AttLSTMCond2Inputs'
+                                                                                                                  'to AttLSTMCond3Inputs'
         else:
             assert self.input_spec[1].ndim == 3, 'When using an attention model, you should pass one 3D tensors' \
                                                  'to AttLSTMCond3Inputs'

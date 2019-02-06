@@ -139,14 +139,14 @@ class Dropout(Layer):
 
 
 class GuidedDropout(Layer):
-    # TODO: Test this layer
+
     """Applies a guided Dropout to the input, where the output activations are set
     to 0 given by the weights of the layer.
+    # TODO: Test this layer
 
-    Inputs:
-        modulated_input: (batch_size, num_features)
-        modulator_input: (batch_size, num_dropout_matrices)
+    # Arguments:
         weights_shape: (num_dropout_matrices, num_features)
+        weights: Initial weights
     """
 
     def __init__(self, weights_shape, weights=None, **kwargs):
@@ -756,6 +756,7 @@ class Lambda(Layer):
           input mask for Embedding.
         arguments: optional dictionary of keyword arguments to be passed
             to the function.
+        supports_masking: whether it supports masking or not
 
     # Input shape
         Arbitrary. Use the keyword argument input_shape
@@ -1105,6 +1106,8 @@ class PositionLayer(Layer):
     shape but with the content:
     [arange(N), arange(N), ..., arange(N)]
 
+    # Arguments
+        maxlen: Integer, maximum length allowed (N)
     # Input shape
         Arbitrary. Use the keyword argument `input_shape`
         when using this layer as the first layer in a model.
@@ -1412,11 +1415,11 @@ class WeightedMerge(Layer):
         This layer learns a set of lambda weights for applying a weighted sum
         for merging the input tensors.
 
-    # Parameters
+    # Arguments
         mode: merge mode used. Possible values are 'sum' (default) or 'mul'.
         init: Initialization function.
         lambdas_regularizer: Regularizers for the weights.
-        weigthts: Initial weights for each element to merge.
+        weights: Initial weights for each element to merge.
 
     # Input shape
         List of tensors of any dimensions but with the same shape.
@@ -1425,7 +1428,10 @@ class WeightedMerge(Layer):
         Tensor with the same number of dimensions as the input tensors.
     """
 
-    def __init__(self, mode='sum', init='glorot_uniform', lambdas_regularizer=None, weights=None, **kwargs):
+    def __init__(self, mode='sum',
+                 init='glorot_uniform',
+                 lambdas_regularizer=None,
+                 weights=None, **kwargs):
         # self.out_shape = out_shape
         self._valid_modes = ['sum', 'mul']
 
@@ -1551,7 +1557,7 @@ class ZeroesLayer(Layer):
         # as first
 
     # Arguments
-        units: int > 0.
+        output_dim: int > 0.
         input_dim: dimensionality of the input (integer). This argument
             (or alternatively, the keyword argument `input_shape`)
             is required when using this layer as the first layer in a model.
@@ -1731,6 +1737,9 @@ class PositionwiseFeedForwardDense(Layer):
             (see [activations](../activations.md)).
             If you don't specify anything, no activation is applied
             (ie. "linear" activation: `a(inputs) = inputs`).
+        dropout: Float between 0 and 1.
+            Fraction of the units to drop for
+            the linear transformation of the context.
         use_bias: Boolean, whether the layer uses a bias vector.
         kernel_initializer: Initializer for the `kernel` weights matrix
             (see [initializers](../initializers.md)).
@@ -1869,6 +1878,10 @@ class PositionwiseFeedForwardDense(Layer):
 
 class Slice(Layer):
     """Slices the input with the provided min-max indices.
+
+    # Arguments
+        min_idx: Integer indicating the start indices of the slice
+        max_idx: Integer final indices of the slice
 
     # Input shape
         2D tensor

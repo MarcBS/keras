@@ -156,6 +156,12 @@ class ChannelWisePReLU(Layer):
     `f(x) = x for x >= 0`,
     where `alphas` is a learned vector with the same number of elments as channels has x (or features).
 
+    # Arguments
+        init: initialization function for the weights.
+        weights: initial weights, as a list of a single Numpy array.
+        channels_shared: True if we use the same parameter for all channeles or False if not.
+        axis: Channels axis.
+
     # Input shape
         Arbitrary. Use the keyword argument `input_shape`
         (tuple of integers, does not include the samples axis)
@@ -164,11 +170,6 @@ class ChannelWisePReLU(Layer):
     # Output shape
         Same shape as the input.
 
-    # Arguments
-        kernel_initializer: initialization function for the weights.
-        weights: initial weights, as a list of a single Numpy array.
-        channels_shared: True if we use the same parameter for all channeles or False if not.
-        axis: Channels axis.
     # References
         - [Delving Deep into Rectifiers: Surpassing Human-Level Performance on ImageNet Classification](http://arxiv.org/pdf/1502.01852v1.pdf)
     """
