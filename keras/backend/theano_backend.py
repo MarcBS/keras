@@ -4557,6 +4557,13 @@ def local_conv2d(inputs,
         output = permute_dimensions(output, (2, 0, 1, 3))
     return output
 
+def ctc_label_dense_to_sparse(labels, label_lengths):
+    raise NotImplementedError
+
+
+def ctc_decode(y_pred, input_length, greedy=True, beam_width=100, top_paths=1):
+    raise NotImplementedError
+
 
 # modified from the one included in np_utils.py
 def conv_input_length(output_length, filter_size, border_mode, stride):
