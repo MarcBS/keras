@@ -149,6 +149,7 @@ from .load_backend import normalize_data_format
 from .load_backend import name_scope
 
 # Set Keras' recursion limit high enough.
+import sys
 sys.setrecursionlimit(10000)
 
 if backend() == 'theano':
