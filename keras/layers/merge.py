@@ -193,7 +193,7 @@ class _Merge(Layer):
                              'should have the same length.')
         if all([m is None for m in mask]):
             return None
-        masks = [K.expand_dims(m, 0) for m in mask if m is not None]
+        masks = [K.expand_dims(K.cast(m, K.floatx()), 0) for m in mask if m is not None]
         return K.all(K.concatenate(masks, axis=0), axis=0, keepdims=False)
 
 
