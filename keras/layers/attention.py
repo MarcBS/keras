@@ -27,6 +27,7 @@ class MultiHeadAttention(Layer):
             (see [activations](../activations.md)).
             If you pass None, no activation is applied
             (ie. "linear" activation: `a(x) = x`).
+        use_bias: Use bias in the Multi-head projections.
         kernel_initializer: Initializer for the `kernel` weights matrix,
             used for the linear transformation of the inputs
             (see [initializers](../initializers.md)).
@@ -61,6 +62,7 @@ class MultiHeadAttention(Layer):
                  mask_future=False,
                  dropout=0.,
                  activation='relu',
+                 use_bias=False,
                  kernel_initializer='glorot_uniform',
                  kernel_regularizer=None,
                  activity_regularizer=None,
@@ -78,11 +80,11 @@ class MultiHeadAttention(Layer):
         self.dv = dmodel // n_heads
         self.dropout = dropout
         self.activation = activations.get(activation)
+        self.use_bias = use_bias
         self.kernel_initializer = initializers.get(kernel_initializer)
         self.kernel_regularizer = regularizers.get(kernel_regularizer)
         self.kernel_constraint = constraints.get(kernel_constraint)
         self.activity_regularizer = regularizers.get(activity_regularizer)
-
         self.bias_initializer = initializers.get(bias_initializer)
         self.bias_regularizer = regularizers.get(bias_regularizer)
         self.bias_constraint = constraints.get(bias_constraint)
@@ -110,46 +112,52 @@ class MultiHeadAttention(Layer):
                                         regularizer=self.kernel_regularizer,
                                         constraint=self.kernel_constraint)
 
-        self.bias_q = self.add_weight(shape=(query_dim,),
-                                      initializer=self.bias_initializer,
-                                      name='bias_q',
-                                      regularizer=self.bias_regularizer,
-                                      constraint=self.bias_constraint)
-
         self.linear_k = self.add_weight(shape=(key_dim, self.dk * self.n_heads),
                                         initializer=self.kernel_initializer,
                                         name='linear_k',
                                         regularizer=self.kernel_regularizer,
                                         constraint=self.kernel_constraint)
 
-        self.bias_k = self.add_weight(shape=(key_dim,),
-                                      initializer=self.bias_initializer,
-                                      name='bias_k',
-                                      regularizer=self.bias_regularizer,
-                                      constraint=self.bias_constraint)
-
         self.linear_v = self.add_weight(shape=(key_dim, self.dv * self.n_heads),
                                         initializer=self.kernel_initializer,
                                         name='linear_v',
                                         regularizer=self.kernel_regularizer,
                                         constraint=self.kernel_constraint)
-        self.bias_v = self.add_weight(shape=(key_dim,),
-                                      initializer=self.bias_initializer,
-                                      name='bias_v',
-                                      regularizer=self.bias_regularizer,
-                                      constraint=self.bias_constraint)
 
         self.linear_o = self.add_weight(shape=(self.dv * self.n_heads, self.dmodel),
                                         initializer=self.kernel_initializer,
                                         name='linear_o',
                                         regularizer=self.kernel_regularizer,
                                         constraint=self.kernel_constraint)
+        if self.use_bias:
+            self.bias_q = self.add_weight(shape=(query_dim,),
+                                          initializer=self.bias_initializer,
+                                          name='bias_q',
+                                          regularizer=self.bias_regularizer,
+                                          constraint=self.bias_constraint)
 
-        self.bias_o = self.add_weight(shape=(key_dim,),
-                                      initializer=self.bias_initializer,
-                                      name='bias_o',
-                                      regularizer=self.bias_regularizer,
-                                      constraint=self.bias_constraint)
+            self.bias_k = self.add_weight(shape=(key_dim,),
+                                          initializer=self.bias_initializer,
+                                          name='bias_k',
+                                          regularizer=self.bias_regularizer,
+                                          constraint=self.bias_constraint)
+
+            self.bias_v = self.add_weight(shape=(key_dim,),
+                                          initializer=self.bias_initializer,
+                                          name='bias_v',
+                                          regularizer=self.bias_regularizer,
+                                          constraint=self.bias_constraint)
+
+            self.bias_o = self.add_weight(shape=(key_dim,),
+                                          initializer=self.bias_initializer,
+                                          name='bias_o',
+                                          regularizer=self.bias_regularizer,
+                                          constraint=self.bias_constraint)
+        else:
+            self.bias_q = None
+            self.bias_k = None
+            self.bias_v = None
+            self.bias_o = None
 
         if self.dropout > 0:
             self.dropout_layer = Dropout(self.dropout)
@@ -169,7 +177,7 @@ class MultiHeadAttention(Layer):
             key *= mask_key[:, :, None]
 
         # Do linear projections. Shapes: batch_size, timesteps, dmodel*n_heads
-        queries, keys, values = [self.activation(K.bias_add(K.dot_product(x, kernel), bias))
+        queries, keys, values = [self.activation(K.bias_add(K.dot_product(x, kernel), bias)) if self.use_bias else self.activation(K.dot_product(x, kernel))
                                  for kernel, bias, x in zip([self.linear_q, self.linear_k, self.linear_v],
                                                             [self.bias_q, self.bias_k, self.bias_v],
                                                             (query, key, key))]
@@ -222,7 +230,7 @@ class MultiHeadAttention(Layer):
         attended_heads = K.concatenate([attended_heads[i * nb_samples: (i + 1) * nb_samples, :, :] for i in range(self.n_heads)], axis=2)  # batch_size, timesteps, dmodel
 
         # Apply the final linear
-        output = self.activation(K.bias_add(K.dot_product(attended_heads, self.linear_o), self.bias_o))
+        output = self.activation(K.bias_add(K.dot_product(attended_heads, self.linear_o), self.bias_o)) if self.use_bias else self.activation(K.dot_product(attended_heads, self.linear_o))
         return output
 
     def compute_mask(self, inputs, mask=None):
