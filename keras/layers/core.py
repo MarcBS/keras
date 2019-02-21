@@ -1135,6 +1135,36 @@ class PositionLayer(Layer):
         return dict(list(base_config.items()))
 
 
+class RemoveThirdDimension(Layer):
+    """
+    Removes the third dimension of a 3D tensor.
+
+    # Input shape
+        3D. Use the keyword argument `input_shape`
+        when using this layer as the first layer in a model.
+
+    # Output shape
+        Same shape as input but without the last dimension.
+    """
+
+    def __init__(self, **kwargs):
+        self.supports_masking = True
+        super(RemoveThirdDimension, self).__init__(**kwargs)
+
+    def call(self, inputs, mask=None):
+        return inputs[:, :, 0]
+
+    def compute_mask(self, input_shape, input_mask=None):
+        return input_mask
+
+    def compute_output_shape(self, input_shape):
+        return input_shape[:-1]
+
+    def get_config(self):
+        base_config = super(RemoveThirdDimension, self).get_config()
+        return dict(list(base_config.items()))
+
+
 class MaskedMean(Layer):
     """
     This layer is called after an Embedding layer.
