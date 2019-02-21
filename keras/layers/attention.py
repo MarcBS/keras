@@ -254,6 +254,7 @@ class MultiHeadAttention(Layer):
             'n_heads': self.n_heads,
             'dmodel': self.dmodel,
             'activation': activations.serialize(self.activation),
+            'use_bias': self.use_bias,
             'kernel_initializer': initializers.serialize(self.kernel_initializer),
             'kernel_regularizer': regularizers.serialize(self.kernel_regularizer),
             'kernel_constraint': constraints.serialize(self.kernel_constraint),

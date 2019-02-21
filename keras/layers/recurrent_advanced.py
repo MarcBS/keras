@@ -88,7 +88,7 @@ def compute_attention(h_tm1, pctx_, context, att_dp_mask, attention_recurrent_ke
     else:
         raise NotImplementedError('The attention mode ' + attention_mode + ' is not implemented.')
 
-    if K.ndim(mask_context) > 1:  # Mask the context (only if necessary)
+    if mask_context is not None and K.ndim(mask_context) > 1:  # Mask the context (only if necessary)
         e = K.cast(mask_context, K.dtype(e)) * e
     alphas = K.softmax(K.reshape(e, [K.shape(e)[0], K.shape(e)[1]]))
 
@@ -957,7 +957,7 @@ class AttGRU(Recurrent):
         context = states[7]  # Original context
 
         ctx_, alphas = compute_attention(h_tm1, pctx_, context, att_dp_mask, self.attention_recurrent_kernel,
-                                         self.attention_context_wa, self.bias_ca, mask_context,
+                                         self.attention_context_wa, self.bias_ca, None,
                                          attention_mode=self.attention_mode)
 
         matrix_x = x + K.dot(ctx_ * dp_mask[0], self.kernel)
@@ -2815,6 +2815,7 @@ class LSTMCond(Recurrent):
         config = {'units': self.units,
                   'activation': activations.serialize(self.activation),
                   'recurrent_activation': activations.serialize(self.recurrent_activation),
+                  'use_bias': self.use_bias,
                   'return_states': self.return_states,
                   'kernel_initializer': initializers.serialize(self.kernel_initializer),
                   'recurrent_initializer': initializers.serialize(self.recurrent_initializer),
@@ -3285,8 +3286,8 @@ class AttLSTM(Recurrent):
         pctx_ = states[7]  # Projected context (i.e. context * Ua + ba)
 
         # Attention model (see Formulation in class header)
-        ctx_, alphas = compute_attention(h_tm1, pctx_, context, att_dp_mask, self.attention_recurrent_kernel,
-                                         self.attention_context_wa, self.bias_ca, mask_context,
+        ctx_, alphas = compute_attention(h_tm1, pctx_, pctx_, att_dp_mask, self.attention_recurrent_kernel,
+                                         self.attention_context_wa, self.bias_ca, None,
                                          attention_mode=self.attention_mode)
         # LSTM
         z = x + \
@@ -3403,6 +3404,7 @@ class AttLSTM(Recurrent):
                   'recurrent_activation': activations.serialize(self.recurrent_activation),
                   'return_extra_variables': self.return_extra_variables,
                   'return_states': self.return_states,
+                  'use_bias': self.use_bias,
                   'kernel_initializer': initializers.serialize(self.kernel_initializer),
                   'recurrent_initializer': initializers.serialize(self.recurrent_initializer),
                   'attention_recurrent_initializer': initializers.serialize(self.attention_recurrent_initializer),
@@ -5430,7 +5432,7 @@ class AttLSTMCond2Inputs(Recurrent):
             pctx_1 = mask_context1[:, :, None] * pctx_1
             context1 = mask_context1[:, :, None] * context1
 
-        ctx_1, alphas1 = compute_attention(h_tm1, pctx_1, context, att_dp_mask, self.attention_recurrent_kernel,
+        ctx_1, alphas1 = compute_attention(h_tm1, pctx_1, context1, att_dp_mask, self.attention_recurrent_kernel,
                                            self.attention_context_wa, self.bias_ca, mask_context1,
                                            attention_mode=self.attention_mode)
 
@@ -5440,7 +5442,7 @@ class AttLSTMCond2Inputs(Recurrent):
                 context2 = mask_context2[:, :, None] * context2
 
             # Attention model 2 (see Formulation in class header)
-            ctx_2, alphas2 = compute_attention(h_tm1, pctx_1, context, att_dp_mask2, self.attention_recurrent_kernel2,
+            ctx_2, alphas2 = compute_attention(h_tm1, pctx_1, context2, att_dp_mask2, self.attention_recurrent_kernel2,
                                                self.attention_context_wa2, self.bias_ca2, mask_context2,
                                                attention_mode=self.attention_mode)
         else:
@@ -5454,7 +5456,7 @@ class AttLSTMCond2Inputs(Recurrent):
         if self.use_bias:
             z = K.bias_add(z, self.bias)
             if self.attend_on_both:
-                z = K.bias_add(z_, self.bias2)
+                z = K.bias_add(z, self.bias2)
         z0 = z[:, :self.units]
         z1 = z[:, self.units: 2 * self.units]
         z2 = z[:, 2 * self.units: 3 * self.units]
@@ -6455,7 +6457,7 @@ class AttConditionalLSTMCond2Inputs(Recurrent):
         h_ = o_ * self.activation(c_)
 
         # Attention model 1 (see Formulation in class header)
-        ctx_, alphas = compute_attention(h_, pctx_1, context, att_dp_mask, self.attention_recurrent_kernel,
+        ctx_, alphas = compute_attention(h_, pctx_1, context1, att_dp_mask, self.attention_recurrent_kernel,
                                          self.attention_context_wa, self.bias_ca, mask_context1,
                                          attention_mode=self.attention_mode)
 
@@ -6464,7 +6466,7 @@ class AttConditionalLSTMCond2Inputs(Recurrent):
                 pctx_2 = mask_context2[:, :, None] * pctx_2
                 context2 = mask_context2[:, :, None] * context2
             # Attention model 2 (see Formulation in class header)
-            ctx_2, alphas2 = compute_attention(h_, pctx_1, context, att_dp_mask2, self.attention_recurrent_kernel2,
+            ctx_2, alphas2 = compute_attention(h_, pctx_1, context2, att_dp_mask2, self.attention_recurrent_kernel2,
                                                self.attention_context_wa2, self.bias_ca2, mask_context2,
                                                attention_mode=self.attention_mode)
         else:
@@ -6475,7 +6477,7 @@ class AttConditionalLSTMCond2Inputs(Recurrent):
         z = x + \
             K.dot(h_ * rec_dp_mask[0], self.recurrent_kernel) + \
             K.dot(ctx_2 * dp_mask2[0], self.kernel2) + \
-            K.dot(ctx_1 * dp_mask[0], self.kernel)
+            K.dot(ctx_ * dp_mask[0], self.kernel)
         if self.use_bias:
             z = K.bias_add(z, self.bias)
             if self.attend_on_both:
@@ -6490,7 +6492,7 @@ class AttConditionalLSTMCond2Inputs(Recurrent):
         c = f * c_ + i * self.activation(z2)
         o = self.recurrent_activation(z3)
         h = o * self.activation(c)
-        return h, [h, c, ctx_1, alphas1, ctx_2, alphas2]
+        return h, [h, c, ctx_, alphas, ctx_2, alphas2]
 
     def get_constants(self, inputs, mask_context1, mask_context2, training=None):
         constants = []
@@ -7570,11 +7572,11 @@ class AttLSTMCond3Inputs(Recurrent):
 
         if self.attend_on_both:
             # Attention model 2 (see Formulation in class header)
-            ctx_2, alphas2 = compute_attention(h_tm1, pctx_, context, B_Wa2, self.Wa2,
+            ctx_2, alphas2 = compute_attention(h_tm1, pctx_2, context2, B_Wa2, self.Wa2,
                                                self.wa2, self.ca2, mask_context2,
                                                attention_mode=self.attention_mode)
             # Attention model 3 (see Formulation in class header)
-            ctx_3, alphas3 = compute_attention(h_tm1, pctx_, context, B_Wa3, self.Wa3,
+            ctx_3, alphas3 = compute_attention(h_tm1, pctx_3, context3, B_Wa3, self.Wa3,
                                                self.wa3, self.ca3, mask_context3,
                                                attention_mode=self.attention_mode)
         else:
@@ -7838,6 +7840,7 @@ class AttLSTMCond3Inputs(Recurrent):
                   "unit_forget_bias": initializers.serialize(self.forget_bias_init),
                   "activation": activations.serialize(self.activation),
                   'attention_mode': self.attention_mode,
+                  'use_bias': self.use_bias,
                   "recurrent_activation": activations.serialize(self.inner_activation),
                   "S_regularizer": self.S_regularizer.get_config() if self.S_regularizer else None,
                   "T_regularizer": self.T_regularizer.get_config() if self.T_regularizer else None,
