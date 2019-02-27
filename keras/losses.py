@@ -118,6 +118,44 @@ def log_diff(args):
     cost_difference = K.switch(cost_difference > -1., cost_difference, 0.)
     return cost_difference
 
+
+def minmax_categorical_crossentropy(args):
+    """Minmax_categorical_crossentropy loss.
+
+    # Arguments
+        args: y_true, y_pred, h_true, h_pred, mask_y, mask_h, weight_y, weight_h
+
+    # Returns
+        weight_y * xent(mask_y * y_true, y_pred) +
+         weight_h * xent(mask_h * h_true, h_pred)
+
+    """
+    y_true, y_pred, h_true, h_pred, mask_y, mask_h, weight_y, weight_h = args
+    ce_y = categorical_crossentropy(mask_y[:, :, None] * y_true, y_pred)
+    ce_h = categorical_crossentropy(mask_h[:, :, None] * h_true, h_pred)
+    ce_y = weight_y[:, :, None] * ce_y
+    ce_h = weight_h[:, :, None] * ce_h
+    return ce_y + ce_h
+
+
+def weighted_log_diff(args):
+    """Cross-entropy difference between a GT and a hypothesis.
+
+    # Arguments
+         args: y_pred, y_true, h_pred, h_true.
+
+    # Returns
+        cost_difference(categorical_crossentropy(y_true, y_pred) -
+                        weight * categorical_crossentropy(h_true, h_pred)).
+    """
+    y_true, y_pred, h_true, h_pred, mask_y, mask_h, weight = args
+    ce_y = categorical_crossentropy(mask_y[:, :, None] * y_true,
+                                    mask_y[:, :, None] * y_pred)
+    ce_h = categorical_crossentropy(mask_h[:, :, None] * h_true,
+                                    mask_h[:, :, None] * h_pred)
+
+    return ce_y - weight[:, :, None] * ce_h
+
 # Aliases.
 
 mse = MSE = mean_squared_error
@@ -126,6 +164,7 @@ mape = MAPE = mean_absolute_percentage_error
 msle = MSLE = mean_squared_logarithmic_error
 kld = KLD = kullback_leibler_divergence
 cosine = cosine_proximity
+pas_weighted_log_diff = weighted_log_diff
 
 
 def serialize(loss):
