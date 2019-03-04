@@ -5,7 +5,7 @@ import json
 
 import keras.backend.tensorflow_backend
 import keras.backend.theano_backend
-import keras.backend.cntk_backend
+# import keras.backend.cntk_backend
 import keras.backend.numpy_backend
 import keras.utils.test_utils
 
