@@ -478,8 +478,7 @@ class SGDHD(Optimizer):
         Online Learning Rate Adaptation with Hypergradient Descent (https://openreview.net/forum?id=BkrsAzWAb)
     """
 
-    def __init__(self, lr=0.01, momentum=0., decay=0.,
-                 nesterov=False, hypergrad_lr=1e-3, **kwargs):
+    def __init__(self, lr=0.01, momentum=0., decay=0., nesterov=False, hypergrad_lr=1e-4, **kwargs):
         super(SGDHD, self).__init__(**kwargs)
         with K.name_scope(self.__class__.__name__):
             self.iterations = K.variable(0, dtype='int64', name='iterations')
