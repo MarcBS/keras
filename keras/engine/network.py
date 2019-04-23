@@ -960,7 +960,7 @@ class Network(Layer):
         def add_unprocessed_node(layer, node_data):
             """Add node to layer list
 
-            Args:
+            # Arguments
                 layer: layer object
                 node_data: Node data specifying layer call
             """
@@ -972,11 +972,11 @@ class Network(Layer):
         def process_node(layer, node_data):
             """Reconstruct node by linking to inbound layers
 
-            Args:
+            # Arguments
                 layer: Layer to process
                 node_data: List of layer configs
 
-            Raises:
+            # Raises
                 ValueError: For incorrect layer config
                 LookupError: If layer required is not found
             """
@@ -1105,7 +1105,11 @@ class Network(Layer):
         was never compiled in the first place).
 
         # Arguments
-            filepath: String, path to the file to save the weights to.
+            filepath: one of the following:
+                - string, path to the file to save the model to
+                - h5py.File or h5py.Group object where to save the model
+                - any file-like object implementing the method `write` that accepts
+                    `bytes` data (e.g. `io.BytesIO`).
             overwrite: Whether to silently overwrite any existing file at the
                 target location, or provide the user with a manual prompt.
             include_optimizer: If True, save optimizer's state together.

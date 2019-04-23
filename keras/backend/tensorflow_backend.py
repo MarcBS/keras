@@ -210,6 +210,7 @@ def get_session():
             else:
                 num_thread = int(os.environ.get('OMP_NUM_THREADS'))
                 config = tf.ConfigProto(intra_op_parallelism_threads=num_thread,
+                                        inter_op_parallelism_threads=num_thread,
                                         allow_soft_placement=True)
 
             config.gpu_options.allow_growth = True  # dynamically grow the memory used on the GPU
@@ -787,7 +788,7 @@ def eye(size, dtype=None, name=None):
     """Instantiate an identity matrix and returns it.
 
     # Arguments
-        size: Integer, number of rows/columns.
+        size: Tuple, number of rows and columns. If Integer, number of rows.
         dtype: String, data type of returned Keras variable.
         name: String, name of returned Keras variable.
 
@@ -797,18 +798,24 @@ def eye(size, dtype=None, name=None):
     # Example
     ```python
         >>> from keras import backend as K
-        >>> kvar = K.eye(3)
-        >>> K.eval(kvar)
+        >>> K.eval(K.eye(3))
         array([[ 1.,  0.,  0.],
                [ 0.,  1.,  0.],
                [ 0.,  0.,  1.]], dtype=float32)
+        >>> K.eval(K.eye((2, 3)))
+        array([[1., 0., 0.],
+               [0., 1., 0.]], dtype=float32)
     ```
     {{np_implementation}}
     """
     if dtype is None:
         dtype = floatx()
     tf_dtype = tf.as_dtype(dtype)
-    return variable(tf.eye(size, dtype=tf_dtype), dtype, name)
+    if isinstance(size, (list, tuple)):
+        n, m = size
+    else:
+        n, m = size, size
+    return variable(tf.eye(n, m, dtype=tf_dtype), dtype, name)
 
 
 def zeros_like(x, dtype=None, name=None):
@@ -834,6 +841,8 @@ def zeros_like(x, dtype=None, name=None):
     ```
     {{np_implementation}}
     """
+    if dtype is None:
+        dtype = floatx()
     return tf.zeros_like(x, dtype=dtype, name=name)
 
 
@@ -860,6 +869,8 @@ def ones_like(x, dtype=None, name=None):
     ```
     {{np_implementation}}
     """
+    if dtype is None:
+        dtype = floatx()
     return tf.ones_like(x, dtype=dtype, name=name)
 
 
@@ -2563,9 +2574,31 @@ def tile(x, n):
 
     # Returns
         A tiled tensor.
+
+    # Example
+    ```python
+        >>> from keras import backend as K
+        >>> kvar = K.variable(np.random.random((2, 3)))
+        >>> kvar_tile = K.tile(K.eye(2), (2, 3))
+        >>> K.eval(kvar_tile)
+        array([[1., 0., 1., 0., 1., 0.],
+               [0., 1., 0., 1., 0., 1.],
+               [1., 0., 1., 0., 1., 0.],
+               [0., 1., 0., 1., 0., 1.]], dtype=float32)
+    ```
+    {{np_implementation}}
     """
     if isinstance(n, int):
-        n = [n]
+        n = (n,)
+    elif isinstance(n, list):
+        n = tuple(n)
+
+    shape = int_shape(x)
+    if len(n) < len(shape):  # Padding the axis
+        n = tuple([1 for _ in range(len(shape) - len(n))]) + n
+    elif len(n) != len(shape):
+        raise NotImplementedError
+
     return tf.tile(x, n)
 
 
@@ -2796,8 +2829,17 @@ def slice(x, start, size):
         new_x = x[start[0]: start[0] + size[0], ..., start[-1]: start[-1] + size[-1]]
         ```
 
+    # Raises
+        ValueError: if the dimension and the size of indices mismatches.
+
     {{np_implementation}}
     """
+    x_shape = int_shape(x)
+    if (x_shape is not None) and (x_shape[0] is not None):
+        len_start = int_shape(start)[0] if is_tensor(start) else len(start)
+        len_size = int_shape(size)[0] if is_tensor(size) else len(size)
+        if not (len(int_shape(x)) == len_start == len_size):
+            raise ValueError('The dimension and the size of indices should match.')
     return tf.slice(x, start, size)
 
 
@@ -4854,8 +4896,8 @@ def ctc_label_dense_to_sparse(labels, label_lengths):
 
     vals_sparse = tf.gather_nd(labels, indices)
 
-    indices = tf.to_int64(indices)
-    label_shape = tf.to_int64(label_shape)
+    indices = tf.cast(indices, tf.int64)
+    label_shape = tf.cast(label_shape, tf.int64)
     return tf.SparseTensor(indices, vals_sparse, label_shape)
 
 
@@ -4876,12 +4918,11 @@ def ctc_batch_cost(y_true, y_pred, input_length, label_length):
         Tensor with shape (samples,1) containing the
             CTC loss of each element.
     """
-    label_length = tf.to_int32(tf.squeeze(label_length, axis=-1))
-    input_length = tf.to_int32(tf.squeeze(input_length, axis=-1))
-    sparse_labels = tf.to_int32(ctc_label_dense_to_sparse(y_true, label_length))
-
+    label_length = tf.cast(tf.squeeze(label_length, axis=-1), tf.int32)
+    input_length = tf.cast(tf.squeeze(input_length, axis=-1), tf.int32)
+    sparse_labels = tf.cast(
+        ctc_label_dense_to_sparse(y_true, label_length), tf.int32)
     y_pred = tf.log(tf.transpose(y_pred, perm=[1, 0, 2]) + epsilon())
-
     return tf.expand_dims(ctc.ctc_loss(inputs=y_pred,
                                        labels=sparse_labels,
                                        sequence_length=input_length), 1)
@@ -4919,7 +4960,7 @@ def ctc_decode(y_pred, input_length, greedy=True, beam_width=100,
                 the log probability of each decoded sequence.
     """
     y_pred = tf.log(tf.transpose(y_pred, perm=[1, 0, 2]) + epsilon())
-    input_length = tf.to_int32(input_length)
+    input_length = tf.cast(input_length, tf.int32)
 
     if greedy:
         (decoded, log_prob) = ctc.ctc_greedy_decoder(

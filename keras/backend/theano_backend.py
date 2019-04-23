@@ -43,29 +43,6 @@ _LEARNING_PHASE = T.scalar(dtype='uint8', name='keras_learning_phase')
 _UID_PREFIXES = defaultdict(int)
 
 
-def printing(x, string='', summarize=None):
-    """Prints `message` and the tensor value when evaluated.
-
-     Note that `printing` returns a new tensor identical to `x`
-     which should be used in the following code. Otherwise the
-     print operation is not taken into account during evaluation.
-
-     # Example
-     ```python
-         >>> x = K.printing(x, string="x is: ")
-     ```
-
-    # Arguments
-        x: Tensor to print.
-        string: Message to print jointly with the tensor.
-        summarize: Argument included for TF compatibility. Ignored by Theano
-
-    # Returns
-        The same tensor `x`, unchanged.
-    """
-    return theano.printing.Print(string)(x)
-
-
 def learning_phase():
     """Returns the learning phase flag.
 
@@ -182,16 +159,6 @@ def to_dense(tensor):
         return th_sparse_module.dense_from_sparse(tensor)
     else:
         return tensor
-
-
-def _is_explicit_shape(shape):
-    if hasattr(shape, '__iter__'):
-        for x in shape:
-            if x is not None:
-                if not isinstance(x, int):
-                    return False
-        return True
-    return False
 
 
 NAME_SCOPE_STACK = []
@@ -613,12 +580,18 @@ def eye(size, dtype=None, name=None):
     """
     if dtype is None:
         dtype = floatx()
-    return variable(np.eye(size), dtype, name)
+    if isinstance(size, (list, tuple)):
+        n, m = size
+    else:
+        n, m = size, size
+    return variable(np.eye(n, m), dtype, name)
 
 
 def ones_like(x, dtype=None, name=None):
     """Instantiates an all-ones symbolic variable with the shape of x.
     """
+    if dtype is None:
+        dtype = floatx()
     return T.ones_like(x, dtype=dtype)
 
 
@@ -644,6 +617,8 @@ def zeros_like(x, dtype=None, name=None):
                [ 0.,  0.,  0.]], dtype=float32)
     ```
     """
+    if dtype is None:
+        dtype = floatx()
     return T.zeros_like(x, dtype=dtype)
 
 
@@ -2037,33 +2012,22 @@ def tile(x, n):
     # Returns
         A tiled tensor.
     """
+    if isinstance(n, int):
+        n = (n,)
+    elif isinstance(n, list):
+        n = tuple(n)
+
     y = T.tile(x, n)
-    if hasattr(x, '_keras_shape'):
-        if _is_explicit_shape(n):
-            output_shape = x._keras_shape[:-len(n)]
-            for i, j in zip(x._keras_shape, n):
-                if i is None:
-                    output_shape += (None,)
-                else:
-                    output_shape += (i * j,)
-        elif isinstance(n, int):
-            output_shape = x._keras_shape[:-1]
-            if x._keras_shape[-1] is None:
-                output_shape += (None,)
-            else:
-                output_shape += (x._keras_shape[-1] * n,)
-        else:
-            # symbolic n
-            if n.ndim == 0:
-                # n is a scalar
-                output_shape = x._keras_shape[:-1] + (None,)
-            elif hasattr(n, '_keras_shape'):
-                # n is a vector
-                n_size = n._keras_shape[0]
-                output_shape = x._keras_shape[:-n_size] + (None,) * n_size
-            else:
-                output_shape = (None,) * x.ndim
-        y._keras_shape = output_shape
+    shape = int_shape(x)
+    if shape is None:
+        return y
+    elif len(n) < len(shape):  # Padding the axis
+        n = tuple([1 for _ in range(len(shape) - len(n))]) + n
+    elif len(n) != len(shape):
+        raise NotImplementedError
+
+    y._keras_shape = tuple([None if a is None else a * b
+                            for (a, b) in zip(shape, n)])
     return y
 
 
@@ -2400,6 +2364,11 @@ def reverse(x, axes):
     """
     if isinstance(axes, int):
         axes = [axes]
+    elif isinstance(axes, tuple):
+        axes = list(axes)
+    for i in range(len(axes)):
+        if axes[i] == -1:
+            axes[i] = x.ndim - 1
     slices = []
     for i in range(x.ndim):
         if i in axes:
@@ -2410,7 +2379,11 @@ def reverse(x, axes):
 
 
 def slice(x, start, size):
-    raise NotImplementedError
+    if not (len(int_shape(x)) == len(start) == len(size)):
+        raise ValueError('The dimension and the size of indices should match.')
+    out = x[tuple([py_slice(i, i + j) for (i, j) in zip(start, size)])]
+    out._keras_shape = tuple(size)
+    return out
 
 
 def pattern_broadcast(x, broadcastable):
