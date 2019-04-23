@@ -7,7 +7,6 @@ from .load_backend import image_data_format
 from .load_backend import set_image_data_format
 from .load_backend import reset_uids
 from .load_backend import get_uid
-from .load_backend import printing
 from .load_backend import learning_phase
 from .load_backend import set_learning_phase
 from .load_backend import is_sparse

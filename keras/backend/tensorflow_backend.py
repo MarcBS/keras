@@ -61,30 +61,6 @@ _MANUAL_VAR_INIT = False
 _LOCAL_DEVICES = None
 
 
-def printing(x, string='', summarize=None):
-    """Prints `message` and the tensor value when evaluated.
-
-     Note that `printing` returns a new tensor identical to `x`
-     which should be used in the following code. Otherwise the
-     print operation is not taken into account during evaluation.
-
-     # Example
-     ```python
-         >>> x = K.printing(x, string="x is: ")
-     ```
-
-    # Arguments
-        x: Tensor to print.
-        string: Message to print jointly with the tensor.
-        summarize: Only print this many entries of each tensor. If None, then a
-               maximum of 3 elements are printed per input tensor.
-
-    # Returns
-        The same tensor `x`, unchanged.
-    """
-    return tf.Print(x, [x], message=string, summarize=summarize)
-
-
 def get_uid(prefix=''):
     """Get the uid for the default graph.
 
