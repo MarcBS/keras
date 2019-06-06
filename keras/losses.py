@@ -156,8 +156,21 @@ def weighted_log_diff(args):
 
     return ce_y - weight[:, :, None] * ce_h
 
-# Aliases.
 
+def weighted_categorical_crossentropy(args):
+    """Weighted cross-entropy.
+
+    # Arguments
+        args: y_pred, y_true, weight.
+
+    # Returns
+        categorical_crossentropy(y_true, y_pred) * weights
+    """
+    y_true, y_pred, weights = args
+    return K.categorical_crossentropy(y_true, y_pred) * weights
+
+
+# Aliases.
 mse = MSE = mean_squared_error
 mae = MAE = mean_absolute_error
 mape = MAPE = mean_absolute_percentage_error
