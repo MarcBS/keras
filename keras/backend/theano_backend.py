@@ -902,53 +902,40 @@ def dot(x, y):
 def batch_dot(x, y, axes=None):
     """Batchwise dot product.
 
-    `batch_dot` is used to compute dot product of `x` and `y` when
-    `x` and `y` are data in batch, i.e. in a shape of
-    `(batch_size, :)`.
-    `batch_dot` results in a tensor or variable with less dimensions
-    than the input. If the number of dimensions is reduced to 1,
-    we use `expand_dims` to make sure that ndim is at least 2.
+    batch_dot results in a tensor with less dimensions than the input.
+    If the number of dimensions is reduced to 1, we use `expand_dims` to
+    make sure that ndim is at least 2.
 
     # Arguments
-        x: Keras tensor or variable with `ndim >= 2`.
-        y: Keras tensor or variable with `ndim >= 2`.
-        axes: list of (or single) int with target dimensions.
-            The lengths of `axes[0]` and `axes[1]` should be the same.
+        x, y: tensors with ndim >= 2
+        axes: list (or single) int with target dimensions
 
     # Returns
-        A tensor with shape equal to the concatenation of `x`'s shape
-        (less the dimension that was summed over) and `y`'s shape
+        A tensor with shape equal to the concatenation of x's shape
+        (less the dimension that was summed over) and y's shape
         (less the batch dimension and the dimension that was summed over).
-        If the final rank is 1, we reshape it to `(batch_size, 1)`.
+        If the final rank is 1, we reshape it to (batch_size, 1).
 
     # Examples
-        Assume `x = [[1, 2], [3, 4]]` and `y = [[5, 6], [7, 8]]`
-        `batch_dot(x, y, axes=1) = [[17], [53]]` which is the main diagonal
-        of `x.dot(y.T)`, although we never have to calculate the off-diagonal
+        Assume x = [[1, 2], [3, 4]]   and y = [[5, 6], [7, 8]]
+        batch_dot(x, y, axes=1) = [[17, 53]] which is the main diagonal
+        of x.dot(y.T), although we never have to calculate the off-diagonal
         elements.
 
         Shape inference:
-        Let `x`'s shape be `(100, 20)` and `y`'s shape be `(100, 30, 20)`.
-        If `axes` is (1, 2), to find the output shape of resultant tensor,
-            loop through each dimension in `x`'s shape and `y`'s shape:
+        Let x's shape be (100, 20) and y's shape be (100, 30, 20).
+        If dot_axes is (1, 2), to find the output shape of resultant tensor,
+            loop through each dimension in x's shape and y's shape:
+        x.shape[0] : 100 : append to output shape
+        x.shape[1] : 20 : do not append to output shape,
+            dimension 1 of x has been summed over. (dot_axes[0] = 1)
+        y.shape[0] : 100 : do not append to output shape,
+            always ignore first dimension of y
+        y.shape[1] : 30 : append to output shape
+        y.shape[2] : 20 : do not append to output shape,
+            dimension 2 of y has been summed over. (dot_axes[1] = 2)
 
-        * `x.shape[0]` : 100 : append to output shape
-        * `x.shape[1]` : 20 : do not append to output shape,
-            dimension 1 of `x` has been summed over. (`dot_axes[0]` = 1)
-        * `y.shape[0]` : 100 : do not append to output shape,
-            always ignore first dimension of `y`
-        * `y.shape[1]` : 30 : append to output shape
-        * `y.shape[2]` : 20 : do not append to output shape,
-            dimension 2 of `y` has been summed over. (`dot_axes[1]` = 2)
-        `output_shape` = `(100, 30)`
-
-    ```python
-        >>> x_batch = K.ones(shape=(32, 20, 1))
-        >>> y_batch = K.ones(shape=(32, 30, 20))
-        >>> xy_batch_dot = K.batch_dot(x_batch, y_batch, axes=[1, 2])
-        >>> K.int_shape(xy_batch_dot)
-        (32, 1, 30)
-    ```
+        output_shape = (100, 30)
     """
     if isinstance(axes, int):
         axes = (axes, axes)
@@ -1170,40 +1157,6 @@ def cumprod(x, axis=0):
     return T.extra_ops.cumprod(x, axis=axis)
 
 
-def var(x, axis=None, keepdims=False):
-    """Variance of a tensor, alongside the specified axis.
-
-    # Arguments
-        x: A tensor or variable.
-        axis: An integer, the axis to compute the variance.
-        keepdims: A boolean, whether to keep the dimensions or not.
-            If `keepdims` is `False`, the rank of the tensor is reduced
-            by 1. If `keepdims` is `True`,
-            the reduced dimension is retained with length 1.
-
-    # Returns
-        A tensor with the variance of elements of `x`.
-    """
-    return T.var(x, axis=axis, keepdims=keepdims)
-
-
-def std(x, axis=None, keepdims=False):
-    """Standard deviation of a tensor, alongside the specified axis.
-
-    # Arguments
-        x: A tensor or variable.
-        axis: An integer, the axis to compute the standard deviation.
-        keepdims: A boolean, whether to keep the dimensions or not.
-            If `keepdims` is `False`, the rank of the tensor is reduced
-            by 1. If `keepdims` is `True`,
-            the reduced dimension is retained with length 1.
-
-    # Returns
-        A tensor with the standard deviation of elements of `x`.
-    """
-    return T.std(x, axis=axis, keepdims=keepdims)
-
-
 def mean(x, axis=None, keepdims=False):
     """Mean of a tensor, alongside the specified axis.
 
@@ -1223,6 +1176,40 @@ def mean(x, axis=None, keepdims=False):
     if 'int' in x.dtype or x.dtype == 'bool':
         dtype = floatx()
     return T.mean(x, axis=axis, keepdims=keepdims, dtype=dtype)
+
+
+def std(x, axis=None, keepdims=False):
+    """Standard deviation of a tensor, alongside the specified axis.
+
+    # Arguments
+        x: A tensor or variable.
+        axis: An integer, the axis to compute the standard deviation.
+        keepdims: A boolean, whether to keep the dimensions or not.
+            If `keepdims` is `False`, the rank of the tensor is reduced
+            by 1. If `keepdims` is `True`,
+            the reduced dimension is retained with length 1.
+
+    # Returns
+        A tensor with the standard deviation of elements of `x`.
+    """
+    return T.std(x, axis=axis, keepdims=keepdims)
+
+
+def var(x, axis=None, keepdims=False):
+    """Variance of a tensor, alongside the specified axis.
+
+    # Arguments
+        x: A tensor or variable.
+        axis: An integer, the axis to compute the variance.
+        keepdims: A boolean, whether to keep the dimensions or not.
+            If `keepdims` is `False`, the rank of the tensor is reduced
+            by 1. If `keepdims` is `True`,
+            the reduced dimension is retained with length 1.
+
+    # Returns
+        A tensor with the variance of elements of `x`.
+    """
+    return T.var(x, axis=axis, keepdims=keepdims)
 
 
 def any(x, axis=None, keepdims=False):
@@ -1820,7 +1807,7 @@ def repeat_elements(x, rep, axis):
         y._keras_shape = list(x._keras_shape)
         repeat_dim = x._keras_shape[axis]
         if repeat_dim is not None:
-            y._keras_shape[axis] = repeat_dim * rep
+                y._keras_shape[axis] = repeat_dim * rep
         y._keras_shape = tuple(y._keras_shape)
     return y
 
@@ -2837,7 +2824,6 @@ def in_train_phase(x, alt, training=None):
 
 def in_test_phase(x, alt, training=None):
     """Selects `x` in test phase, and `alt` otherwise.
-
     Note that `alt` should have the *same shape* as `x`.
 
     # Arguments
@@ -2868,14 +2854,11 @@ def _assert_has_capability(module, func):
 
 
 def elu(x, alpha=1.0):
-    """Exponential linear unit.
+    """ Exponential linear unit
 
     # Arguments
-        x: A tensor or variable to compute the activation function for.
-        alpha: A scalar, slope of negative section.
-
-    # Returns
-        A tensor.
+        x: Tensor to compute the activation function for.
+        alpha: scalar
     """
     _assert_has_capability(T.nnet, 'elu')
     return T.nnet.elu(x, alpha)
@@ -4057,6 +4040,8 @@ def bias_add(x, bias, data_format=None):
 
 
 # RANDOMNESS
+
+
 def random_normal(shape, mean=0.0, stddev=1.0, dtype=None, seed=None):
     """Returns a tensor with normal distribution of values.
 
@@ -4360,12 +4345,12 @@ def map_fn(fn, elems, name=None, dtype=None):
 
     # Arguments
         fn: Callable that will be called upon each element in elems
-        elems: tensor
+        elems: tensor, at least 2 dimensional
         name: A string name for the map node in the graph
-        dtype: Output data type.
 
     # Returns
-        Tensor with dtype `dtype`.
+        Tensor with first dimension equal to the elems and second depending on
+        fn
     """
     return theano.map(fn, elems, name=name)[0]
 
