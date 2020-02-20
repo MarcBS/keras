@@ -591,6 +591,7 @@ class Huber(LossFunctionWrapper):
         reduction: (Optional) Type of reduction to apply to loss.
         name: Optional name for the object.
     """
+
     def __init__(self,
                  delta=1.0,
                  reduction=losses_utils.Reduction.SUM_OVER_BATCH_SIZE,
@@ -663,8 +664,10 @@ def logcosh(y_true, y_pred):
     # Returns
         Tensor with one scalar loss entry per sample.
     """
+
     def _logcosh(x):
         return x + K.softplus(-2. * x) - K.log(2.)
+
     return K.mean(_logcosh(y_pred - y_true), axis=-1)
 
 
@@ -825,12 +828,13 @@ kld = KLD = kullback_leibler_divergence
 cosine = cosine_similarity = cosine_proximity
 pas_weighted_log_diff = weighted_log_diff
 
+
 def is_categorical_crossentropy(loss):
     return (isinstance(loss, CategoricalCrossentropy) or
             (isinstance(loss, LossFunctionWrapper) and
-                loss.fn == categorical_crossentropy) or
+             loss.fn == categorical_crossentropy) or
             (hasattr(loss, '__name__') and
-                loss.__name__ == 'categorical_crossentropy') or
+             loss.__name__ == 'categorical_crossentropy') or
             loss == 'categorical_crossentropy')
 
 

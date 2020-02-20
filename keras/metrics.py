@@ -1644,9 +1644,9 @@ class AUC(Metric):
             raise ValueError('Invalid curve: "{}". Valid options are: "{}"'.format(
                 curve, list(metrics_utils.AUCCurve)))
         if isinstance(
-            summation_method,
-            metrics_utils.AUCSummationMethod) and summation_method not in list(
-                metrics_utils.AUCSummationMethod):
+                summation_method,
+                metrics_utils.AUCSummationMethod) and summation_method not in list(
+            metrics_utils.AUCSummationMethod):
             raise ValueError(
                 'Invalid summation method: "{}". Valid options are: "{}"'.format(
                     summation_method, list(metrics_utils.AUCSummationMethod)))
@@ -1752,7 +1752,7 @@ class AUC(Metric):
             pr_auc: an approximation of the area under the P-R curve.
         """
         dtp = self.true_positives[:self.num_thresholds -
-                                  1] - self.true_positives[1:]
+                                   1] - self.true_positives[1:]
         p = self.true_positives + self.false_positives
         dp = p[:self.num_thresholds - 1] - p[1:]
 
@@ -1795,13 +1795,13 @@ class AUC(Metric):
         recall = K.switch(
             K.greater((self.true_positives), 0),
             (self.true_positives /
-                (self.true_positives + self.false_negatives)),
+             (self.true_positives + self.false_negatives)),
             K.zeros_like(self.true_positives))
         if self.curve == metrics_utils.AUCCurve.ROC:
             fp_rate = K.switch(
                 K.greater((self.false_positives), 0),
                 (self.false_positives /
-                    (self.false_positives + self.true_negatives)),
+                 (self.false_positives + self.true_negatives)),
                 K.zeros_like(self.false_positives))
             x = fp_rate
             y = recall
@@ -1846,6 +1846,7 @@ class AUC(Metric):
 BaseMeanIoU = object
 if K.backend() == 'tensorflow':
     import tensorflow as tf
+
     if tf.__version__ >= '2.0.0':
         BaseMeanIoU = tf.keras.metrics.MeanIoU
 
@@ -1880,6 +1881,7 @@ class MeanIoU(BaseMeanIoU):
         name: (Optional) string name of the metric instance.
         dtype: (Optional) data type of the metric result.
     """
+
     def __init__(self, num_classes, name=None, dtype=None):
         if K.backend() != 'tensorflow' or BaseMeanIoU is object:
             raise RuntimeError(
@@ -1949,6 +1951,7 @@ def clone_metrics(metrics):
         return {key: clone_metric(value) for key, value in metrics.items()}
     return [clone_metric(metric) for metric in metrics]
 
+
 def perplexity(y_true, y_pred, mask=None):
     """Calculates the perplexity
     """
@@ -1960,6 +1963,7 @@ def perplexity(y_true, y_pred, mask=None):
         return K.pow(2, K.mean(-K.log2(predictions)))
     else:
         return K.pow(2, K.mean(-K.log2(y_pred)))
+
 
 # Aliases
 

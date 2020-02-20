@@ -12,6 +12,7 @@ from theano.tensor.fft import rfft, irfft
 from theano.printing import Print
 from theano.tensor.signal.conv import conv2d as vec_conv
 from theano.ifelse import ifelse
+
 try:
     import theano.sparse as th_sparse_module
 except ImportError:
@@ -34,7 +35,6 @@ py_all = all
 py_any = any
 py_sum = sum
 py_slice = slice
-
 
 # INTERNAL UTILS
 theano.config.floatX = floatx()
@@ -308,7 +308,7 @@ def is_keras_tensor(x):
     if not is_tensor(x):
         raise ValueError('Unexpectedly found an instance of type `' +
                          str(type(x)) + '`. '
-                         'Expected a symbolic tensor instance.')
+                                        'Expected a symbolic tensor instance.')
     return hasattr(x, '_keras_history')
 
 
@@ -759,6 +759,7 @@ def cast(x, dtype):
     """
     return T.cast(x, dtype)
 
+
 def size(x, name=None):
     """Returns the size of a tensor.
     # Arguments
@@ -769,7 +770,6 @@ def size(x, name=None):
     ```
     """
     return sum(ones_like(x, name=name))
-
 
 
 def ceil(x, name=None):
@@ -1829,7 +1829,7 @@ def repeat_elements(x, rep, axis):
         y._keras_shape = list(x._keras_shape)
         repeat_dim = x._keras_shape[axis]
         if repeat_dim is not None:
-                y._keras_shape[axis] = repeat_dim * rep
+            y._keras_shape[axis] = repeat_dim * rep
         y._keras_shape = tuple(y._keras_shape)
     return y
 
@@ -2055,7 +2055,7 @@ def flatten(x):
         if None in x._keras_shape:
             y._keras_shape = (None,)
         else:
-            y._keras_shape = (np.prod(x._keras_shape), )
+            y._keras_shape = (np.prod(x._keras_shape),)
     return y
 
 
@@ -2400,6 +2400,7 @@ def pattern_broadcast(x, broadcastable):
     """Make the input adopt a specific broadcasting pattern.
     """
     return T.patternbroadcast(x, broadcastable)
+
 
 # VALUE MANIPULATION
 
@@ -3395,6 +3396,7 @@ def _preprocess_conv2d_depthwise_filter_shape(filter_shape, data_format):
             return int(value)
         except TypeError:
             return None
+
     if filter_shape:
         filter_shape = (filter_shape[3] * filter_shape[2], 1,
                         filter_shape[0], filter_shape[1])
@@ -3949,8 +3951,8 @@ def pool2d(x, pool_size, strides=(1, 1), padding='valid',
         expected_width = (x.shape[2] + strides[0] - 1) // strides[0]
         expected_height = (x.shape[3] + strides[1] - 1) // strides[1]
         pool_out = pool_out[:, :,
-                            : expected_width,
-                            : expected_height]
+                   : expected_width,
+                   : expected_height]
 
     if data_format == 'channels_last':
         pool_out = pool_out.dimshuffle((0, 2, 3, 1))
@@ -4010,9 +4012,9 @@ def pool3d(x, pool_size, strides=(1, 1, 1), padding='valid',
         expected_depth = (x.shape[4] + strides[2] - 1) // strides[2]
 
         pool_out = pool_out[:, :,
-                            : expected_width,
-                            : expected_height,
-                            : expected_depth]
+                   : expected_width,
+                   : expected_height,
+                   : expected_depth]
 
     if data_format == 'channels_last':
         pool_out = pool_out.dimshuffle((0, 2, 3, 4, 1))
@@ -4565,6 +4567,7 @@ def ctc_label_dense_to_sparse(labels, label_lengths):
 def ctc_decode(y_pred, input_length, greedy=True, beam_width=100, top_paths=1,
                merge_repeated=False):
     raise NotImplementedError
+
 
 def control_dependencies(control_inputs):
     @contextmanager

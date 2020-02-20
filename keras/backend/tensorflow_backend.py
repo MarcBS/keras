@@ -8,6 +8,7 @@ from tensorflow.python.framework import device as tfdev
 from tensorflow.python.framework import ops as tf_ops
 from tensorflow.python.ops import image_ops as tf_image_ops
 from tensorflow.python.ops import math_ops as tf_math_ops
+from tensorflow.python.ops import tensor_array_ops
 from tensorflow.python.ops import state_ops as tf_state_ops
 from tensorflow.python.keras import backend as tf_keras_backend
 from tensorflow.python.keras.utils import tf_utils
