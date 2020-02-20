@@ -151,7 +151,6 @@ from .load_backend import random_normal
 from .load_backend import random_uniform
 from .load_backend import random_binomial
 from .load_backend import truncated_normal
-from .load_backend import random_multinomial
 from .load_backend import count_sketch
 from .load_backend import scan_conv1d
 from .load_backend import ctc_label_dense_to_sparse
