@@ -9,6 +9,7 @@ import types
 
 import numpy as np
 
+from .. import losses
 from ..utils.np_utils import to_categorical
 from ..utils.generic_utils import has_arg
 from ..utils.generic_utils import to_list
@@ -140,10 +141,8 @@ class BaseWrapper(object):
         else:
             self.model = self.build_fn(**self.filter_sk_params(self.build_fn))
 
-        loss_name = self.model.loss
-        if hasattr(loss_name, '__name__'):
-            loss_name = loss_name.__name__
-        if 'categorical_crossentropy' in loss_name and len(y.shape) != 2:
+        if (losses.is_categorical_crossentropy(self.model.loss) and
+                len(y.shape) != 2):
             y = to_categorical(y)
 
         fit_args = copy.deepcopy(self.filter_sk_params(Sequential.fit))
@@ -288,13 +287,13 @@ class KerasClassifier(BaseWrapper):
         loss_name = self.model.loss
         if hasattr(loss_name, '__name__'):
             loss_name = loss_name.__name__
-        if 'categorical_crossentropy' in loss_name and len(y.shape) != 2:
+        if loss_name == 'categorical_crossentropy' and len(y.shape) != 2:
             y = to_categorical(y)
 
         outputs = self.model.evaluate(x, y, **kwargs)
         outputs = to_list(outputs)
         for name, output in zip(self.model.metrics_names, outputs):
-            if name == 'acc':
+            if name in ['accuracy', 'acc']:
                 return output
         raise ValueError('The model is not configured to compute accuracy. '
                          'You should pass `metrics=["accuracy"]` to '
@@ -320,7 +319,10 @@ class KerasRegressor(BaseWrapper):
                 Predictions.
         """
         kwargs = self.filter_sk_params(Sequential.predict, kwargs)
-        return np.squeeze(self.model.predict(x, **kwargs), axis=-1)
+        preds = np.array(self.model.predict(x, **kwargs))
+        if preds.shape[-1] == 1:
+            return np.squeeze(preds, axis=-1)
+        return preds
 
     def score(self, x, y, **kwargs):
         """Returns the mean loss on the given test data and labels.
