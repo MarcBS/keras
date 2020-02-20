@@ -44,11 +44,11 @@ _LEARNING_PHASE_CACHE = {}
 def _is_tf_1():
     return tf.__version__.startswith('1.')
 
+
 # Set initial config
 tf_keras_backend.set_floatx(floatx())
 tf_keras_backend.set_epsilon(epsilon())
 tf_keras_backend.set_image_data_format(image_data_format())
-
 
 # Private TF Keras utils
 get_graph = tf_keras_backend.get_graph
@@ -75,6 +75,7 @@ def symbolic(func):
                 return func(*args, **kwargs)
         else:
             return func(*args, **kwargs)
+
     return symbolic_fn_wrapper
 
 
@@ -106,6 +107,7 @@ def eager(func):
         finally:
             _SYMBOLIC_SCOPE.value = prev_value
         return out
+
     return eager_fn_wrapper
 
 
@@ -406,56 +408,36 @@ def set_session(session):
     tf_keras_backend.set_session(session)
 
 
-    if default_session is not None:
-        session = default_session
-    else:
-        if _SESSION is None:
-            if not os.environ.get('OMP_NUM_THREADS'):
-                config = tf.ConfigProto(allow_soft_placement=True)
-            else:
-                num_thread = int(os.environ.get('OMP_NUM_THREADS'))
-                config = tf.ConfigProto(intra_op_parallelism_threads=num_thread,
-                                        inter_op_parallelism_threads=num_thread,
-                                        allow_soft_placement=True)
+def clear_session():
+    """Destroys the current Keras graph and creates a new one.
 
-            config.gpu_options.allow_growth = True  # dynamically grow the memory used on the GPU
-
-            _SESSION = tf.Session(config=config)
-        session = _SESSION
-    if not _MANUAL_VAR_INIT:
-        with session.graph.as_default():
-            variables = tf.global_variables()
-            candidate_vars = []
-            for v in variables:
-                if not getattr(v, '_keras_initialized', False):
-                    candidate_vars.append(v)
-            if candidate_vars:
-                # This step is expensive, so we only run it on variables
-                # not already marked as initialized.
-                is_initialized = session.run(
-                    [tf.is_variable_initialized(v) for v in candidate_vars])
-                uninitialized_vars = []
-                for flag, v in zip(is_initialized, candidate_vars):
-                    if not flag:
-                        uninitialized_vars.append(v)
-                    v._keras_initialized = True
-                if uninitialized_vars:
-                    session.run(tf.variables_initializer(uninitialized_vars))
-    # hack for list_devices() function.
-    # list_devices() function is not available under tensorflow r1.3.
-    if not hasattr(session, 'list_devices'):
-        session.list_devices = lambda: device_lib.list_local_devices()
-    return session
-
-
-def set_session(session):
-    """Sets the global TensorFlow session.
-
-    # Arguments
-        session: A TF Session.
+    Useful to avoid clutter from old models / layers.
     """
-    global _SESSION
-    _SESSION = session
+    tf_keras_backend.clear_session()
+    global _LEARNING_PHASE_CACHE
+    _LEARNING_PHASE_CACHE = {}
+
+
+def v1_variable_initialization():
+    session = get_session()
+    with session.graph.as_default():
+        variables = tf.global_variables()
+        candidate_vars = []
+        for v in variables:
+            if not getattr(v, '_keras_initialized', False):
+                candidate_vars.append(v)
+        if candidate_vars:
+            # This step is expensive, so we only run it on variables
+            # not already marked as initialized.
+            is_initialized = session.run(
+                [tf.is_variable_initialized(v) for v in candidate_vars])
+            uninitialized_vars = []
+            for flag, v in zip(is_initialized, candidate_vars):
+                if not flag:
+                    uninitialized_vars.append(v)
+                v._keras_initialized = True
+            if uninitialized_vars:
+                session.run(tf.variables_initializer(uninitialized_vars))
 
 
 # DEVICE MANIPULATION AND PROBING
@@ -715,7 +697,7 @@ def is_keras_tensor(x):
     if not is_tensor(x):
         raise ValueError('Unexpectedly found an instance of type `' +
                          str(type(x)) + '`. '
-                         'Expected a symbolic tensor instance.')
+                                        'Expected a symbolic tensor instance.')
     return hasattr(x, '_keras_history')
 
 
@@ -1543,7 +1525,7 @@ def batch_dot(x, y, axes=None):
         raise ValueError('Can not do batch_dot on inputs with shapes ' +
                          str(x_shape) + ' and ' + str(y_shape) +
                          ' with axes=' + str(axes) + '. x.shape[%d] != '
-                         'y.shape[%d] (%d != %d).' % (axes[0], axes[1], d1, d2))
+                                                     'y.shape[%d] (%d != %d).' % (axes[0], axes[1], d1, d2))
 
     # backup ndims. Need them later.
     orig_x_ndim = x_ndim
@@ -2448,8 +2430,8 @@ def batch_normalization(x, mean, var, beta, gamma, axis=-1, epsilon=1e-3):
             tf_data_format = None
 
         if ((tf_data_format == 'NHWC' or
-                (tf_data_format == 'NCHW' and
-                 _has_nchw_support())) and
+             (tf_data_format == 'NCHW' and
+              _has_nchw_support())) and
                 _is_tf_1()):
             # The mean / var / beta / gamma may be processed by broadcast
             # so it may have extra axes with 1,
@@ -2576,7 +2558,7 @@ def resize_images(x,
     original_shape = int_shape(x)
     new_shape = tf.shape(x)[rows:cols + 1]
     new_shape *= tf.constant(np.array([height_factor, width_factor],
-                             dtype='int32'))
+                                      dtype='int32'))
     if data_format == 'channels_first':
         x = permute_dimensions(x, [0, 2, 3, 1])
     if interpolation == 'nearest':
@@ -3674,6 +3656,7 @@ def rnn(step_function, inputs, initial_states,
 
                     output_ta_t = output_ta_t.write(time, output)
                     return (time + 1, output_ta_t, output, states_ta_t) + tuple(new_states)
+
                 loop_vars = (time, output_ta, initial_output, states_ta) + states
             else:
                 def _step(time, output_ta_t, output_tm1, *states):
@@ -3707,6 +3690,7 @@ def rnn(step_function, inputs, initial_states,
 
                     output_ta_t = output_ta_t.write(time, output)
                     return (time + 1, output_ta_t, output) + tuple(new_states)
+
                 loop_vars = (time, output_ta, initial_output) + states
             final_outputs = control_flow_ops.while_loop(
                 body=_step,
@@ -3816,7 +3800,7 @@ def switch(condition, then_expression, else_expression):
                              ' equal to rank of `then_expression` and '
                              '`else_expression`. ndim(condition)=' +
                              str(cond_ndim) + ', ndim(then_expression)'
-                             '=' + str(expr_ndim))
+                                              '=' + str(expr_ndim))
         if cond_ndim > 1:
             ndim_diff = expr_ndim - cond_ndim
             cond_shape = tf.concat([tf.shape(condition), [1] * ndim_diff], axis=0)
