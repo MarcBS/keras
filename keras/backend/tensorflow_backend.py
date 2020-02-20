@@ -4065,7 +4065,7 @@ def categorical_crossentropy(target, output, from_logits=False, axis=-1):
     # expects logits, Keras expects probabilities.
     if not from_logits:
         # scale preds so that the class probas of each sample sum to 1
-        output /= tf.reduce_sum(output, axis, True)
+        output = tf.div(output, tf.reduce_sum(output, axis, True))
         # manual computation of crossentropy
         _epsilon = _to_tensor(epsilon(), output.dtype.base_dtype)
         output = tf.clip_by_value(output, _epsilon, 1. - _epsilon)
