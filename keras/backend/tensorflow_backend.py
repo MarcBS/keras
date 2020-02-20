@@ -4113,8 +4113,16 @@ def binary_crossentropy(target, output, from_logits=False):
     # Returns
         A tensor.
     """
-    return tf_keras_backend.binary_crossentropy(
-        target, output, from_logits=from_logits)
+    # Note: tf.nn.sigmoid_cross_entropy_with_logits
+    # expects logits, Keras expects probabilities.
+    if not from_logits:
+        # transform back to logits
+        _epsilon = _to_tensor(epsilon(), output.dtype.base_dtype)
+        output = tf.clip_by_value(output, _epsilon, 1 - _epsilon)
+        output = tf.log(output / (1 - output))
+
+    return tf.nn.sigmoid_cross_entropy_with_logits(labels=target,
+                                                   logits=output)
 
 
 def weighted_binary_crossentropy(target, output, from_logits=False, lambda_w_rec=1.0, lambda_w_pre=1.0):
