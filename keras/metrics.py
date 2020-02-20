@@ -1645,8 +1645,7 @@ class AUC(Metric):
                 curve, list(metrics_utils.AUCCurve)))
         if isinstance(
                 summation_method,
-                metrics_utils.AUCSummationMethod) and summation_method not in list(
-            metrics_utils.AUCSummationMethod):
+                metrics_utils.AUCSummationMethod) and summation_method not in list(metrics_utils.AUCSummationMethod):
             raise ValueError(
                 'Invalid summation method: "{}". Valid options are: "{}"'.format(
                     summation_method, list(metrics_utils.AUCSummationMethod)))
@@ -1751,8 +1750,7 @@ class AUC(Metric):
         # Returns
             pr_auc: an approximation of the area under the P-R curve.
         """
-        dtp = self.true_positives[:self.num_thresholds -
-                                   1] - self.true_positives[1:]
+        dtp = self.true_positives[:self.num_thresholds - 1] - self.true_positives[1:]
         p = self.true_positives + self.false_positives
         dp = p[:self.num_thresholds - 1] - p[1:]
 

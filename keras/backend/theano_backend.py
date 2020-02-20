@@ -3950,9 +3950,7 @@ def pool2d(x, pool_size, strides=(1, 1), padding='valid',
     if padding == 'same':
         expected_width = (x.shape[2] + strides[0] - 1) // strides[0]
         expected_height = (x.shape[3] + strides[1] - 1) // strides[1]
-        pool_out = pool_out[:, :,
-                   : expected_width,
-                   : expected_height]
+        pool_out = pool_out[:, :, :expected_width, :expected_height]
 
     if data_format == 'channels_last':
         pool_out = pool_out.dimshuffle((0, 2, 3, 1))
@@ -4011,10 +4009,7 @@ def pool3d(x, pool_size, strides=(1, 1, 1), padding='valid',
         expected_height = (x.shape[3] + strides[1] - 1) // strides[1]
         expected_depth = (x.shape[4] + strides[2] - 1) // strides[2]
 
-        pool_out = pool_out[:, :,
-                   : expected_width,
-                   : expected_height,
-                   : expected_depth]
+        pool_out = pool_out[:, :, :expected_width, :expected_height, :expected_depth]
 
     if data_format == 'channels_last':
         pool_out = pool_out.dimshuffle((0, 2, 3, 4, 1))

@@ -3,18 +3,27 @@ from __future__ import division
 from __future__ import print_function
 
 import tensorflow as tf
+from tensorflow.python.client import device_lib
+from tensorflow.core.protobuf import config_pb2
 from tensorflow.python.eager import context
 from tensorflow.python.framework import device as tfdev
 from tensorflow.python.framework import ops as tf_ops
 from tensorflow.python.ops import image_ops as tf_image_ops
 from tensorflow.python.ops import math_ops as tf_math_ops
+from tensorflow.python.ops import control_flow_ops
+from tensorflow.python.ops import functional_ops
 from tensorflow.python.ops import tensor_array_ops
+from tensorflow.python.ops import ctc_ops as ctc
 from tensorflow.python.ops import state_ops as tf_state_ops
+from tensorflow.python.training import moving_averages
 from tensorflow.python.keras import backend as tf_keras_backend
 from tensorflow.python.keras.utils import tf_utils
 from tensorflow.python.ops import functional_ops
 from tensorflow.python.ops import ctc_ops as ctc
+
 from .common import floatx, epsilon, image_data_format
+
+from collections import defaultdict
 
 import sys
 import functools
@@ -5130,26 +5139,6 @@ def truncated_normal(shape, mean=0.0, stddev=1.0, dtype=None, seed=None):
     with tf_ops.init_scope():
         return tf_keras_backend.truncated_normal(
             shape, mean=mean, stddev=stddev, dtype=dtype, seed=seed)
-
-
-def random_multinomial(shape, p=0.0, dtype=None, seed=None):
-    """Returns a tensor with random multinomial distribution of values.
-
-    # Arguments
-        shape: A tuple of integers, the shape of tensor to create.
-        p: A float, `0. <= p <= 1`, probability of multinomial distribution.
-        dtype: String, dtype of returned tensor.
-        seed: Integer, random seed.
-
-    # Returns
-        A tensor.
-    """
-    if dtype is None:
-        dtype = floatx()
-    if seed is None:
-        seed = np.random.randint(10e6)
-    rng = RandomStreams(seed=seed)
-    return rng.multinomial(shape, pvals=p, dtype=dtype)
 
 
 # COUNT SKETCH
