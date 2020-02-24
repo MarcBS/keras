@@ -3088,28 +3088,6 @@ def binary_crossentropy(target, output, from_logits=False):
     return T.nnet.binary_crossentropy(output, target)
 
 
-def weighted_binary_crossentropy(target, output, from_logits=False, lambda_w_rec=1.0, lambda_w_pre=1.0):
-    """Weighted crossentropy of binary random variables.
-
-    # Arguments
-        target: A tensor with the same shape as `output`.
-        output: A tensor.
-        from_logits: Whether `output` is expected to be a logits tensor.
-            By default, we consider that `output`
-            encodes a probability distribution.
-        lambda_w_rec: Float. First weight.
-        lambda_w_pre: Float. Second weight.
-
-    # Returns
-        A tensor.
-    """
-    if from_logits:
-        output = T.nnet.sigmoid(output)
-    # avoid numerical instability with _epsilon clipping
-    output = T.clip(output, _epsilon(), 1.0 - _epsilon())
-    return -(lambda_w_rec * target * T.log(output) + lambda_w_pre * (1.0 - target) * T.log(1.0 - output))
-
-
 def sigmoid(x):
     """Element-wise sigmoid.
 

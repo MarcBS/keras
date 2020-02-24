@@ -128,7 +128,6 @@ from .load_backend import softsign
 from .load_backend import categorical_crossentropy
 from .load_backend import sparse_categorical_crossentropy
 from .load_backend import binary_crossentropy
-from .load_backend import weighted_binary_crossentropy
 from .load_backend import sigmoid
 from .load_backend import hard_sigmoid
 from .load_backend import tanh
