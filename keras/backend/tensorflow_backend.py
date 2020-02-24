@@ -4054,24 +4054,8 @@ def categorical_crossentropy(target, output, from_logits=False, axis=-1):
         ValueError: if `axis` is neither -1 nor one of
             the axes of `output`.
     """
-    output_dimensions = list(range(len(output.get_shape())))
-    if axis != -1 and axis not in output_dimensions:
-        raise ValueError(
-            '{}{}{}'.format(
-                'Unexpected channels axis {}. '.format(axis),
-                'Expected to be -1 or one of the axes of `output`, ',
-                'which has {} dimensions.'.format(len(output.get_shape()))))
-    # Note: tf.nn.softmax_cross_entropy_with_logits
-    # expects logits, Keras expects probabilities.
-    if not from_logits:
-        # scale preds so that the class probas of each sample sum to 1
-        output = tf.div(output, tf.reduce_sum(output, axis, True))
-        # manual computation of crossentropy
-        _epsilon = _to_tensor(epsilon(), output.dtype.base_dtype)
-        output = tf.clip_by_value(output, _epsilon, 1. - _epsilon)
-        return - tf.reduce_sum(target * tf.log(output), axis)
-    else:
-        return tf.nn.softmax_cross_entropy_with_logits_v2(labels=target, logits=output)
+    return tf_keras_backend.categorical_crossentropy(
+        target, output, from_logits=from_logits, axis=axis)
 
 
 def sparse_categorical_crossentropy(target, output, from_logits=False, axis=-1):
@@ -4113,39 +4097,8 @@ def binary_crossentropy(target, output, from_logits=False):
     # Returns
         A tensor.
     """
-    # Note: tf.nn.sigmoid_cross_entropy_with_logits
-    # expects logits, Keras expects probabilities.
-    if not from_logits:
-        # transform back to logits
-        _epsilon = _to_tensor(epsilon(), output.dtype.base_dtype)
-        output = tf.clip_by_value(output, _epsilon, 1 - _epsilon)
-        output = tf.log(output / (1 - output))
-
-    return tf.nn.sigmoid_cross_entropy_with_logits(labels=target,
-                                                   logits=output)
-
-
-def weighted_binary_crossentropy(target, output, from_logits=False, lambda_w_rec=1.0, lambda_w_pre=1.0):
-    """Weighted crossentropy of binary random variables.
-
-    # Arguments
-        target: A tensor with the same shape as `output`.
-        output: A tensor.
-        from_logits: Whether `output` is expected to be a logits tensor.
-            By default, we consider that `output`
-            encodes a probability distribution.
-        lambda_w_rec: Float. First weight.
-        lambda_w_pre: Float. Second weight.
-
-    # Returns
-        A tensor.
-    """
-    if from_logits:
-        output = tf.nn.sigmoid(output)
-    # avoid numerical instability with _EPSILON clipping
-    _epsilon = _to_tensor(epsilon(), output.dtype.base_dtype)
-    output = tf.clip_by_value(output, _epsilon, 1.0 - _epsilon)
-    return -(lambda_w_rec * target * log(output) + lambda_w_pre * (1.0 - target) * log(1.0 - output))
+    return tf_keras_backend.binary_crossentropy(
+        target, output, from_logits=from_logits)
 
 
 def sigmoid(x):
