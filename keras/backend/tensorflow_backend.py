@@ -5,6 +5,7 @@ import tensorflow as tf
 from tensorflow.python.eager import context
 from tensorflow.python.framework import device as tfdev
 from tensorflow.python.framework import ops as tf_ops
+from tensorflow.python.training import moving_averages
 from tensorflow.python.ops import image_ops as tf_image_ops
 from tensorflow.python.ops import math_ops as tf_math_ops
 from tensorflow.python.ops import control_flow_ops
@@ -14,6 +15,8 @@ from tensorflow.python.keras import backend as tf_keras_backend
 from tensorflow.python.client import device_lib
 from tensorflow.python.ops import functional_ops
 from tensorflow.python.ops import ctc_ops as ctc
+from tensorflow.python.client import device_lib
+from tensorflow.core.protobuf import config_pb2
 from .common import floatx, epsilon, image_data_format
 
 from collections import defaultdict
@@ -943,6 +946,7 @@ def eye(size, dtype=None, name=None):
     """
     if dtype is None:
         dtype = floatx()
+    tf_dtype = tf.as_dtype(dtype)
     if isinstance(size, (list, tuple)):
         n, m = size
     else:
@@ -1048,6 +1052,7 @@ def random_uniform_variable(shape, low, high, dtype=None,
     """
     if dtype is None:
         dtype = floatx()
+    tf_dtype = tf.as_dtype(dtype)
     if seed is None:
         # ensure that randomness is conditioned by the Numpy RNG
         seed = np.random.randint(10e8)
@@ -4842,26 +4847,6 @@ def truncated_normal(shape, mean=0.0, stddev=1.0, dtype=None, seed=None):
     if seed is None:
         seed = np.random.randint(10e6)
     return tf.truncated_normal(shape, mean, stddev, dtype=dtype, seed=seed)
-
-
-def random_multinomial(shape, p=0.0, dtype=None, seed=None):
-    """Returns a tensor with random multinomial distribution of values.
-
-    # Arguments
-        shape: A tuple of integers, the shape of tensor to create.
-        p: A float, `0. <= p <= 1`, probability of multinomial distribution.
-        dtype: String, dtype of returned tensor.
-        seed: Integer, random seed.
-
-    # Returns
-        A tensor.
-    """
-    if dtype is None:
-        dtype = floatx()
-    if seed is None:
-        seed = np.random.randint(10e6)
-    rng = RandomStreams(seed=seed)
-    return rng.multinomial(shape, pvals=p, dtype=dtype)
 
 
 # COUNT SKETCH
