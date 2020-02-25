@@ -68,11 +68,11 @@ _LEARNING_PHASE_CACHE = {}
 def _is_tf_1():
     return tf.__version__.startswith('1.')
 
+
 # Set initial config
 tf_keras_backend.set_floatx(floatx())
 tf_keras_backend.set_epsilon(epsilon())
 tf_keras_backend.set_image_data_format(image_data_format())
-
 
 # Private TF Keras utils
 get_graph = tf_keras_backend.get_graph
@@ -99,6 +99,7 @@ def symbolic(func):
                 return func(*args, **kwargs)
         else:
             return func(*args, **kwargs)
+
     return symbolic_fn_wrapper
 
 
@@ -130,6 +131,7 @@ def eager(func):
         finally:
             _SYMBOLIC_SCOPE.value = prev_value
         return out
+
     return eager_fn_wrapper
 
 
@@ -137,7 +139,6 @@ def _has_compat_v1():
     if hasattr(tf, 'compat') and hasattr(tf.compat, 'v1'):
         return True
     return False
-
 
 
 def get_uid(prefix=''):
@@ -197,7 +198,6 @@ def manual_variable_initialization(value):
     """
     global _MANUAL_VAR_INIT
     _MANUAL_VAR_INIT = value
-
 
 
 def set_image_data_format(data_format):
@@ -621,7 +621,7 @@ def is_keras_tensor(x):
     if not is_tensor(x):
         raise ValueError('Unexpectedly found an instance of type `' +
                          str(type(x)) + '`. '
-                         'Expected a symbolic tensor instance.')
+                                        'Expected a symbolic tensor instance.')
     return hasattr(x, '_keras_history')
 
 
@@ -1431,7 +1431,7 @@ def batch_dot(x, y, axes=None):
         raise ValueError('Can not do batch_dot on inputs with shapes ' +
                          str(x_shape) + ' and ' + str(y_shape) +
                          ' with axes=' + str(axes) + '. x.shape[%d] != '
-                         'y.shape[%d] (%d != %d).' % (axes[0], axes[1], d1, d2))
+                                                     'y.shape[%d] (%d != %d).' % (axes[0], axes[1], d1, d2))
 
     # backup ndims. Need them later.
     orig_x_ndim = x_ndim
@@ -3581,6 +3581,7 @@ def rnn(step_function, inputs, initial_states,
 
                     output_ta_t = output_ta_t.write(time, output)
                     return (time + 1, output_ta_t, output, states_ta_t) + tuple(new_states)
+
                 loop_vars = (time, output_ta, initial_output, states_ta) + states
             else:
                 def _step(time, output_ta_t, output_tm1, *states):
@@ -3614,6 +3615,7 @@ def rnn(step_function, inputs, initial_states,
 
                     output_ta_t = output_ta_t.write(time, output)
                     return (time + 1, output_ta_t, output) + tuple(new_states)
+
                 loop_vars = (time, output_ta, initial_output) + states
             final_outputs = control_flow_ops.while_loop(
                 body=_step,
@@ -3722,7 +3724,7 @@ def switch(condition, then_expression, else_expression):
                              ' equal to rank of `then_expression` and '
                              '`else_expression`. ndim(condition)=' +
                              str(cond_ndim) + ', ndim(then_expression)'
-                             '=' + str(expr_ndim))
+                                              '=' + str(expr_ndim))
         if cond_ndim > 1:
             ndim_diff = expr_ndim - cond_ndim
             cond_shape = tf.concat([tf.shape(condition), [1] * ndim_diff], axis=0)
