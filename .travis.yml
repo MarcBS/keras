@@ -77,7 +77,7 @@ script:
     elif [[ "MODE" == "PEP8_DOC" ]]; then
       PYTHONPATH=$PWD:$PYTHONPATH py.test --pep8 -m pep8 -n0 && py.test tests/docs;
     elif [[ "MODE" == "API" ]]; then
-      PYTHONPATH=$PWD:$PYTHONPATH pip install git+git://www.github.com/keras-team/keras.git && python update_api.py && pip install -e .[tests] --progress-bar off && py.test tests/test_api.py;
+      PYTHONPATH=$PWD:$PYTHONPATH pip install git+git://www.github.com/MarcBS/keras.git && python update_api.py && pip install -e .[tests] --progress-bar off && py.test tests/test_api.py;
     elif [[ "$RUN_ONLY_BACKEND_TESTS" == "1" ]]; then
       PYTHONPATH=$PWD:$PYTHONPATH py.test  tests/keras/backend/;
     else

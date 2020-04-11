@@ -68,6 +68,9 @@ def set_floatx(floatx):
     # Arguments
         floatx: String, 'float16', 'float32', or 'float64'.
 
+    # Raises:
+        ValueError: if `floatx` is unknown.
+
     # Example
     ```python
         >>> from keras import backend as K

@@ -203,25 +203,6 @@ def manual_variable_initialization(value):
     _MANUAL_VAR_INIT = value
 
 
-def set_image_data_format(data_format):
-    """Sets the value of the data format convention.
-
-    # Arguments
-        data_format: string. `'channels_first'` or `'channels_last'`.
-
-    # Example
-    ```python
-        >>> from keras import backend as K
-        >>> K.image_data_format()
-        'channels_first'
-        >>> K.set_image_data_format('channels_last')
-        >>> K.image_data_format()
-        'channels_last'
-    ```
-    """
-    tf_keras_backend.set_image_data_format(data_format)
-
-
 def normalize_data_format(value):
     """Checks that the value correspond to a valid data format.
 
@@ -2730,10 +2711,11 @@ def tile(x, n):
         n = tuple(n)
 
     shape = int_shape(x)
-    if len(n) < len(shape):  # Padding the axis
-        n = tuple([1 for _ in range(len(shape) - len(n))]) + n
-    elif len(n) != len(shape):
-        raise NotImplementedError
+    if not is_tensor(n):
+        if len(n) < len(shape):  # Padding the axis
+            n = tuple([1 for _ in range(len(shape) - len(n))]) + n
+        elif len(n) != len(shape):
+            raise NotImplementedError
 
     return tf.tile(x, n)
 
@@ -2761,7 +2743,9 @@ def batch_flatten(x):
     # Returns
         A tensor.
     """
-    x = tf.reshape(x, tf.stack([-1, prod(shape(x)[1:])]))
+    x = tf.reshape(
+        x, tf.stack([-1, prod(shape(x)[1:])],
+                    name='stack_' + str(np.random.randint(1e4))))
     return x
 
 
