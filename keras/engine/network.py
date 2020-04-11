@@ -16,6 +16,7 @@ from . import saving
 from .base_layer import Layer
 from .base_layer import Node
 from .input_layer import InputLayer
+from .saving import preprocess_weights_for_loading
 from .. import backend as K
 from ..utils.io_utils import ask_to_proceed_with_overwrite
 from ..utils.layer_utils import print_summary as print_layer_summary
@@ -517,10 +518,10 @@ class Network(Layer):
         for sw, w in zip(own_weight_vars, own_weights):
             tuples.append((sw, w))
         weights = weights[num_param:]
-
         for layer in self.layers:
             num_param = len(layer.weights)
             layer_weights = weights[:num_param]
+            layer_weights = preprocess_weights_for_loading(layer, layer_weights)
             for sw, w in zip(layer.weights, layer_weights):
                 tuples.append((sw, w))
             weights = weights[num_param:]
