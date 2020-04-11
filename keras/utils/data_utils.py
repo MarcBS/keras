@@ -33,7 +33,7 @@ from ..utils.generic_utils import Progbar
 
 if sys.version_info[0] == 2:
     def urlretrieve(url, filename, reporthook=None, data=None):
-        """Replacement for `urlretrive` for Python 2.
+        """Replacement for `urlretrieve` for Python 2.
 
         Under Python 2, `urlretrieve` relies on `FancyURLopener` from legacy
         `urllib` module, known to have issues with proxy management.
@@ -67,8 +67,8 @@ if sys.version_info[0] == 2:
                     break
 
         with closing(urlopen(url, data)) as response, open(filename, 'wb') as fd:
-                for chunk in chunk_read(response, reporthook=reporthook):
-                    fd.write(chunk)
+            for chunk in chunk_read(response, reporthook=reporthook):
+                fd.write(chunk)
 else:
     from six.moves.urllib.request import urlretrieve
 
@@ -195,10 +195,10 @@ def get_file(fname,
         # File found; verify integrity if a hash was provided.
         if file_hash is not None:
             if not validate_file(fpath, file_hash, algorithm=hash_algorithm):
-                print('A local file was found, but it seems to be '
-                      'incomplete or outdated because the ' + hash_algorithm +
-                      ' file hash does not match the original value of ' +
-                      file_hash + ' so we will re-download the data.')
+                print('A local file was found, but it seems to be incomplete'
+                      ' or outdated because the {} file hash does not match '
+                      'the original value of {} so we will re-download the '
+                      'data.'.format(hash_algorithm, file_hash))
                 download = True
     else:
         download = True
@@ -541,6 +541,7 @@ class OrderedEnqueuer(SequenceEnqueuer):
     def __init__(self, sequence, use_multiprocessing=False, shuffle=False):
         super(OrderedEnqueuer, self).__init__(sequence, use_multiprocessing)
         self.shuffle = shuffle
+        self.end_of_epoch_signal = threading.Event()
 
     def _get_executor_init(self, workers):
         """Get the Pool initializer for multiprocessing.
@@ -561,9 +562,10 @@ class OrderedEnqueuer(SequenceEnqueuer):
 
     def _run(self):
         """Submits request to the executor and queue the `Future` objects."""
-        sequence = list(range(len(self.sequence)))
-        self._send_sequence()  # Share the initial sequence
         while True:
+            sequence = list(range(len(self.sequence)))
+            self._send_sequence()  # Share the initial sequence
+
             if self.shuffle:
                 random.shuffle(sequence)
 
@@ -584,7 +586,12 @@ class OrderedEnqueuer(SequenceEnqueuer):
 
             # Call the internal on epoch end.
             self.sequence.on_epoch_end()
-            self._send_sequence()  # Update the pool
+            # communicate on_epoch_end to the main thread
+            self.end_of_epoch_signal.set()
+
+    def join_end_of_epoch(self):
+        self.end_of_epoch_signal.wait(timeout=30)
+        self.end_of_epoch_signal.clear()
 
     def get(self):
         """Creates a generator to extract data from the queue.
@@ -601,7 +608,6 @@ class OrderedEnqueuer(SequenceEnqueuer):
                 try:
                     future = self.queue.get(block=True)
                     inputs = future.get(timeout=30)
-                    self.queue.task_done()
                 except mp.TimeoutError:
                     idx = future.idx
                     warnings.warn(
@@ -609,6 +615,9 @@ class OrderedEnqueuer(SequenceEnqueuer):
                         ' It could be because a worker has died.'.format(idx),
                         UserWarning)
                     inputs = self.sequence[idx]
+                finally:
+                    self.queue.task_done()
+
                 if inputs is not None:
                     yield inputs
         except Exception:
@@ -716,9 +725,9 @@ class GeneratorEnqueuer(SequenceEnqueuer):
             while self.queue.qsize() > 0:
                 last_ones.append(self.queue.get(block=True))
             # Wait for them to complete
-            list(map(lambda f: f.wait(), last_ones))
+            [f.wait() for f in last_ones]
             # Keep the good ones
-            last_ones = [future.get() for future in last_ones if future.successful()]
+            last_ones = (future.get() for future in last_ones if future.successful())
             for inputs in last_ones:
                 if inputs is not None:
                     yield inputs

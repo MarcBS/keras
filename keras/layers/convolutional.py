@@ -1628,7 +1628,7 @@ class SeparableConv1D(_SeparableConv):
 class SeparableConv2D(_SeparableConv):
     """Depthwise separable 2D convolution.
 
-    Separable convolutions consist in first performing
+    Separable convolution performs first
     a depthwise spatial convolution
     (which acts on each input channel separately)
     followed by a pointwise convolution which mixes together the resulting
@@ -1767,10 +1767,10 @@ class SeparableConv2D(_SeparableConv):
 
 
 class DepthwiseConv2D(Conv2D):
-    """Depthwise separable 2D convolution.
+    """Depthwise 2D convolution.
 
-    Depthwise Separable convolutions consists in performing
-    just the first step in a depthwise spatial convolution
+    Depthwise convolution performs
+    just the first step of a depthwise spatial convolution
     (which acts on each input channel separately).
     The `depth_multiplier` argument controls how many
     output channels are generated per input channel in the depthwise step.
@@ -1841,10 +1841,10 @@ class DepthwiseConv2D(Conv2D):
 
     # Output shape
         4D tensor with shape:
-        `(batch, filters, new_rows, new_cols)`
+        `(batch, channels * depth_multiplier, new_rows, new_cols)`
         if `data_format` is `"channels_first"`
         or 4D tensor with shape:
-        `(batch, new_rows, new_cols, filters)`
+        `(batch, new_rows, new_cols,  channels * depth_multiplier)`
         if `data_format` is `"channels_last"`.
         `rows` and `cols` values might have changed due to padding.
     """

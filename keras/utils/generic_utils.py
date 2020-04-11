@@ -126,7 +126,7 @@ def deserialize_keras_object(identifier, module_objects=None,
         # In this case we are dealing with a Keras config dictionary.
         config = identifier
         if 'class_name' not in config or 'config' not in config:
-            raise ValueError('Improper config format: ' + str(config))
+            raise ValueError('Improper config format: {}'.format(config))
         class_name = config['class_name']
         if custom_objects and class_name in custom_objects:
             cls = custom_objects[class_name]
@@ -136,8 +136,8 @@ def deserialize_keras_object(identifier, module_objects=None,
             module_objects = module_objects or {}
             cls = module_objects.get(class_name)
             if cls is None:
-                raise ValueError('Unknown ' + printable_module_name +
-                                 ': ' + class_name)
+                raise ValueError('Unknown {}: {}'.format(printable_module_name,
+                                                         class_name))
         if hasattr(cls, 'from_config'):
             custom_objects = custom_objects or {}
             if has_arg(cls.from_config, 'custom_objects'):
@@ -163,12 +163,12 @@ def deserialize_keras_object(identifier, module_objects=None,
         else:
             fn = module_objects.get(function_name)
             if fn is None:
-                raise ValueError('Unknown ' + printable_module_name +
-                                 ':' + function_name)
+                raise ValueError('Unknown {}: {}'.format(printable_module_name,
+                                                         function_name))
         return fn
     else:
-        raise ValueError('Could not interpret serialized ' +
-                         printable_module_name + ': ' + identifier)
+        raise ValueError('Could not interpret serialized '
+                         '{}: {}'.format(printable_module_name, identifier))
 
 
 def func_dump(func):
@@ -514,7 +514,7 @@ def unpack_singleton(x):
 
 def object_list_uid(object_list):
     object_list = to_list(object_list)
-    return ', '.join([str(abs(id(x))) for x in object_list])
+    return ', '.join((str(abs(id(x))) for x in object_list))
 
 
 def is_all_none(iterable_or_element):
@@ -613,3 +613,11 @@ def transpose_shape(shape, target_format, spatial_axes):
         raise ValueError('The `data_format` argument must be one of '
                          '"channels_first", "channels_last". Received: ' +
                          str(target_format))
+
+
+def check_for_unexpected_keys(name, input_dict, expected_values):
+    unknown = set(input_dict.keys()).difference(expected_values)
+    if unknown:
+        raise ValueError('Unknown entries in {} dictionary: {}. Only expected '
+                         'following keys: {}'.format(name, list(unknown),
+                                                     expected_values))

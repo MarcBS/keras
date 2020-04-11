@@ -12,6 +12,7 @@ from .load_backend import set_learning_phase
 from .load_backend import is_sparse
 from .load_backend import to_dense
 from .load_backend import variable
+from .load_backend import is_variable
 from .load_backend import constant
 from .load_backend import is_keras_tensor
 from .load_backend import is_tensor
@@ -127,7 +128,6 @@ from .load_backend import softsign
 from .load_backend import categorical_crossentropy
 from .load_backend import sparse_categorical_crossentropy
 from .load_backend import binary_crossentropy
-from .load_backend import weighted_binary_crossentropy
 from .load_backend import sigmoid
 from .load_backend import hard_sigmoid
 from .load_backend import tanh
@@ -150,7 +150,6 @@ from .load_backend import random_normal
 from .load_backend import random_uniform
 from .load_backend import random_binomial
 from .load_backend import truncated_normal
-from .load_backend import random_multinomial
 from .load_backend import count_sketch
 from .load_backend import scan_conv1d
 from .load_backend import ctc_label_dense_to_sparse
@@ -164,6 +163,10 @@ from .load_backend import local_conv2d
 from .load_backend import backend
 from .load_backend import normalize_data_format
 from .load_backend import name_scope
+from .load_backend import symbolic
+from .load_backend import eager
+from .load_backend import size
+from .load_backend import control_dependencies
 
 # Set Keras' recursion limit high enough.
 import sys

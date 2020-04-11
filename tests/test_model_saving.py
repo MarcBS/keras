@@ -3,6 +3,7 @@ import pytest
 import os
 import h5py
 import tempfile
+import warnings
 from contextlib import contextmanager
 import numpy as np
 from numpy.testing import assert_allclose
@@ -13,7 +14,7 @@ from keras.engine.saving import preprocess_weights_for_loading
 from keras.models import Model, Sequential
 from keras.layers import Dense, Lambda, RepeatVector, TimeDistributed
 from keras.layers import Bidirectional, GRU, LSTM, CuDNNGRU, CuDNNLSTM
-from keras.layers import Conv2D, Flatten
+from keras.layers import Conv2D, Flatten, Activation
 from keras.layers import Input, InputLayer
 from keras.initializers import Constant
 from keras import optimizers
@@ -38,7 +39,7 @@ def test_sequential_model_saving():
     model.add(Dense(2, input_shape=(3,)))
     model.add(RepeatVector(3))
     model.add(TimeDistributed(Dense(3)))
-    model.compile(loss=losses.MSE,
+    model.compile(loss=losses.MeanSquaredError(),
                   optimizer=optimizers.RMSprop(lr=0.0001),
                   metrics=[metrics.categorical_accuracy],
                   sample_weight_mode='temporal')
@@ -707,6 +708,21 @@ def test_saving_constant_initializer_with_numpy():
     os.remove(fname)
 
 
+def test_saving_group_naming_h5py(tmpdir):
+    """Test saving model with layer which name is prefix to a previous layer
+    name
+    """
+
+    input_layer = Input((None, None, 3), name='test_input')
+    x = Conv2D(1, 1, name='conv1/conv')(input_layer)
+    x = Activation('relu', name='conv1')(x)
+
+    model = Model(inputs=input_layer, outputs=x)
+    p = tmpdir.mkdir("test").join("test.h5")
+    model.save_weights(p)
+    model.load_weights(p)
+
+
 def test_save_load_weights_gcs():
     model = Sequential()
     model.add(Dense(2, input_shape=(3,)))
@@ -951,6 +967,40 @@ def test_preprocess_weights_for_loading_gru_incompatible():
     assert_not_compatible(gru(reset_after=True), gru(),
                           'GRU(reset_after=True) is not compatible with '
                           'GRU(reset_after=False)')
+
+
+def test_model_saving_with_rnn_initial_state_and_args():
+    class CustomRNN(LSTM):
+        def call(self, inputs, arg=1, mask=None, training=None, initial_state=None):
+            if isinstance(inputs, list):
+                inputs = inputs[:]
+                shape = K.int_shape(inputs[0])
+                inputs[0] *= arg
+                inputs[0]._keras_shape = shape  # for theano backend
+            else:
+                shape = K.int_shape(inputs)
+                inputs *= arg
+                inputs._keras_shape = shape  # for theano backend
+            return super(CustomRNN, self).call(inputs, mask, training, initial_state)
+
+    inp = Input((3, 2))
+    rnn_out, h, c = CustomRNN(2, return_state=True, return_sequences=True)(inp)
+    assert hasattr(rnn_out, '_keras_history')
+    assert hasattr(h, '_keras_history')
+    assert hasattr(c, '_keras_history')
+    rnn2_out = CustomRNN(2)(rnn_out, arg=2, initial_state=[h, c])
+    assert hasattr(rnn2_out, '_keras_history')
+    model = Model(inputs=inp, outputs=rnn2_out)
+    x = np.random.random((2, 3, 2))
+    y1 = model.predict(x)
+    _, fname = tempfile.mkstemp('.h5')
+    with warnings.catch_warnings():
+        warnings.filterwarnings('error')
+        model.save(fname)
+    model2 = load_model(fname, custom_objects={'CustomRNN': CustomRNN})
+    y2 = model2.predict(x)
+    assert_allclose(y1, y2, atol=1e-5)
+    os.remove(fname)
 
 
 if __name__ == '__main__':

@@ -12,6 +12,7 @@ from theano.tensor.fft import rfft, irfft
 from theano.printing import Print
 from theano.tensor.signal.conv import conv2d as vec_conv
 from theano.ifelse import ifelse
+
 try:
     import theano.sparse as th_sparse_module
 except ImportError:
@@ -34,7 +35,6 @@ py_all = all
 py_any = any
 py_sum = sum
 py_slice = slice
-
 
 # INTERNAL UTILS
 theano.config.floatX = floatx()
@@ -228,6 +228,10 @@ def variable(value, dtype=None, name=None, constraint=None):
     return variable
 
 
+def is_variable(x):
+    return isinstance(x, theano.tensor.sharedvar.TensorSharedVariable)
+
+
 def constant(value, dtype=None, shape=None, name=None):
     """Creates a constant tensor.
 
@@ -244,8 +248,13 @@ def constant(value, dtype=None, shape=None, name=None):
         dtype = floatx()
     if shape is None:
         shape = ()
-    np_value = value * np.ones(shape)
-    const = T.constant(np_value,
+    if not is_tensor(value):
+        value = np.array(value)
+        if len(value.shape) == 0:
+            value = value * np.ones(shape)
+        if shape and value.shape != shape:
+            value = np.reshape(value, shape)
+    const = T.constant(value,
                        dtype=dtype,
                        name=_prepare_name(name, 'constant'))
     const._keras_shape = shape
@@ -299,13 +308,14 @@ def is_keras_tensor(x):
     if not is_tensor(x):
         raise ValueError('Unexpectedly found an instance of type `' +
                          str(type(x)) + '`. '
-                         'Expected a symbolic tensor instance.')
+                                        'Expected a symbolic tensor instance.')
     return hasattr(x, '_keras_history')
 
 
 def is_tensor(x):
     return isinstance(x, (T.TensorVariable,
-                          T.sharedvar.TensorSharedVariable))
+                          T.sharedvar.TensorSharedVariable,
+                          T.TensorConstant))
 
 
 def placeholder(shape=None, ndim=None, dtype=None, sparse=False, name=None):
@@ -748,6 +758,18 @@ def cast(x, dtype):
     ```
     """
     return T.cast(x, dtype)
+
+
+def size(x, name=None):
+    """Returns the size of a tensor.
+    # Arguments
+        x: The input tensor.
+        name: A name for the operation (optional).
+    # Returns
+        Size of the tensor.
+    ```
+    """
+    return sum(ones_like(x, name=name))
 
 
 def ceil(x, name=None):
@@ -1807,7 +1829,7 @@ def repeat_elements(x, rep, axis):
         y._keras_shape = list(x._keras_shape)
         repeat_dim = x._keras_shape[axis]
         if repeat_dim is not None:
-                y._keras_shape[axis] = repeat_dim * rep
+            y._keras_shape[axis] = repeat_dim * rep
         y._keras_shape = tuple(y._keras_shape)
     return y
 
@@ -2004,17 +2026,18 @@ def tile(x, n):
     elif isinstance(n, list):
         n = tuple(n)
 
-    y = T.tile(x, n)
+    y = T.tile(x, n, ndim=x.ndim)
     shape = int_shape(x)
     if shape is None:
         return y
-    elif len(n) < len(shape):  # Padding the axis
+    elif isinstance(n, tuple) and len(n) < len(shape):  # Padding the axis
         n = tuple([1 for _ in range(len(shape) - len(n))]) + n
-    elif len(n) != len(shape):
+    elif isinstance(n, tuple) and len(n) != len(shape):
         raise NotImplementedError
 
-    y._keras_shape = tuple([None if a is None else a * b
-                            for (a, b) in zip(shape, n)])
+    if isinstance(n, tuple):
+        y._keras_shape = tuple([None if a is None else a * b
+                                for (a, b) in zip(shape, n)])
     return y
 
 
@@ -2032,7 +2055,7 @@ def flatten(x):
         if None in x._keras_shape:
             y._keras_shape = (None,)
         else:
-            y._keras_shape = (np.prod(x._keras_shape), )
+            y._keras_shape = (np.prod(x._keras_shape),)
     return y
 
 
@@ -2378,6 +2401,7 @@ def pattern_broadcast(x, broadcastable):
     """
     return T.patternbroadcast(x, broadcastable)
 
+
 # VALUE MANIPULATION
 
 
@@ -2479,16 +2503,32 @@ class Function(object):
             if v not in unique_variables_to_update:
                 unique_variables_to_update[v] = nv
         updates = unique_variables_to_update.items()
+        self.outputs = outputs
         self.function = theano.function(inputs, outputs, updates=updates,
                                         allow_input_downcast=True,
                                         on_unused_input='ignore',
                                         name=name,
                                         **kwargs)
+        self._metrics = [x for x in outputs if hasattr(x, '_is_metric')]
+        self._metrics_function = theano.function(
+            [], self._metrics,
+            name=name + '_metrics' if name else None)
         self.name = name
 
     def __call__(self, inputs):
         assert isinstance(inputs, (list, tuple))
-        return self.function(*inputs)
+        outputs = self.function(*inputs)
+        if self._metrics:
+            metrics = self._metrics_function()
+        i = 0
+        j = 0
+        for x in self.outputs:
+            if hasattr(x, '_is_metric'):
+                v = metrics[j]
+                outputs[i] = v
+                j += 1
+            i += 1
+        return outputs
 
 
 def _raise_invalid_arg(key):
@@ -2582,6 +2622,9 @@ def rnn(step_function, inputs, initial_states,
             raise ValueError('When specifying `unroll=True`, '
                              'an `input_length` '
                              'must be provided to `rnn`.')
+        if input_length == 1:
+            raise ValueError('`input_length=1` is not'
+                             ' supported when `unroll=True`.')
 
     axes = [1, 0] + list(range(2, ndim))
     inputs = inputs.dimshuffle(axes)
@@ -3045,28 +3088,6 @@ def binary_crossentropy(target, output, from_logits=False):
     return T.nnet.binary_crossentropy(output, target)
 
 
-def weighted_binary_crossentropy(target, output, from_logits=False, lambda_w_rec=1.0, lambda_w_pre=1.0):
-    """Weighted crossentropy of binary random variables.
-
-    # Arguments
-        target: A tensor with the same shape as `output`.
-        output: A tensor.
-        from_logits: Whether `output` is expected to be a logits tensor.
-            By default, we consider that `output`
-            encodes a probability distribution.
-        lambda_w_rec: Float. First weight.
-        lambda_w_pre: Float. Second weight.
-
-    # Returns
-        A tensor.
-    """
-    if from_logits:
-        output = T.nnet.sigmoid(output)
-    # avoid numerical instability with _epsilon clipping
-    output = T.clip(output, _epsilon(), 1.0 - _epsilon())
-    return -(lambda_w_rec * target * T.log(output) + lambda_w_pre * (1.0 - target) * T.log(1.0 - output))
-
-
 def sigmoid(x):
     """Element-wise sigmoid.
 
@@ -3353,6 +3374,7 @@ def _preprocess_conv2d_depthwise_filter_shape(filter_shape, data_format):
             return int(value)
         except TypeError:
             return None
+
     if filter_shape:
         filter_shape = (filter_shape[3] * filter_shape[2], 1,
                         filter_shape[0], filter_shape[1])
@@ -3906,9 +3928,7 @@ def pool2d(x, pool_size, strides=(1, 1), padding='valid',
     if padding == 'same':
         expected_width = (x.shape[2] + strides[0] - 1) // strides[0]
         expected_height = (x.shape[3] + strides[1] - 1) // strides[1]
-        pool_out = pool_out[:, :,
-                            : expected_width,
-                            : expected_height]
+        pool_out = pool_out[:, :, :expected_width, :expected_height]
 
     if data_format == 'channels_last':
         pool_out = pool_out.dimshuffle((0, 2, 3, 1))
@@ -3967,10 +3987,7 @@ def pool3d(x, pool_size, strides=(1, 1, 1), padding='valid',
         expected_height = (x.shape[3] + strides[1] - 1) // strides[1]
         expected_depth = (x.shape[4] + strides[2] - 1) // strides[2]
 
-        pool_out = pool_out[:, :,
-                            : expected_width,
-                            : expected_height,
-                            : expected_depth]
+        pool_out = pool_out[:, :, :expected_width, :expected_height, :expected_depth]
 
     if data_format == 'channels_last':
         pool_out = pool_out.dimshuffle((0, 2, 3, 4, 1))
@@ -4523,6 +4540,14 @@ def ctc_label_dense_to_sparse(labels, label_lengths):
 def ctc_decode(y_pred, input_length, greedy=True, beam_width=100, top_paths=1,
                merge_repeated=False):
     raise NotImplementedError
+
+
+def control_dependencies(control_inputs):
+    @contextmanager
+    def nullcontextmanager():
+        yield
+
+    return nullcontextmanager()
 
 
 # modified from the one included in np_utils.py
