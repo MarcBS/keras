@@ -1950,17 +1950,12 @@ def clone_metrics(metrics):
     return [clone_metric(metric) for metric in metrics]
 
 
-def perplexity(y_true, y_pred, mask=None):
+def perplexity(y_true, y_pred):
     """Calculates the perplexity
     """
-    if mask is not None:
-        y_pred /= K.sum(y_pred, axis=-1, keepdims=True)
-        mask = K.permute_dimensions(K.reshape(mask, y_true.shape[:-1]), (0, 1, 'x'))
-        truth_mask = K.flatten(y_true * mask).nonzero()[0]  # How do you do this on tensorflow?
-        predictions = K.gather(y_pred.flatten(), truth_mask)
-        return K.pow(2, K.mean(-K.log2(predictions)))
-    else:
-        return K.pow(2, K.mean(-K.log2(y_pred)))
+    cross_entropy = categorical_crossentropy(y_true, y_pred)
+    perplexity = K.exp(cross_entropy)
+    return perplexity
 
 
 # Aliases
