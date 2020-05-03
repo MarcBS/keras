@@ -140,6 +140,7 @@ class Layer(object):
                           'name',
                           'trainable',
                           'weights',
+                          'reset_after',  # Compatibility between GRU/LSTM definitions.
                           'input_dtype',  # legacy
                           }
         for kwarg in kwargs:
